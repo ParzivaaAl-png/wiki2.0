@@ -1,18 +1,14 @@
 import * as React from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { 
   ArrowLeft, 
   Save, 
-  Eye, 
-  Edit3, 
-  Image as ImageIcon, 
   Tag as TagIcon,
   X,
   Sparkles
 } from 'lucide-react';
-import { fetchArticle, fetchCategories, createArticle, updateArticle, uploadImage, Category } from '../lib/api';
+import { fetchArticle, fetchCategories, createArticle, updateArticle, Category } from '../lib/api';
+import WYSIWYGEditor from '../components/wysiwyg-editor';
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>();
@@ -32,9 +28,7 @@ export default function Editor() {
   const [tags, setTags] = React.useState<string[]>([]);
   const [newTag, setNewTag] = React.useState('');
 
-  const [activeTab, setActiveTab] = React.useState<'write' | 'preview'>('write');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [isUploading, setIsUploading] = React.useState(false);
 
   // Initial Fetch
   React.useEffect(() => {
@@ -67,12 +61,16 @@ export default function Editor() {
   const handleTitleChange = (val: string) => {
     setTitle(val);
     if (!isEditMode) {
+      // Slugify with support for Cyrillic and special characters
       const slugified = val
+        .toString()
         .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '')
         .trim()
         .replace(/\s+/g, '-')
-        .replace(/-+/g, '-');
+        .replace(/[^\w\u0400-\u04FF-]+/g, '')
+        .replace(/--+/g, '-')
+        .replace(/^-+/, '')
+        .replace(/-+$/, '');
       setSlug(slugified);
     }
   };
@@ -90,40 +88,6 @@ export default function Editor() {
 
   const handleRemoveTag = (tagToRemove: string) => {
     setTags(tags.filter(t => t !== tagToRemove));
-  };
-
-  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    try {
-      const { url } = await uploadImage(file);
-      
-      const textarea = document.getElementById('content-textarea') as HTMLTextAreaElement;
-      if (textarea) {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        const before = text.substring(0, start);
-        const after = text.substring(end, text.length);
-        const imageMarkdown = `\n![Uploaded Image](${url})\n`;
-        
-        setContent(before + imageMarkdown + after);
-        
-        setTimeout(() => {
-          textarea.focus();
-          textarea.setSelectionRange(start + imageMarkdown.length, start + imageMarkdown.length);
-        }, 10);
-      } else {
-        setContent(prev => prev + `\n![Uploaded Image](${url})\n`);
-      }
-    } catch (err: any) {
-      console.error(err);
-      alert(`Не удалось загрузить изображение: ${err.message}`);
-    } finally {
-      setIsUploading(false);
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,6 +114,8 @@ export default function Editor() {
       } else {
         await createArticle(payload);
       }
+      // Remove autosave copies from local storage on successful save
+      localStorage.removeItem(`wiki_autosave_${id || 'new'}`);
       navigate('/admin');
     } catch (err: any) {
       console.error(err);
@@ -276,86 +242,30 @@ export default function Editor() {
         </div>
 
         {/* Content Pane */}
-        <div className="lg:col-span-2 lg:order-1 flex flex-col border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl overflow-hidden shadow-premium dark:shadow-premium-dark">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-neutral-200/50 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-950">
-            <div className="flex gap-1">
-              <button
-                type="button"
-                onClick={() => setActiveTab('write')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  activeTab === 'write'
-                    ? 'bg-neutral-100 dark:bg-neutral-900 text-indigo-500 dark:text-indigo-400'
-                    : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300'
-                }`}
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                Редактор
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('preview')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  activeTab === 'preview'
-                    ? 'bg-neutral-100 dark:bg-neutral-900 text-indigo-500 dark:text-indigo-400'
-                    : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300'
-                }`}
-              >
-                <Eye className="w-3.5 h-3.5" />
-                Предпросмотр
-              </button>
-            </div>
+        <div className="lg:col-span-2 lg:order-1 flex flex-col border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl overflow-hidden shadow-premium dark:shadow-premium-dark p-6 space-y-4">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            placeholder="Название статьи..."
+            required
+            className="w-full text-xl sm:text-2xl font-extrabold text-neutral-950 dark:text-white placeholder-neutral-300 dark:placeholder-neutral-800 bg-transparent outline-none border-b border-neutral-100 dark:border-neutral-900 pb-2"
+          />
 
-            <label className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 text-xs font-medium cursor-pointer transition-colors shadow-sm">
-              <ImageIcon className="w-3.5 h-3.5" />
-              <span>{isUploading ? 'Загрузка...' : 'Вставить картинку'}</span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageFileChange}
-                disabled={isUploading}
-                className="hidden"
-              />
-            </label>
-          </div>
+          <input
+            type="text"
+            value={summary}
+            onChange={(e) => setSummary(e.target.value)}
+            placeholder="Краткое описание (summary) этой статьи..."
+            className="w-full text-xs text-neutral-500 bg-transparent outline-none placeholder-neutral-400 dark:placeholder-neutral-800 border-b border-neutral-100 dark:border-neutral-900 pb-2"
+          />
 
-          <div className="p-4 space-y-4 flex-1 flex flex-col">
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              placeholder="Название статьи..."
-              required
-              className="w-full text-xl sm:text-2xl font-extrabold text-neutral-950 dark:text-white placeholder-neutral-300 dark:placeholder-neutral-800 bg-transparent outline-none border-b border-neutral-100 dark:border-neutral-900 pb-2"
+          <div className="flex-1">
+            <WYSIWYGEditor
+              content={content}
+              onChange={setContent}
+              articleId={id || 'new'}
             />
-
-            <input
-              type="text"
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              placeholder="Краткое описание (summary) этой статьи..."
-              className="w-full text-xs text-neutral-500 bg-transparent outline-none placeholder-neutral-400 dark:placeholder-neutral-800"
-            />
-
-            {activeTab === 'write' ? (
-              <textarea
-                id="content-textarea"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="# Напишите здесь содержимое в формате Markdown..."
-                required
-                className="w-full min-h-[450px] flex-1 bg-transparent text-sm text-neutral-900 dark:text-neutral-200 font-mono outline-none resize-y py-2 leading-relaxed"
-              />
-            ) : (
-              <div className="prose-custom min-h-[450px] py-2 overflow-y-auto max-h-[60vh] border border-dashed border-neutral-200 dark:border-neutral-800 p-4 rounded-lg bg-neutral-50/20 dark:bg-neutral-950/20">
-                {content.trim() === '' ? (
-                  <span className="text-xs text-neutral-400 italic">Нечего показывать. Начните писать текст.</span>
-                ) : (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {content}
-                  </ReactMarkdown>
-                )}
-              </div>
-            )}
           </div>
         </div>
       </div>

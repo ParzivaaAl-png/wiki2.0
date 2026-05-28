@@ -12,6 +12,16 @@ export interface Category {
   article_count?: number;
 }
 
+export interface User {
+  id: number;
+  username: string;
+  name: string;
+  role: 'Admin' | 'Editor' | 'User';
+  is_blocked: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Article {
   id: number;
   title: string;
@@ -50,16 +60,43 @@ export interface Suggestion {
   categoryName: string;
 }
 
+// Helper to make API calls with cookies included and error handling
+async function apiCall<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const url = path.startsWith('http') ? path : `${getApiUrl()}${path}`;
+  const response = await fetch(url, {
+    ...options,
+    credentials: 'include',
+    headers: {
+      ...(!(options.body instanceof FormData) && { 'Content-Type': 'application/json' }),
+      ...options.headers,
+    },
+  });
+
+  if (!response.ok) {
+    let errorMessage = 'Произошла ошибка при запросе к серверу.';
+    try {
+      const err = await response.json();
+      errorMessage = err.error || errorMessage;
+    } catch (e) {
+      // JSON parsing failed, keep default message
+    }
+    throw new Error(errorMessage);
+  }
+
+  // Handle empty responses
+  if (response.status === 204) {
+    return {} as T;
+  }
+
+  return response.json();
+}
+
 export async function fetchCategories(): Promise<Category[]> {
-  const res = await fetch(`${getApiUrl()}/categories`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch categories');
-  return res.json();
+  return apiCall<Category[]>('/categories', { cache: 'no-store' });
 }
 
 export async function fetchCategory(slugOrId: string | number): Promise<Category> {
-  const res = await fetch(`${getApiUrl()}/categories/${slugOrId}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch category');
-  return res.json();
+  return apiCall<Category>(`/categories/${slugOrId}`, { cache: 'no-store' });
 }
 
 export async function fetchArticles(params?: {
@@ -72,16 +109,11 @@ export async function fetchArticles(params?: {
   if (params?.tag) queryParams.set('tag', params.tag);
   if (params?.all) queryParams.set('all', 'true');
 
-  const url = `${getApiUrl()}/articles?${queryParams.toString()}`;
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch articles');
-  return res.json();
+  return apiCall<Article[]>(`/articles?${queryParams.toString()}`, { cache: 'no-store' });
 }
 
 export async function fetchArticle(slugOrId: string | number): Promise<Article> {
-  const res = await fetch(`${getApiUrl()}/articles/${slugOrId}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch article');
-  return res.json();
+  return apiCall<Article>(`/articles/${slugOrId}`, { cache: 'no-store' });
 }
 
 export async function searchArticles(
@@ -93,66 +125,118 @@ export async function searchArticles(
   if (category) queryParams.set('category', category);
   if (tag) queryParams.set('tag', tag);
 
-  const res = await fetch(`${getApiUrl()}/search?${queryParams.toString()}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to search articles');
-  return res.json();
+  return apiCall<SearchResult[]>(`/search?${queryParams.toString()}`, { cache: 'no-store' });
 }
 
 export async function suggestArticles(q: string): Promise<Suggestion[]> {
-  const res = await fetch(`${getApiUrl()}/search/suggest?q=${encodeURIComponent(q)}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch suggestions');
-  return res.json();
+  return apiCall<Suggestion[]>(`/search/suggest?q=${encodeURIComponent(q)}`, { cache: 'no-store' });
 }
 
 export async function createArticle(data: Omit<Article, 'id' | 'created_at' | 'updated_at' | 'views'>): Promise<Article> {
-  const res = await fetch(`${getApiUrl()}/articles`, {
+  return apiCall<Article>('/articles', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to create article');
-  }
-  return res.json();
 }
 
 export async function updateArticle(
   id: number,
   data: Omit<Article, 'id' | 'created_at' | 'updated_at' | 'views'>
 ): Promise<Article> {
-  const res = await fetch(`${getApiUrl()}/articles/${id}`, {
+  return apiCall<Article>(`/articles/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to update article');
-  }
-  return res.json();
 }
 
 export async function deleteArticle(id: number): Promise<void> {
-  const res = await fetch(`${getApiUrl()}/articles/${id}`, {
+  return apiCall<void>(`/articles/${id}`, {
     method: 'DELETE',
   });
-  if (!res.ok) throw new Error('Failed to delete article');
 }
 
 export async function uploadImage(file: File): Promise<{ url: string }> {
   const formData = new FormData();
   formData.append('image', file);
 
-  const res = await fetch(`${getApiUrl()}/upload`, {
+  return apiCall<{ url: string }>('/upload', {
     method: 'POST',
     body: formData,
   });
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to upload image');
-  }
-
-  return res.json();
 }
+
+// Authentication API
+export async function loginUser(username: string, password: string): Promise<{ user: User; accessToken: string }> {
+  return apiCall<{ user: User; accessToken: string }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function registerUser(username: string, name: string, password: string): Promise<{ user: User; accessToken: string }> {
+  return apiCall<{ user: User; accessToken: string }>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ username, name, password }),
+  });
+}
+
+export async function logoutUser(): Promise<{ message: string }> {
+  return apiCall<{ message: string }>('/auth/logout', {
+    method: 'POST',
+  });
+}
+
+export async function fetchMe(): Promise<User> {
+  return apiCall<User>('/auth/me', { cache: 'no-store' });
+}
+
+// Article Import API
+export async function importArticle(file: File): Promise<Article> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return apiCall<Article>('/articles/import', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+// Admin User Management API
+export async function adminFetchUsers(): Promise<User[]> {
+  return apiCall<User[]>('/admin/users', { cache: 'no-store' });
+}
+
+export async function adminCreateUser(data: Omit<User, 'id' | 'is_blocked'> & { password: string }): Promise<User> {
+  return apiCall<User>('/admin/users', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminChangeRole(userId: number, role: 'Admin' | 'Editor' | 'User'): Promise<{ message: string }> {
+  return apiCall<{ message: string }>(`/admin/users/${userId}/role`, {
+    method: 'PUT',
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function adminToggleBlock(userId: number, is_blocked: boolean): Promise<{ message: string }> {
+  return apiCall<{ message: string }>(`/admin/users/${userId}/block`, {
+    method: 'PUT',
+    body: JSON.stringify({ is_blocked }),
+  });
+}
+
+export async function adminResetPassword(userId: number, password: string): Promise<{ message: string }> {
+  return apiCall<{ message: string }>(`/admin/users/${userId}/reset-password`, {
+    method: 'PUT',
+    body: JSON.stringify({ password }),
+  });
+}
+
+export async function adminDeleteUser(userId: number): Promise<{ message: string }> {
+  return apiCall<{ message: string }>(`/admin/users/${userId}`, {
+    method: 'DELETE',
+  });
+}
+

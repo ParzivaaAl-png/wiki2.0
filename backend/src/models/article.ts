@@ -7,6 +7,7 @@ export interface Article {
   content: string;
   summary: string;
   category_id: number | null;
+  author_id: number | null;
   category_name?: string;
   category_slug?: string;
   published: boolean;
@@ -106,6 +107,7 @@ export const createArticle = async (data: {
   content: string;
   summary: string;
   category_id: number | null;
+  author_id?: number | null;
   published: boolean;
   tags: string[];
 }): Promise<Article> => {
@@ -115,8 +117,8 @@ export const createArticle = async (data: {
     
     // Insert Article
     const artSql = `
-      INSERT INTO articles (title, slug, content, summary, category_id, published)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO articles (title, slug, content, summary, category_id, author_id, published)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
     `;
     const artRes = await client.query(artSql, [
@@ -125,6 +127,7 @@ export const createArticle = async (data: {
       data.content,
       data.summary,
       data.category_id,
+      data.author_id || null,
       data.published,
     ]);
     const article = artRes.rows[0];

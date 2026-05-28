@@ -2,6 +2,23 @@
 DROP TABLE IF EXISTS article_tags CASCADE;
 DROP TABLE IF EXISTS articles CASCADE;
 DROP TABLE IF EXISTS categories CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
+-- Create Users Table
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    role VARCHAR(50) DEFAULT 'User', -- 'Admin', 'Editor', 'User'
+    is_blocked BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Seed Default Admin User (username: Sherzad, password: Xwz247Agd)
+INSERT INTO users (username, password_hash, name, role) VALUES
+('Sherzad', '$2b$10$GTO8CPoU.eFIPYDlZawNQeL8t1IiRppBLnR0WRHoVbkJbceWnNmS2', 'Администратор Sherzad', 'Admin');
 
 -- Create Categories Table
 CREATE TABLE categories (
@@ -21,6 +38,7 @@ CREATE TABLE articles (
     content TEXT NOT NULL,
     summary TEXT,
     category_id INT REFERENCES categories(id) ON DELETE SET NULL,
+    author_id INT REFERENCES users(id) ON DELETE SET NULL,
     published BOOLEAN DEFAULT TRUE,
     views INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

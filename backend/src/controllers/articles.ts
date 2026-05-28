@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
+import * as fs from 'fs';
 import * as ArticleModel from '../models/article';
 import * as esService from '../services/elasticsearch';
+import { parseDocument } from '../services/parser';
+import { AuthenticatedRequest } from '../middleware/auth';
 
 export const getArticles = async (req: Request, res: Response) => {
   try {
@@ -211,5 +214,72 @@ export const uploadImage = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Image upload failed:', error);
     res.status(500).json({ error: 'Image upload failed', details: error.message });
+  }
+};
+
+export const importArticle = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No document file uploaded.' });
+    }
+
+    const { path: tempPath, originalname } = req.file;
+
+    // Parse document
+    const parsedDoc = await parseDocument(tempPath, originalname);
+
+    // Slugify title + random string to prevent duplicates
+    const cleanTitle = parsedDoc.title;
+    const cleanSlug = cleanTitle
+      .toString()
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^\w\u0400-\u04FF-]+/g, '')
+      .replace(/--+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '') + '-' + Date.now();
+
+    const authorId = req.user ? req.user.id : null;
+
+    // Create article in Postgres as published
+    const article = await ArticleModel.createArticle({
+      title: cleanTitle,
+      slug: cleanSlug,
+      content: parsedDoc.content,
+      summary: parsedDoc.summary,
+      category_id: null,
+      author_id: authorId,
+      published: true,
+      tags: [],
+    });
+
+    // Index to Elasticsearch
+    const doc: esService.ArticleDocument = {
+      id: article.id,
+      title: article.title,
+      slug: article.slug,
+      content: article.content,
+      summary: article.summary,
+      categoryName: '',
+      tags: [],
+      published: true,
+      createdAt: article.created_at.toISOString(),
+    };
+    
+    await esService.indexArticle(doc);
+
+    // Clean up local temp file
+    if (fs.existsSync(tempPath)) {
+      fs.unlinkSync(tempPath);
+    }
+
+    res.status(201).json(article);
+  } catch (error: any) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    console.error('Document import failed:', error);
+    res.status(500).json({ error: 'Document import failed', details: error.message });
   }
 };
