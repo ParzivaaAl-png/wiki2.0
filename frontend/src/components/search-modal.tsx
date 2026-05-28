@@ -1,7 +1,5 @@
-'use client';
-
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { Search, Sparkles, X, FileText, CornerDownLeft } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { suggestArticles, searchArticles, SearchResult, Suggestion } from '../lib/api';
@@ -14,7 +12,7 @@ export function SearchModal() {
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(false);
 
-  const router = useRouter();
+  const navigate = useNavigate();
 
   // Listen for Cmd+K / Ctrl+K
   React.useEffect(() => {
@@ -42,11 +40,9 @@ export function SearchModal() {
     const timer = setTimeout(async () => {
       setIsLoading(true);
       try {
-        // Fetch autocomplete suggestions
         const sugData = await suggestArticles(query);
         setSuggestions(sugData);
 
-        // Fetch detailed results (with highlighting)
         const resData = await searchArticles(query);
         setResults(resData);
         
@@ -56,7 +52,7 @@ export function SearchModal() {
       } finally {
         setIsLoading(false);
       }
-    }, 200); // debounce API calls
+    }, 200);
 
     return () => clearTimeout(timer);
   }, [query]);
@@ -73,10 +69,9 @@ export function SearchModal() {
 
   const handleSelect = (slug: string) => {
     setIsOpen(false);
-    router.push(`/articles/${slug}`);
+    navigate(`/articles/${slug}`);
   };
 
-  // Keyboard navigation inside list
   const totalItems = suggestions.length + results.length;
 
   const handleListKeyDown = (e: React.KeyboardEvent) => {
@@ -91,7 +86,6 @@ export function SearchModal() {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       
-      // Determine which item is selected
       if (selectedIndex < suggestions.length) {
         handleSelect(suggestions[selectedIndex].slug);
       } else {
@@ -103,7 +97,6 @@ export function SearchModal() {
 
   return (
     <>
-      {/* Trigger Button (Visible in layout) */}
       <button
         onClick={() => setIsOpen(true)}
         className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 bg-neutral-50 dark:bg-neutral-900/50 text-neutral-500 dark:text-neutral-400 text-sm hover:border-neutral-300 dark:hover:border-neutral-700 hover:text-neutral-800 dark:hover:text-neutral-200 transition-all w-48 md:w-64"
@@ -115,11 +108,9 @@ export function SearchModal() {
         </kbd>
       </button>
 
-      {/* Portal Overlay & Modal */}
       <AnimatePresence>
         {isOpen && (
           <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 md:pt-32 p-4">
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -128,7 +119,6 @@ export function SearchModal() {
               className="fixed inset-0 bg-neutral-950/60 backdrop-blur-sm"
             />
 
-            {/* Modal Dialog */}
             <motion.div
               initial={{ scale: 0.97, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -136,7 +126,6 @@ export function SearchModal() {
               transition={{ duration: 0.2, ease: 'easeOut' }}
               className="relative w-full max-w-2xl bg-white dark:bg-neutral-950 rounded-xl border border-neutral-200 dark:border-neutral-800 shadow-2xl overflow-hidden"
             >
-              {/* Input Box */}
               <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-200 dark:border-neutral-800">
                 <Search className="w-5 h-5 text-neutral-400 shrink-0" />
                 <input
@@ -159,7 +148,6 @@ export function SearchModal() {
                 </button>
               </div>
 
-              {/* Suggestions & Results Pane */}
               <div className="max-h-[60vh] overflow-y-auto p-2">
                 {query.trim().length < 2 && (
                   <div className="py-8 text-center text-neutral-400 text-sm">
@@ -170,11 +158,10 @@ export function SearchModal() {
 
                 {query.trim().length >= 2 && suggestions.length === 0 && results.length === 0 && !isLoading && (
                   <div className="py-8 text-center text-neutral-400 text-sm">
-                    No results found for &quot;<span className="text-neutral-900 dark:text-white font-semibold">{query}</span>&quot;.
+                    No results found for &quot;<span className="text-neutral-900 dark:white font-semibold">{query}</span>&quot;.
                   </div>
                 )}
 
-                {/* Autocomplete Suggestions Section */}
                 {suggestions.length > 0 && (
                   <div className="mb-4">
                     <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
@@ -208,7 +195,6 @@ export function SearchModal() {
                   </div>
                 )}
 
-                {/* Full-Text Matches (with highlighted summaries) */}
                 {results.length > 0 && (
                   <div>
                     <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
@@ -238,7 +224,6 @@ export function SearchModal() {
                               </span>
                             </div>
                             
-                            {/* Render search highlights */}
                             {res.highlights && res.highlights.length > 0 ? (
                               <div className="text-xs text-neutral-500 dark:text-neutral-400 space-y-1 mt-1 border-l-2 border-neutral-200 dark:border-neutral-800 pl-2">
                                 {res.highlights.map((hl, hIdx) => (
@@ -259,7 +244,6 @@ export function SearchModal() {
                 )}
               </div>
 
-              {/* Footer Guide */}
               <div className="flex items-center justify-between px-4 py-2 bg-neutral-50 dark:bg-neutral-900/40 border-t border-neutral-200/80 dark:border-neutral-900 text-[10px] text-neutral-400 select-none">
                 <div className="flex gap-3">
                   <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">↑↓</kbd> Navigate</span>

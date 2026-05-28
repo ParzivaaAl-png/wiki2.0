@@ -1,9 +1,5 @@
 const getApiUrl = () => {
-  if (typeof window === 'undefined') {
-    // Inside Docker container networking, the backend service is named "backend"
-    return process.env.INTERNAL_API_URL || 'http://backend:5000/api';
-  }
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  return import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 };
 
 export interface Category {
@@ -36,9 +32,9 @@ export interface Article {
 
 export interface SearchResult {
   id: number;
-  title: string; // highlighted if matched
+  title: string;
   slug: string;
-  summary: string; // highlighted if matched
+  summary: string;
   categoryName: string;
   tags: string[];
   published: boolean;

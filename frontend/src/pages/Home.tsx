@@ -1,20 +1,33 @@
-'use client';
-
 import * as React from 'react';
-import Link from 'next/link';
-import { Search, Sparkles, BookOpen, Clock, ChevronRight, Eye } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Search, Sparkles, Clock, ChevronRight, Eye, BookOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Category, Article } from '../lib/api';
+import { fetchCategories, fetchArticles, Category, Article } from '../lib/api';
 import { CategoryIcon } from '../components/icon';
 
-interface HomeClientProps {
-  categories: Category[];
-  recentArticles: Article[];
-}
+export default function Home() {
+  const [categories, setCategories] = React.useState<Category[]>([]);
+  const [recentArticles, setRecentArticles] = React.useState<Article[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
 
-export default function HomeClient({ categories, recentArticles }: HomeClientProps) {
-  
-  // Simulates Cmd+K click event to open global Search Modal
+  React.useEffect(() => {
+    async function loadData() {
+      try {
+        const [cats, arts] = await Promise.all([
+          fetchCategories(),
+          fetchArticles(),
+        ]);
+        setCategories(cats);
+        setRecentArticles(arts.slice(0, 3));
+      } catch (error) {
+        console.error('Home data load failed:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
   const triggerGlobalSearch = () => {
     const event = new KeyboardEvent('keydown', {
       key: 'k',
@@ -28,9 +41,7 @@ export default function HomeClient({ categories, recentArticles }: HomeClientPro
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-      },
+      transition: { staggerChildren: 0.1 },
     },
   };
 
@@ -39,10 +50,28 @@ export default function HomeClient({ categories, recentArticles }: HomeClientPro
     show: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 100 } },
   };
 
+  if (isLoading) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-20 space-y-12 animate-pulse">
+        <div className="space-y-4 text-center max-w-2xl mx-auto">
+          <div className="h-6 w-32 bg-neutral-200 dark:bg-neutral-800 rounded-full mx-auto" />
+          <div className="h-12 w-3/4 bg-neutral-200 dark:bg-neutral-800 rounded mx-auto" />
+          <div className="h-4 w-full bg-neutral-200 dark:bg-neutral-800 rounded mx-auto" />
+        </div>
+        <div className="h-14 max-w-2xl bg-neutral-200 dark:bg-neutral-800 rounded-xl mx-auto" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-12">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-40 bg-neutral-200 dark:bg-neutral-800 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen pb-20 overflow-hidden">
       
-      {/* Background Decorative Blurs */}
+      {/* Decorative Blurs */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[400px] pointer-events-none -z-10 opacity-70 dark:opacity-30">
         <div className="absolute top-[-10%] left-[20%] w-[350px] h-[350px] rounded-full bg-indigo-400 dark:bg-indigo-900/40 blur-[120px]" />
         <div className="absolute top-[10%] right-[20%] w-[300px] h-[300px] rounded-full bg-violet-400 dark:bg-violet-900/30 blur-[100px]" />
@@ -79,7 +108,7 @@ export default function HomeClient({ categories, recentArticles }: HomeClientPro
           A minimalist tech-wiki search engine with instant autocomplete suggestions, fuzzy typo corrections, and beautiful Notion-like formatting.
         </motion.p>
 
-        {/* Big Search Trigger Box */}
+        {/* Search Trigger */}
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -142,7 +171,7 @@ export default function HomeClient({ categories, recentArticles }: HomeClientPro
                   {cat.article_count || 0} articles
                 </span>
                 <Link
-                  href={`/categories/${cat.slug}`}
+                  to={`/categories/${cat.slug}`}
                   className="text-xs font-semibold text-indigo-500 dark:text-indigo-400 flex items-center gap-1 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all"
                 >
                   Browse <ChevronRight className="w-3.5 h-3.5" />
@@ -153,7 +182,7 @@ export default function HomeClient({ categories, recentArticles }: HomeClientPro
         </motion.div>
       </section>
 
-      {/* Recent / Popular Articles */}
+      {/* Recent Articles */}
       {recentArticles.length > 0 && (
         <section className="max-w-3xl mx-auto px-4 py-12">
           <div className="flex items-center gap-2 mb-6 border-b border-neutral-200/50 dark:border-neutral-800 pb-3">
@@ -183,7 +212,7 @@ export default function HomeClient({ categories, recentArticles }: HomeClientPro
                     </span>
                   </div>
                   <Link 
-                    href={`/articles/${art.slug}`}
+                    to={`/articles/${art.slug}`}
                     className="font-outfit text-base font-bold text-neutral-900 dark:text-neutral-100 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors line-clamp-1"
                   >
                     {art.title}
@@ -194,7 +223,7 @@ export default function HomeClient({ categories, recentArticles }: HomeClientPro
                 </div>
 
                 <Link
-                  href={`/articles/${art.slug}`}
+                  to={`/articles/${art.slug}`}
                   className="p-2 rounded-lg bg-neutral-100 dark:bg-neutral-900 text-neutral-400 dark:text-neutral-500 hover:text-indigo-500 dark:hover:text-indigo-400 group-hover:bg-indigo-500/10 group-hover:text-indigo-500 transition-colors ml-4 shrink-0"
                 >
                   <ChevronRight className="w-4 h-4" />

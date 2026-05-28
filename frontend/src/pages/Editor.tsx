@@ -1,7 +1,5 @@
-'use client';
-
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { 
@@ -14,47 +12,71 @@ import {
   X,
   Sparkles
 } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { Article, Category, createArticle, updateArticle, uploadImage } from '../../../lib/api';
+import { fetchArticle, fetchCategories, createArticle, updateArticle, uploadImage, Category } from '../lib/api';
 
-interface EditorClientProps {
-  article?: Article | null;
-  categories: Category[];
-}
+export default function Editor() {
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = !!id;
+  const navigate = useNavigate();
 
-export default function EditorClient({ article, categories }: EditorClientProps) {
-  const isEditMode = !!article;
-  const router = useRouter();
+  const [categories, setCategories] = React.useState<Category[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
 
   // Form states
-  const [title, setTitle] = React.useState(article?.title || '');
-  const [slug, setSlug] = React.useState(article?.slug || '');
-  const [summary, setSummary] = React.useState(article?.summary || '');
-  const [content, setContent] = React.useState(article?.content || '');
-  const [categoryId, setCategoryId] = React.useState<number | null>(article?.category_id || null);
-  const [published, setPublished] = React.useState(article?.published ?? true);
-  const [tags, setTags] = React.useState<string[]>(article?.tags || []);
+  const [title, setTitle] = React.useState('');
+  const [slug, setSlug] = React.useState('');
+  const [summary, setSummary] = React.useState('');
+  const [content, setContent] = React.useState('');
+  const [categoryId, setCategoryId] = React.useState<number | null>(null);
+  const [published, setPublished] = React.useState(true);
+  const [tags, setTags] = React.useState<string[]>([]);
   const [newTag, setNewTag] = React.useState('');
 
   const [activeTab, setActiveTab] = React.useState<'write' | 'preview'>('write');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
 
-  // Auto-generate slug from title
+  // Initial Fetch
+  React.useEffect(() => {
+    async function loadEditorData() {
+      setIsLoading(true);
+      try {
+        const cats = await fetchCategories();
+        setCategories(cats);
+
+        if (isEditMode && id) {
+          const article = await fetchArticle(id);
+          setTitle(article.title);
+          setSlug(article.slug);
+          setSummary(article.summary || '');
+          setContent(article.content);
+          setCategoryId(article.category_id);
+          setPublished(article.published);
+          setTags(article.tags || []);
+        }
+      } catch (err) {
+        console.error('Failed to load editor data:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadEditorData();
+  }, [id, isEditMode]);
+
+  // Auto slugify title
   const handleTitleChange = (val: string) => {
     setTitle(val);
     if (!isEditMode) {
       const slugified = val
         .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '') // remove special characters
+        .replace(/[^a-z0-9\s-]/g, '')
         .trim()
-        .replace(/\s+/g, '-') // replace spaces with hyphens
-        .replace(/-+/g, '-'); // collapse multiple hyphens
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-');
       setSlug(slugified);
     }
   };
 
-  // Add tag pill
   const handleAddTag = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && newTag.trim()) {
       e.preventDefault();
@@ -70,7 +92,6 @@ export default function EditorClient({ article, categories }: EditorClientProps)
     setTags(tags.filter(t => t !== tagToRemove));
   };
 
-  // Upload image and insert markdown link at cursor
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -90,7 +111,6 @@ export default function EditorClient({ article, categories }: EditorClientProps)
         
         setContent(before + imageMarkdown + after);
         
-        // Return focus
         setTimeout(() => {
           textarea.focus();
           textarea.setSelectionRange(start + imageMarkdown.length, start + imageMarkdown.length);
@@ -106,16 +126,14 @@ export default function EditorClient({ article, categories }: EditorClientProps)
     }
   };
 
-  // Save changes
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !slug.trim() || !content.trim()) {
-      alert('Please fill out all required fields (Title, Slug, Content).');
+      alert('Please fill out Title, Slug and Content.');
       return;
     }
 
     setIsSubmitting(true);
-    
     const payload = {
       title,
       slug,
@@ -127,13 +145,12 @@ export default function EditorClient({ article, categories }: EditorClientProps)
     };
 
     try {
-      if (isEditMode && article) {
-        await updateArticle(article.id, payload);
+      if (isEditMode && id) {
+        await updateArticle(Number(id), payload);
       } else {
         await createArticle(payload);
       }
-      router.push('/admin');
-      router.refresh();
+      navigate('/admin');
     } catch (err: any) {
       console.error(err);
       alert(`Save failed: ${err.message}`);
@@ -142,12 +159,24 @@ export default function EditorClient({ article, categories }: EditorClientProps)
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-8 animate-pulse space-y-6">
+        <div className="h-4 w-32 bg-neutral-200 dark:bg-neutral-800 rounded" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 h-[450px] bg-neutral-200 dark:bg-neutral-800 rounded-xl" />
+          <div className="h-80 bg-neutral-200 dark:bg-neutral-800 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* Top bar navigation */}
+      {/* Navigation and Save Actions */}
       <div className="flex items-center justify-between gap-4 mb-6">
         <Link
-          href="/admin"
+          to="/admin"
           className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -165,7 +194,8 @@ export default function EditorClient({ article, categories }: EditorClientProps)
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Editor controls / metadata form (right on large screens, top on mobile) */}
+        
+        {/* Sidebar Settings Form */}
         <div className="lg:order-2 space-y-6">
           <div className="p-5 border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl shadow-premium dark:shadow-premium-dark space-y-4">
             <h3 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
@@ -173,7 +203,6 @@ export default function EditorClient({ article, categories }: EditorClientProps)
               Settings &amp; Metadata
             </h3>
 
-            {/* Slug input */}
             <div>
               <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Slug URL</label>
               <input
@@ -186,7 +215,6 @@ export default function EditorClient({ article, categories }: EditorClientProps)
               />
             </div>
 
-            {/* Category selection */}
             <div>
               <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Category</label>
               <select
@@ -201,7 +229,6 @@ export default function EditorClient({ article, categories }: EditorClientProps)
               </select>
             </div>
 
-            {/* Tags builder */}
             <div>
               <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Tags (Press Enter)</label>
               <div className="flex items-center gap-2 border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-1 bg-neutral-50 dark:bg-neutral-900/30 mb-2">
@@ -233,7 +260,6 @@ export default function EditorClient({ article, categories }: EditorClientProps)
               )}
             </div>
 
-            {/* Published Switch */}
             <div className="flex items-center justify-between pt-2">
               <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">Publish Article</span>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -249,11 +275,9 @@ export default function EditorClient({ article, categories }: EditorClientProps)
           </div>
         </div>
 
-        {/* Markdown Input Editor Pane (left on large screens) */}
+        {/* Content Pane */}
         <div className="lg:col-span-2 lg:order-1 flex flex-col border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl overflow-hidden shadow-premium dark:shadow-premium-dark">
-          {/* Editor Header toolbar */}
           <div className="flex items-center justify-between px-4 py-2 border-b border-neutral-200/50 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-950">
-            {/* View tabs */}
             <div className="flex gap-1">
               <button
                 type="button"
@@ -281,7 +305,6 @@ export default function EditorClient({ article, categories }: EditorClientProps)
               </button>
             </div>
 
-            {/* Upload Button */}
             <label className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 text-xs font-medium cursor-pointer transition-colors shadow-sm">
               <ImageIcon className="w-3.5 h-3.5" />
               <span>{isUploading ? 'Uploading...' : 'Insert Image'}</span>
@@ -295,9 +318,7 @@ export default function EditorClient({ article, categories }: EditorClientProps)
             </label>
           </div>
 
-          {/* Editor Fields */}
           <div className="p-4 space-y-4 flex-1 flex flex-col">
-            {/* Title field */}
             <input
               type="text"
               value={title}
@@ -307,7 +328,6 @@ export default function EditorClient({ article, categories }: EditorClientProps)
               className="w-full text-xl sm:text-2xl font-extrabold text-neutral-950 dark:text-white placeholder-neutral-300 dark:placeholder-neutral-800 bg-transparent outline-none border-b border-neutral-100 dark:border-neutral-900 pb-2"
             />
 
-            {/* Summary field */}
             <input
               type="text"
               value={summary}
@@ -316,7 +336,6 @@ export default function EditorClient({ article, categories }: EditorClientProps)
               className="w-full text-xs text-neutral-500 bg-transparent outline-none placeholder-neutral-400 dark:placeholder-neutral-800"
             />
 
-            {/* Writing Pane */}
             {activeTab === 'write' ? (
               <textarea
                 id="content-textarea"
@@ -327,7 +346,6 @@ export default function EditorClient({ article, categories }: EditorClientProps)
                 className="w-full min-h-[450px] flex-1 bg-transparent text-sm text-neutral-900 dark:text-neutral-200 font-mono outline-none resize-y py-2 leading-relaxed"
               />
             ) : (
-              /* Live Preview Pane */
               <div className="prose-custom min-h-[450px] py-2 overflow-y-auto max-h-[60vh] border border-dashed border-neutral-200 dark:border-neutral-800 p-4 rounded-lg bg-neutral-50/20 dark:bg-neutral-950/20">
                 {content.trim() === '' ? (
                   <span className="text-xs text-neutral-400 italic">Nothing to preview. Start writing content.</span>

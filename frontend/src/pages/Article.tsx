@@ -1,8 +1,5 @@
-'use client';
-
 import * as React from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { Link, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { 
@@ -15,33 +12,60 @@ import {
   Edit3, 
   BookOpen, 
   ChevronDown,
-  Layout
+  ArrowLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Article, Category } from '../../../lib/api';
+import { fetchArticle, fetchCategories, fetchArticles, Article as ArticleType, Category } from '../lib/api';
 
-interface ArticleReaderProps {
-  article: Article;
-  categories: Category[];
-  allArticles: Article[];
-}
-
-export default function ArticleReader({ article, categories, allArticles }: ArticleReaderProps) {
+export default function ArticlePage() {
+  const { slug } = useParams<{ slug: string }>();
+  const [article, setArticle] = React.useState<ArticleType | null>(null);
+  const [categories, setCategories] = React.useState<Category[]>([]);
+  const [allArticles, setAllArticles] = React.useState<ArticleType[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
   const [expandedCategories, setExpandedCategories] = React.useState<Record<string, boolean>>({});
-  const router = useRouter();
+
+  // Fetch article data on slug change
+  React.useEffect(() => {
+    async function loadArticleData() {
+      if (!slug) return;
+      setIsLoading(true);
+      try {
+        const [artData, catsData, artsList] = await Promise.all([
+          fetchArticle(slug),
+          fetchCategories(),
+          fetchArticles(),
+        ]);
+        setArticle(artData);
+        setCategories(catsData);
+        setAllArticles(artsList);
+        
+        // Auto-expand category
+        if (artData.category_slug) {
+          setExpandedCategories(prev => ({ ...prev, [artData.category_slug!]: true }));
+        }
+      } catch (err) {
+        console.error('Failed to load article:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadArticleData();
+  }, [slug]);
 
   // Parse Headings for Table of Contents
   const headings = React.useMemo(() => {
+    if (!article) return [];
     const headingRegex = /^(#{2,3})\s+(.*)$/gm;
     const list: { level: number; text: string; id: string }[] = [];
     let match;
-    // Strip code blocks to avoid parsing markdown symbols in snippets
     const cleanContent = article.content.replace(/```[\s\S]*?```/g, '');
     
     while ((match = headingRegex.exec(cleanContent)) !== null) {
       const level = match[1].length;
-      const text = match[2].replace(/\*|_|`/g, '').trim(); // clean formatting
+      const text = match[2].replace(/\*|_|`/g, '').trim();
       const id = text
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
@@ -49,26 +73,16 @@ export default function ArticleReader({ article, categories, allArticles }: Arti
       list.push({ level, text, id });
     }
     return list;
-  }, [article.content]);
+  }, [article]);
 
-  // Pre-expand current article's category
-  React.useEffect(() => {
-    if (article.category_slug) {
-      setExpandedCategories(prev => ({
-        ...prev,
-        [article.category_slug!]: true
-      }));
-    }
-  }, [article.category_slug]);
-
-  const toggleCategory = (slug: string) => {
+  const toggleCategory = (slugStr: string) => {
     setExpandedCategories(prev => ({
       ...prev,
-      [slug]: !prev[slug]
+      [slugStr]: !prev[slugStr]
     }));
   };
 
-  // Custom heading renderers to inject anchor IDs matching ToC
+  // Custom heading node hooks to link anchor tags
   const MarkdownComponents = {
     h2: ({ node, children, ...props }: any) => {
       const text = React.Children.toArray(children).join('');
@@ -84,7 +98,7 @@ export default function ArticleReader({ article, categories, allArticles }: Arti
 
   // Group articles by category
   const articlesByCategory = React.useMemo(() => {
-    const map: Record<string, Article[]> = {};
+    const map: Record<string, ArticleType[]> = {};
     allArticles.forEach(art => {
       if (art.category_slug) {
         if (!map[art.category_slug]) map[art.category_slug] = [];
@@ -94,15 +108,39 @@ export default function ArticleReader({ article, categories, allArticles }: Arti
     return map;
   }, [allArticles]);
 
+  if (isLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-16 animate-pulse flex gap-6">
+        <div className="hidden lg:block w-64 h-[500px] bg-neutral-200 dark:bg-neutral-800 rounded-xl" />
+        <div className="flex-1 space-y-6">
+          <div className="h-4 w-40 bg-neutral-200 dark:bg-neutral-800 rounded" />
+          <div className="h-10 w-3/4 bg-neutral-200 dark:bg-neutral-800 rounded" />
+          <div className="h-4 w-48 bg-neutral-200 dark:bg-neutral-800 rounded" />
+          <div className="h-[300px] bg-neutral-200 dark:bg-neutral-800 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!article) {
+    return (
+      <div className="max-w-md mx-auto py-20 text-center">
+        <h2 className="font-outfit text-xl font-bold">Article not found</h2>
+        <p className="text-sm text-neutral-400 mt-2">The article you requested does not exist or was deleted.</p>
+        <Link to="/" className="inline-flex items-center gap-1 mt-4 text-xs font-semibold text-indigo-500 hover:underline">
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Home
+        </Link>
+      </div>
+    );
+  }
+
   const sidebarContent = (
     <div className="flex flex-col h-full bg-white dark:bg-neutral-950 p-4 border-r border-neutral-200/50 dark:border-neutral-800/50">
-      {/* Header */}
       <div className="flex items-center gap-2 mb-6 px-2 text-indigo-500 font-semibold tracking-tight text-sm uppercase">
         <BookOpen className="w-4 h-4" />
         <span>Wiki Documentation</span>
       </div>
 
-      {/* Categories Tree */}
       <nav className="flex-1 overflow-y-auto space-y-1 pr-1">
         {categories.map((cat) => {
           const isExpanded = !!expandedCategories[cat.slug];
@@ -147,7 +185,7 @@ export default function ArticleReader({ article, categories, allArticles }: Arti
                         return (
                           <Link
                             key={art.id}
-                            href={`/articles/${art.slug}`}
+                            to={`/articles/${art.slug}`}
                             className={`block px-3 py-1.5 rounded-lg text-xs transition-colors truncate ${
                               isCurrentArticle
                                 ? 'bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 font-semibold'
@@ -172,12 +210,12 @@ export default function ArticleReader({ article, categories, allArticles }: Arti
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-6">
       
-      {/* Desktop Left Sidebar */}
+      {/* Left Sidebar */}
       <aside className="hidden lg:block w-64 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
         {sidebarContent}
       </aside>
 
-      {/* Mobile Drawer Trigger & Drawer */}
+      {/* Mobile Trigger */}
       <div className="lg:hidden fixed bottom-4 right-4 z-40">
         <button
           onClick={() => setIsMobileSidebarOpen(true)}
@@ -190,7 +228,6 @@ export default function ArticleReader({ article, categories, allArticles }: Arti
       <AnimatePresence>
         {isMobileSidebarOpen && (
           <div className="fixed inset-0 z-50 lg:hidden">
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -198,7 +235,6 @@ export default function ArticleReader({ article, categories, allArticles }: Arti
               onClick={() => setIsMobileSidebarOpen(false)}
               className="fixed inset-0 bg-neutral-950/60 backdrop-blur-sm"
             />
-            {/* Drawer */}
             <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
@@ -220,15 +256,14 @@ export default function ArticleReader({ article, categories, allArticles }: Arti
         )}
       </AnimatePresence>
 
-      {/* Reader Layout Column */}
+      {/* Content Columns */}
       <div className="flex-1 min-w-0 py-8 lg:px-4">
-        {/* Breadcrumbs */}
         <div className="flex items-center gap-1.5 text-xs text-neutral-400 dark:text-neutral-500 mb-6 font-medium">
-          <Link href="/" className="hover:text-indigo-500 transition-colors">Home</Link>
+          <Link to="/" className="hover:text-indigo-500 transition-colors">Home</Link>
           <ChevronRight className="w-3 h-3" />
           {article.category_name && (
             <>
-              <Link href={`/categories/${article.category_slug}`} className="hover:text-indigo-500 transition-colors">
+              <Link to={`/categories/${article.category_slug}`} className="hover:text-indigo-500 transition-colors">
                 {article.category_name}
               </Link>
               <ChevronRight className="w-3 h-3" />
@@ -237,7 +272,6 @@ export default function ArticleReader({ article, categories, allArticles }: Arti
           <span className="text-neutral-600 dark:text-neutral-400 truncate max-w-[200px]">{article.title}</span>
         </div>
 
-        {/* Article Meta Header */}
         <article className="prose-custom">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-6 border-b border-neutral-200/50 dark:border-neutral-800/80 pb-6">
             <div>
@@ -258,7 +292,7 @@ export default function ArticleReader({ article, categories, allArticles }: Arti
             </div>
 
             <Link
-              href={`/admin/editor/${article.id}`}
+              to={`/admin/editor/${article.id}`}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shrink-0 shadow-sm"
             >
               <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
@@ -266,7 +300,6 @@ export default function ArticleReader({ article, categories, allArticles }: Arti
             </Link>
           </div>
 
-          {/* Tags */}
           {article.tags && article.tags.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 mb-6">
               <Tag className="w-3.5 h-3.5 text-neutral-400" />
@@ -281,7 +314,6 @@ export default function ArticleReader({ article, categories, allArticles }: Arti
             </div>
           )}
 
-          {/* Markdown Parser */}
           <ReactMarkdown 
             remarkPlugins={[remarkGfm]} 
             components={MarkdownComponents}
@@ -291,7 +323,7 @@ export default function ArticleReader({ article, categories, allArticles }: Arti
         </article>
       </div>
 
-      {/* Desktop Table of Contents Sidebar */}
+      {/* Right ToC Sidebar */}
       {headings.length > 0 && (
         <aside className="hidden xl:block w-56 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto py-8">
           <div className="border-l border-neutral-200 dark:border-neutral-800 pl-4 space-y-4">

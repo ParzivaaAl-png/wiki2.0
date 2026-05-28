@@ -1,7 +1,5 @@
-'use client';
-
 import * as React from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
@@ -11,23 +9,37 @@ import {
   BookOpen, 
   Layers, 
   ExternalLink,
-  ChevronRight,
   TrendingUp
 } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { Article, Category, deleteArticle } from '../../lib/api';
+import { fetchArticles, fetchCategories, deleteArticle, Article, Category } from '../lib/api';
 
-interface AdminClientProps {
-  initialArticles: Article[];
-  categories: Category[];
-}
-
-export default function AdminClient({ initialArticles, categories }: AdminClientProps) {
-  const [articles, setArticles] = React.useState<Article[]>(initialArticles);
+export default function Admin() {
+  const [articles, setArticles] = React.useState<Article[]>([]);
+  const [categories, setCategories] = React.useState<Category[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  
   const [searchQuery, setSearchQuery] = React.useState('');
   const [categoryFilter, setCategoryFilter] = React.useState('all');
 
-  // Calculate quick stats
+  React.useEffect(() => {
+    async function loadAdminData() {
+      setIsLoading(true);
+      try {
+        const [arts, cats] = await Promise.all([
+          fetchArticles({ all: true }), // fetches all including drafts
+          fetchCategories(),
+        ]);
+        setArticles(arts);
+        setCategories(cats);
+      } catch (err) {
+        console.error('Failed to load admin catalog:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadAdminData();
+  }, []);
+
   const totalViews = React.useMemo(() => {
     return articles.reduce((acc, curr) => acc + curr.views, 0);
   }, [articles]);
@@ -36,14 +48,11 @@ export default function AdminClient({ initialArticles, categories }: AdminClient
     return articles.filter(art => !art.published).length;
   }, [articles]);
 
-  // Filtered Articles
   const filteredArticles = React.useMemo(() => {
     return articles.filter(art => {
       const matchesSearch = art.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             art.summary.toLowerCase().includes(searchQuery.toLowerCase());
-      
       const matchesCategory = categoryFilter === 'all' || art.category_slug === categoryFilter;
-      
       return matchesSearch && matchesCategory;
     });
   }, [articles, searchQuery, categoryFilter]);
@@ -61,8 +70,23 @@ export default function AdminClient({ initialArticles, categories }: AdminClient
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-10 space-y-6 animate-pulse">
+        <div className="h-10 w-48 bg-neutral-200 dark:bg-neutral-800 rounded" />
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-28 bg-neutral-200 dark:bg-neutral-800 rounded-xl" />
+          ))}
+        </div>
+        <div className="h-[400px] bg-neutral-200 dark:bg-neutral-800 rounded-xl" />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-10">
+      
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
@@ -75,7 +99,7 @@ export default function AdminClient({ initialArticles, categories }: AdminClient
         </div>
 
         <Link
-          href="/admin/editor/new"
+          to="/admin/editor/new"
           className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 transition-all text-center justify-center"
         >
           <Plus className="w-4.5 h-4.5" />
@@ -83,9 +107,8 @@ export default function AdminClient({ initialArticles, categories }: AdminClient
         </Link>
       </div>
 
-      {/* Stats Widgets Bento Grid */}
+      {/* Stats Widgets */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {/* Stat 1 */}
         <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
           <div className="flex items-center justify-between mb-3 text-neutral-400">
             <span className="text-xs font-semibold uppercase tracking-wider">Total Articles</span>
@@ -95,7 +118,6 @@ export default function AdminClient({ initialArticles, categories }: AdminClient
           <p className="text-[10px] text-neutral-400 mt-1">{draftCount} draft articles pending</p>
         </div>
 
-        {/* Stat 2 */}
         <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
           <div className="flex items-center justify-between mb-3 text-neutral-400">
             <span className="text-xs font-semibold uppercase tracking-wider">Categories</span>
@@ -105,7 +127,6 @@ export default function AdminClient({ initialArticles, categories }: AdminClient
           <p className="text-[10px] text-neutral-400 mt-1">Tech segments defined</p>
         </div>
 
-        {/* Stat 3 */}
         <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
           <div className="flex items-center justify-between mb-3 text-neutral-400">
             <span className="text-xs font-semibold uppercase tracking-wider">Documentation Views</span>
@@ -115,7 +136,6 @@ export default function AdminClient({ initialArticles, categories }: AdminClient
           <p className="text-[10px] text-neutral-400 mt-1">Total page reads recorded</p>
         </div>
 
-        {/* Stat 4 */}
         <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
           <div className="flex items-center justify-between mb-3 text-neutral-400">
             <span className="text-xs font-semibold uppercase tracking-wider">Performance</span>
@@ -126,10 +146,8 @@ export default function AdminClient({ initialArticles, categories }: AdminClient
         </div>
       </div>
 
-      {/* Filter and Table Card */}
+      {/* Table grid */}
       <div className="border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 rounded-xl overflow-hidden shadow-premium dark:shadow-premium-dark">
-        
-        {/* Filters Header */}
         <div className="p-4 border-b border-neutral-200/50 dark:border-neutral-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-2 border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-1.5 bg-neutral-50 dark:bg-neutral-900/30 w-full md:max-w-xs">
             <Search className="w-4 h-4 text-neutral-400 shrink-0" />
@@ -157,7 +175,6 @@ export default function AdminClient({ initialArticles, categories }: AdminClient
           </div>
         </div>
 
-        {/* Articles Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -181,7 +198,7 @@ export default function AdminClient({ initialArticles, categories }: AdminClient
                   <tr key={art.id} className="hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20 transition-colors">
                     <td className="p-4 font-medium max-w-sm truncate">
                       <Link 
-                        href={`/articles/${art.slug}`}
+                        to={`/articles/${art.slug}`}
                         className="hover:text-indigo-500 dark:hover:text-indigo-400 hover:underline inline-flex items-center gap-1 font-bold text-neutral-900 dark:text-neutral-100"
                       >
                         {art.title}
@@ -213,7 +230,7 @@ export default function AdminClient({ initialArticles, categories }: AdminClient
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <Link
-                          href={`/admin/editor/${art.id}`}
+                          to={`/admin/editor/${art.id}`}
                           className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors"
                           title="Edit"
                         >
@@ -235,7 +252,6 @@ export default function AdminClient({ initialArticles, categories }: AdminClient
           </table>
         </div>
 
-        {/* Footer */}
         <div className="p-4 bg-neutral-50 dark:bg-neutral-950 border-t border-neutral-200/50 dark:border-neutral-800/80 text-[10px] text-neutral-400 flex items-center justify-between">
           <span>Showing {filteredArticles.length} of {articles.length} articles</span>
           <span>SaaS CMS Engine v2.0</span>
