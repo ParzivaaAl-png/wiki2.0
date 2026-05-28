@@ -5,7 +5,6 @@ import {
   Search, 
   Edit3, 
   Trash2, 
-  Eye, 
   BookOpen, 
   Layers, 
   ExternalLink,
@@ -40,9 +39,7 @@ export default function Admin() {
     loadAdminData();
   }, []);
 
-  const totalViews = React.useMemo(() => {
-    return articles.reduce((acc, curr) => acc + curr.views, 0);
-  }, [articles]);
+
 
   const draftCount = React.useMemo(() => {
     return articles.filter(art => !art.published).length;
@@ -94,7 +91,7 @@ export default function Admin() {
             Панель управления
           </h1>
           <p className="text-neutral-500 dark:text-neutral-400 text-sm font-light mt-1">
-            Создание статей, управление категориями и статистика просмотров.
+            Создание статей и управление категориями.
           </p>
         </div>
 
@@ -108,7 +105,7 @@ export default function Admin() {
       </div>
 
       {/* Stats Widgets */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
           <div className="flex items-center justify-between mb-3 text-neutral-400">
             <span className="text-xs font-semibold uppercase tracking-wider">Всего статей</span>
@@ -125,15 +122,6 @@ export default function Admin() {
           </div>
           <div className="text-2xl font-bold font-outfit text-neutral-900 dark:text-white">{categories.length}</div>
           <p className="text-[10px] text-neutral-400 mt-1">тех. разделов создано</p>
-        </div>
-
-        <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
-          <div className="flex items-center justify-between mb-3 text-neutral-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Просмотры</span>
-            <Eye className="w-5 h-5 text-indigo-500" />
-          </div>
-          <div className="text-2xl font-bold font-outfit text-neutral-900 dark:text-white">{totalViews}</div>
-          <p className="text-[10px] text-neutral-400 mt-1">зафиксировано чтений</p>
         </div>
 
         <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
@@ -181,7 +169,6 @@ export default function Admin() {
               <tr className="bg-neutral-50 dark:bg-neutral-950 text-neutral-400 dark:text-neutral-500 font-semibold text-xs border-b border-neutral-200 dark:border-neutral-800 select-none">
                 <th className="p-4">Статья</th>
                 <th className="p-4">Раздел</th>
-                <th className="p-4 text-center">Просмотры</th>
                 <th className="p-4">Статус</th>
                 <th className="p-4 text-right">Действия</th>
               </tr>
@@ -189,7 +176,7 @@ export default function Admin() {
             <tbody className="divide-y divide-neutral-200/50 dark:divide-neutral-800/80 text-xs">
               {filteredArticles.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-neutral-400 dark:text-neutral-600">
+                  <td colSpan={4} className="p-8 text-center text-neutral-400 dark:text-neutral-600">
                     Статей с такими фильтрами не найдено.
                   </td>
                 </tr>
@@ -212,9 +199,6 @@ export default function Admin() {
                       <span className="text-[10px] uppercase font-semibold text-neutral-400 bg-neutral-100 dark:bg-neutral-900 px-2 py-0.5 rounded">
                         {art.category_name || 'Без раздела'}
                       </span>
-                    </td>
-                    <td className="p-4 text-center font-semibold text-neutral-700 dark:text-neutral-300">
-                      {art.views}
                     </td>
                     <td className="p-4">
                       {art.published ? (
