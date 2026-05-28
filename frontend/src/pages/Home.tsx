@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Sparkles, Clock, ChevronRight, Eye, BookOpen } from 'lucide-react';
+import { Search, Sparkles, Clock, ChevronRight, BookOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { fetchCategories, fetchArticles, Category, Article } from '../lib/api';
 import { CategoryIcon } from '../components/icon';
@@ -34,14 +34,6 @@ export default function Home() {
     if (mod10 === 1 && mod100 !== 11) return 'статья';
     if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'статьи';
     return 'статей';
-  };
-
-  const getViewPlural = (count: number) => {
-    const mod10 = count % 10;
-    const mod100 = count % 100;
-    if (mod10 === 1 && mod100 !== 11) return 'просмотр';
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'просмотра';
-    return 'просмотров';
   };
 
   const triggerGlobalSearch = () => {
@@ -221,10 +213,6 @@ export default function Home() {
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-[10px] font-medium uppercase tracking-wider bg-neutral-100 dark:bg-neutral-900 text-neutral-500 dark:text-neutral-400 px-1.5 py-0.5 rounded">
                       {art.category_name}
-                    </span>
-                    <span className="text-neutral-300 dark:text-neutral-800 text-xs">•</span>
-                    <span className="flex items-center gap-1 text-[10px] text-neutral-400">
-                      <Eye className="w-3.5 h-3.5" /> {art.views} {getViewPlural(art.views)}
                     </span>
                   </div>
                   <Link 

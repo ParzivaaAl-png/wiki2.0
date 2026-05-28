@@ -2,12 +2,11 @@ import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Sparkles, X, FileText, CornerDownLeft } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { suggestArticles, searchArticles, SearchResult, Suggestion } from '../lib/api';
+import { searchArticles, SearchResult } from '../lib/api';
 
 export function SearchModal() {
   const [isOpen, setIsOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
-  const [suggestions, setSuggestions] = React.useState<Suggestion[]>([]);
   const [results, setResults] = React.useState<SearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -29,10 +28,9 @@ export function SearchModal() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Fetch suggestions and results on query change
+  // Fetch results on query change
   React.useEffect(() => {
     if (query.trim().length < 2) {
-      setSuggestions([]);
       setResults([]);
       return;
     }
@@ -40,12 +38,8 @@ export function SearchModal() {
     const timer = setTimeout(async () => {
       setIsLoading(true);
       try {
-        const sugData = await suggestArticles(query);
-        setSuggestions(sugData);
-
         const resData = await searchArticles(query);
         setResults(resData);
-        
         setSelectedIndex(0);
       } catch (err) {
         console.error('Search error:', err);
@@ -61,18 +55,57 @@ export function SearchModal() {
   React.useEffect(() => {
     if (!isOpen) {
       setQuery('');
-      setSuggestions([]);
       setResults([]);
       setSelectedIndex(0);
     }
   }, [isOpen]);
 
-  const handleSelect = (slug: string) => {
+  const handleSelect = (slug: string, highlight?: string) => {
     setIsOpen(false);
-    navigate(`/articles/${slug}`);
+    if (highlight) {
+      navigate(`/articles/${slug}?highlight=${encodeURIComponent(highlight)}`);
+    } else {
+      navigate(`/articles/${slug}`);
+    }
   };
 
-  const totalItems = suggestions.length + results.length;
+  // Process results into Article Matches and Snippet Matches
+  const matchedArticles = results;
+
+  const textMatches = React.useMemo(() => {
+    const list: {
+      id: number;
+      articleTitle: string;
+      slug: string;
+      categoryName: string;
+      snippet: string;
+      matchedWord: string;
+    }[] = [];
+
+    results.forEach((res) => {
+      if (res.highlights && res.highlights.length > 0) {
+        res.highlights.forEach((hl) => {
+          // Extract matching word from tag: <mark class="...">word</mark>
+          const match = hl.match(/<mark[^>]*>(.*?)<\/mark>/i);
+          const matchedWord = match ? match[1] : query;
+
+          // Strip HTML tags from snippet context for better highlight match in article
+          // but we keep the mark format for the modal preview rendering
+          list.push({
+            id: res.id,
+            articleTitle: res.title,
+            slug: res.slug,
+            categoryName: res.categoryName,
+            snippet: hl,
+            matchedWord: matchedWord,
+          });
+        });
+      }
+    });
+    return list;
+  }, [results, query]);
+
+  const totalItems = matchedArticles.length + textMatches.length;
 
   const handleListKeyDown = (e: React.KeyboardEvent) => {
     if (totalItems === 0) return;
@@ -86,11 +119,12 @@ export function SearchModal() {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       
-      if (selectedIndex < suggestions.length) {
-        handleSelect(suggestions[selectedIndex].slug);
+      if (selectedIndex < matchedArticles.length) {
+        handleSelect(matchedArticles[selectedIndex].slug);
       } else {
-        const resultIndex = selectedIndex - suggestions.length;
-        handleSelect(results[resultIndex].slug);
+        const textIdx = selectedIndex - matchedArticles.length;
+        const match = textMatches[textIdx];
+        handleSelect(match.slug, match.matchedWord);
       }
     }
   };
@@ -156,24 +190,24 @@ export function SearchModal() {
                   </div>
                 )}
 
-                {query.trim().length >= 2 && suggestions.length === 0 && results.length === 0 && !isLoading && (
+                {query.trim().length >= 2 && matchedArticles.length === 0 && textMatches.length === 0 && !isLoading && (
                   <div className="py-8 text-center text-neutral-400 text-sm">
                     Ничего не найдено по запросу &quot;<span className="text-neutral-900 dark:text-white font-semibold">{query}</span>&quot;.
                   </div>
                 )}
 
-                {suggestions.length > 0 && (
+                {matchedArticles.length > 0 && (
                   <div className="mb-4">
                     <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                      Подсказки
+                      Статьи
                     </div>
                     <ul className="space-y-1">
-                      {suggestions.map((sug, idx) => {
+                      {matchedArticles.map((art, idx) => {
                         const isCurrent = idx === selectedIndex;
                         return (
                           <li
-                            key={`sug-${sug.id}`}
-                            onClick={() => handleSelect(sug.slug)}
+                            key={`art-${art.id}`}
+                            onClick={() => handleSelect(art.slug)}
                             className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
                               isCurrent
                                 ? 'bg-indigo-500/10 text-indigo-900 dark:text-indigo-200 font-medium'
@@ -182,9 +216,9 @@ export function SearchModal() {
                           >
                             <div className="flex items-center gap-2">
                               <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
-                              <span>{sug.title}</span>
-                              <span className="text-xs text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase">
-                                {sug.categoryName}
+                              <span dangerouslySetInnerHTML={{ __html: art.title }} />
+                              <span className="text-[10px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium">
+                                {art.categoryName.replace('-', ' ')}
                               </span>
                             </div>
                             {isCurrent && <CornerDownLeft className="w-3.5 h-3.5 text-indigo-400" />}
@@ -195,19 +229,19 @@ export function SearchModal() {
                   </div>
                 )}
 
-                {results.length > 0 && (
+                {textMatches.length > 0 && (
                   <div>
                     <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                      Найденные совпадения
+                      Совпадения в тексте
                     </div>
                     <ul className="space-y-2">
-                      {results.map((res, idx) => {
-                        const globalIndex = suggestions.length + idx;
+                      {textMatches.map((match, idx) => {
+                        const globalIndex = matchedArticles.length + idx;
                         const isCurrent = globalIndex === selectedIndex;
                         return (
                           <li
-                            key={`res-${res.id}`}
-                            onClick={() => handleSelect(res.slug)}
+                            key={`match-${match.slug}-${idx}`}
+                            onClick={() => handleSelect(match.slug, match.matchedWord)}
                             className={`p-3 rounded-lg cursor-pointer transition-colors border ${
                               isCurrent
                                 ? 'bg-indigo-500/5 border-indigo-500/20 text-neutral-900 dark:text-neutral-50'
@@ -215,27 +249,18 @@ export function SearchModal() {
                             }`}
                           >
                             <div className="flex items-center justify-between mb-1">
-                              <h4 
-                                className="font-semibold text-sm text-neutral-950 dark:text-white"
-                                dangerouslySetInnerHTML={{ __html: res.title }}
-                              />
-                              <span className="text-xs text-neutral-400 dark:text-neutral-500 capitalize">
-                                {res.categoryName.replace('-', ' ')}
+                              <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
+                                из статьи: <strong className="text-neutral-600 dark:text-neutral-300 font-semibold" dangerouslySetInnerHTML={{ __html: match.articleTitle }} />
+                              </span>
+                              <span className="text-[10px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium">
+                                {match.categoryName.replace('-', ' ')}
                               </span>
                             </div>
                             
-                            {res.highlights && res.highlights.length > 0 ? (
-                              <div className="text-xs text-neutral-500 dark:text-neutral-400 space-y-1 mt-1 border-l-2 border-neutral-200 dark:border-neutral-800 pl-2">
-                                {res.highlights.map((hl, hIdx) => (
-                                  <p key={hIdx} dangerouslySetInnerHTML={{ __html: `... ${hl} ...` }} />
-                                ))}
-                              </div>
-                            ) : (
-                              <p 
-                                className="text-xs text-neutral-500 dark:text-neutral-400 line-clamp-1"
-                                dangerouslySetInnerHTML={{ __html: res.summary }}
-                              />
-                            )}
+                            <p 
+                              className="text-xs text-neutral-500 dark:text-neutral-400 border-l-2 border-neutral-200 dark:border-neutral-800 pl-2 mt-1.5 italic font-light leading-relaxed"
+                              dangerouslySetInnerHTML={{ __html: `... ${match.snippet} ...` }}
+                            />
                           </li>
                         );
                       })}

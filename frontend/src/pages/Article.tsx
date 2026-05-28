@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { 
@@ -7,7 +7,6 @@ import {
   Menu, 
   X, 
   Tag, 
-  Eye, 
   Calendar, 
   Edit3, 
   BookOpen, 
@@ -19,6 +18,7 @@ import { fetchArticle, fetchCategories, fetchArticles, Article as ArticleType, C
 
 export default function ArticlePage() {
   const { slug } = useParams<{ slug: string }>();
+  const location = useLocation();
   const [article, setArticle] = React.useState<ArticleType | null>(null);
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [allArticles, setAllArticles] = React.useState<ArticleType[]>([]);
@@ -55,13 +55,23 @@ export default function ArticlePage() {
     loadArticleData();
   }, [slug]);
 
-  const getViewPlural = (count: number) => {
-    const mod10 = count % 10;
-    const mod100 = count % 100;
-    if (mod10 === 1 && mod100 !== 11) return 'просмотр';
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'просмотра';
-    return 'просмотров';
-  };
+  // Effect to highlight and scroll to text
+  React.useEffect(() => {
+    if (!article || isLoading) return;
+    
+    const timer = setTimeout(() => {
+      const queryParams = new URLSearchParams(location.search);
+      const highlight = queryParams.get('highlight');
+      if (highlight) {
+        const articleContainer = document.querySelector('article');
+        if (articleContainer) {
+          highlightTextInDOM(articleContainer as HTMLElement, highlight);
+        }
+      }
+    }, 150);
+    
+    return () => clearTimeout(timer);
+  }, [article, isLoading, location.search]);
 
   // Parse Headings for Table of Contents
   const headings = React.useMemo(() => {
@@ -292,10 +302,6 @@ export default function ArticlePage() {
                   <Calendar className="w-3.5 h-3.5" />
                   {new Date(article.updated_at).toLocaleDateString()}
                 </span>
-                <span className="flex items-center gap-1">
-                  <Eye className="w-3.5 h-3.5" />
-                  {article.views} {getViewPlural(article.views)}
-                </span>
               </div>
             </div>
 
@@ -357,4 +363,80 @@ export default function ArticlePage() {
 
     </div>
   );
+}
+
+function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
+  if (!textToHighlight || textToHighlight.trim().length === 0) return;
+
+  const escapeRegExp = (str: string) => {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  };
+
+  const regex = new RegExp(`(${escapeRegExp(textToHighlight)})`, 'gi');
+  const walk = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  const nodesToReplace: Text[] = [];
+
+  let currentNode = walk.nextNode();
+  while (currentNode) {
+    const parent = currentNode.parentNode;
+    if (
+      currentNode.nodeValue && 
+      regex.test(currentNode.nodeValue) &&
+      parent &&
+      parent.nodeName !== 'SCRIPT' &&
+      parent.nodeName !== 'STYLE' &&
+      parent.nodeName !== 'MARK' &&
+      parent.nodeName !== 'TEXTAREA'
+    ) {
+      nodesToReplace.push(currentNode as Text);
+    }
+    currentNode = walk.nextNode();
+  }
+
+  let firstMark: HTMLElement | null = null;
+
+  nodesToReplace.forEach((node) => {
+    const parent = node.parentNode;
+    if (!parent) return;
+
+    const text = node.nodeValue || '';
+    const fragments = document.createDocumentFragment();
+    let lastIndex = 0;
+
+    regex.lastIndex = 0;
+
+    text.replace(regex, (match, p1, offset) => {
+      if (offset > lastIndex) {
+        fragments.appendChild(document.createTextNode(text.substring(lastIndex, offset)));
+      }
+
+      const mark = document.createElement('mark');
+      mark.className = 'bg-yellow-200 dark:bg-yellow-500/40 text-neutral-900 dark:text-white px-1 py-0.5 rounded font-bold shadow-sm inline-block';
+      mark.textContent = match;
+      fragments.appendChild(mark);
+
+      if (!firstMark) {
+        firstMark = mark;
+      }
+
+      lastIndex = offset + match.length;
+      return match;
+    });
+
+    if (lastIndex < text.length) {
+      fragments.appendChild(document.createTextNode(text.substring(lastIndex)));
+    }
+
+    try {
+      parent.replaceChild(fragments, node);
+    } catch (e) {
+      console.warn('Failed to replace node for highlight:', e);
+    }
+  });
+
+  if (firstMark) {
+    setTimeout(() => {
+      (firstMark as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  }
 }

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronRight, Calendar, Eye, FileText, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Calendar, FileText, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { fetchCategory, fetchArticles, Category as CategoryType, Article } from '../lib/api';
 import { CategoryIcon } from '../components/icon';
@@ -37,14 +37,6 @@ export default function Category() {
     if (mod10 === 1 && mod100 !== 11) return 'статья';
     if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'статьи';
     return 'статей';
-  };
-
-  const getViewPlural = (count: number) => {
-    const mod10 = count % 10;
-    const mod100 = count % 100;
-    if (mod10 === 1 && mod100 !== 11) return 'просмотр';
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'просмотра';
-    return 'просмотров';
   };
 
   if (isLoading) {
@@ -153,11 +145,6 @@ export default function Category() {
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5" />
                     {new Date(art.updated_at).toLocaleDateString()}
-                  </span>
-                  <span>•</span>
-                  <span className="flex items-center gap-1">
-                    <Eye className="w-3.5 h-3.5" />
-                    {art.views} {getViewPlural(art.views)}
                   </span>
                 </div>
 
