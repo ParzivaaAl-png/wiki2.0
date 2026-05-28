@@ -1,0 +1,143 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #fcfcfd;
+    --foreground: #18181b;
+    --border: #f1f1f4;
+    --card-bg: #ffffff;
+    --card-hover: #f9f9fb;
+    --selection-bg: #e0e7ff;
+  }
+
+  .dark {
+    --background: #030303;
+    --foreground: #f4f4f5;
+    --border: #18181b;
+    --card-bg: #09090b;
+    --card-hover: #121215;
+    --selection-bg: #312e81;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Glassmorphism Navigation */
+.glass-header {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background-color: rgba(252, 252, 253, 0.75);
+}
+
+.dark .glass-header {
+  background-color: rgba(3, 3, 3, 0.7);
+}
+
+/* Custom Scrollbar for Notion-like clean UI */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e4e4e7;
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #27272a;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #d4d4d8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+/* Glow layout decorations */
+.glow-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.glow-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+}
+
+/* Notion + Linear Markdown prose styling */
+.prose-custom {
+  @apply text-neutral-800 dark:text-neutral-200 leading-relaxed;
+}
+
+.prose-custom h1 {
+  @apply text-3xl font-bold tracking-tight text-neutral-900 dark:text-neutral-50 mt-8 mb-4 border-b border-neutral-200 dark:border-neutral-800 pb-2;
+}
+
+.prose-custom h2 {
+  @apply text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-50 mt-6 mb-3;
+}
+
+.prose-custom h3 {
+  @apply text-xl font-medium tracking-tight text-neutral-900 dark:text-neutral-100 mt-4 mb-2;
+}
+
+.prose-custom p {
+  @apply my-3 leading-7 text-neutral-700 dark:text-neutral-300;
+}
+
+.prose-custom a {
+  @apply text-indigo-600 dark:text-indigo-400 underline decoration-indigo-500/30 underline-offset-4 hover:decoration-indigo-500 transition-colors;
+}
+
+.prose-custom blockquote {
+  @apply pl-4 border-l-4 border-neutral-300 dark:border-neutral-700 italic my-4 text-neutral-600 dark:text-neutral-400;
+}
+
+.prose-custom code {
+  @apply px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-900 text-sm font-mono text-neutral-900 dark:text-neutral-100 border border-neutral-200/50 dark:border-neutral-800/50;
+}
+
+.prose-custom pre {
+  @apply p-4 rounded-lg bg-neutral-950 text-neutral-200 font-mono text-sm overflow-x-auto border border-neutral-800 my-4;
+}
+
+.prose-custom pre code {
+  @apply p-0 bg-transparent text-neutral-200 border-0 rounded-none;
+}
+
+.prose-custom ul {
+  @apply list-disc pl-6 my-3 text-neutral-700 dark:text-neutral-300;
+}
+
+.prose-custom ol {
+  @apply list-decimal pl-6 my-3 text-neutral-700 dark:text-neutral-300;
+}
+
+.prose-custom li {
+  @apply my-1;
+}
+
+.prose-custom img {
+  @apply rounded-xl border border-neutral-200 dark:border-neutral-800 my-6 shadow-sm max-w-full h-auto;
+}
