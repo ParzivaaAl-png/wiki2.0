@@ -102,7 +102,7 @@ export function SearchModal() {
         className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 bg-neutral-50 dark:bg-neutral-900/50 text-neutral-500 dark:text-neutral-400 text-sm hover:border-neutral-300 dark:hover:border-neutral-700 hover:text-neutral-800 dark:hover:text-neutral-200 transition-all w-48 md:w-64"
       >
         <Search className="w-4 h-4" />
-        <span className="flex-1 text-left">Search wiki...</span>
+        <span className="flex-1 text-left">Поиск по вики...</span>
         <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1.5 font-mono text-[10px] font-medium text-neutral-400 opacity-100">
           <span>⌘</span>K
         </kbd>
@@ -133,7 +133,7 @@ export function SearchModal() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={handleListKeyDown}
-                  placeholder="Search articles, topics, and code..."
+                  placeholder="Поиск статей, разделов и кода..."
                   autoFocus
                   className="w-full bg-transparent text-neutral-900 dark:text-neutral-50 outline-none placeholder-neutral-400 text-base"
                 />
@@ -152,20 +152,20 @@ export function SearchModal() {
                 {query.trim().length < 2 && (
                   <div className="py-8 text-center text-neutral-400 text-sm">
                     <Sparkles className="w-6 h-6 mx-auto mb-2 text-neutral-300 dark:text-neutral-700" />
-                    Type at least 2 characters to search...
+                    Введите не менее 2 символов для поиска...
                   </div>
                 )}
 
                 {query.trim().length >= 2 && suggestions.length === 0 && results.length === 0 && !isLoading && (
                   <div className="py-8 text-center text-neutral-400 text-sm">
-                    No results found for &quot;<span className="text-neutral-900 dark:white font-semibold">{query}</span>&quot;.
+                    Ничего не найдено по запросу &quot;<span className="text-neutral-900 dark:text-white font-semibold">{query}</span>&quot;.
                   </div>
                 )}
 
                 {suggestions.length > 0 && (
                   <div className="mb-4">
                     <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                      Suggestions
+                      Подсказки
                     </div>
                     <ul className="space-y-1">
                       {suggestions.map((sug, idx) => {
@@ -198,7 +198,7 @@ export function SearchModal() {
                 {results.length > 0 && (
                   <div>
                     <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                      Matching Content
+                      Найденные совпадения
                     </div>
                     <ul className="space-y-2">
                       {results.map((res, idx) => {
@@ -246,11 +246,11 @@ export function SearchModal() {
 
               <div className="flex items-center justify-between px-4 py-2 bg-neutral-50 dark:bg-neutral-900/40 border-t border-neutral-200/80 dark:border-neutral-900 text-[10px] text-neutral-400 select-none">
                 <div className="flex gap-3">
-                  <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">↑↓</kbd> Navigate</span>
-                  <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">Enter</kbd> Open</span>
-                  <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">Esc</kbd> Close</span>
+                  <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">↑↓</kbd> Навигация</span>
+                  <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">Enter</kbd> Открыть</span>
+                  <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">Esc</kbd> Закрыть</span>
                 </div>
-                <div>Fuzzy Autocomplete Active</div>
+                <div>Поиск с автодополнением активен</div>
               </div>
             </motion.div>
           </div>

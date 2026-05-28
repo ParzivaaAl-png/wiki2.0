@@ -55,6 +55,14 @@ export default function ArticlePage() {
     loadArticleData();
   }, [slug]);
 
+  const getViewPlural = (count: number) => {
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'просмотр';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'просмотра';
+    return 'просмотров';
+  };
+
   // Parse Headings for Table of Contents
   const headings = React.useMemo(() => {
     if (!article) return [];
@@ -125,10 +133,10 @@ export default function ArticlePage() {
   if (!article) {
     return (
       <div className="max-w-md mx-auto py-20 text-center">
-        <h2 className="font-outfit text-xl font-bold">Article not found</h2>
-        <p className="text-sm text-neutral-400 mt-2">The article you requested does not exist or was deleted.</p>
+        <h2 className="font-outfit text-xl font-bold">Статья не найдена</h2>
+        <p className="text-sm text-neutral-400 mt-2">Запрошенная вами статья не существует или была удалена.</p>
         <Link to="/" className="inline-flex items-center gap-1 mt-4 text-xs font-semibold text-indigo-500 hover:underline">
-          <ArrowLeft className="w-3.5 h-3.5" /> Back to Home
+          <ArrowLeft className="w-3.5 h-3.5" /> Назад на главную
         </Link>
       </div>
     );
@@ -138,7 +146,7 @@ export default function ArticlePage() {
     <div className="flex flex-col h-full bg-white dark:bg-neutral-950 p-4 border-r border-neutral-200/50 dark:border-neutral-800/50">
       <div className="flex items-center gap-2 mb-6 px-2 text-indigo-500 font-semibold tracking-tight text-sm uppercase">
         <BookOpen className="w-4 h-4" />
-        <span>Wiki Documentation</span>
+        <span>Вики-документация</span>
       </div>
 
       <nav className="flex-1 overflow-y-auto space-y-1 pr-1">
@@ -178,7 +186,7 @@ export default function ArticlePage() {
                     className="overflow-hidden pl-5 border-l border-neutral-200 dark:border-neutral-800 ml-4 space-y-0.5"
                   >
                     {catArticles.length === 0 ? (
-                      <span className="block px-3 py-1.5 text-xs text-neutral-400 dark:text-neutral-600 italic">No articles</span>
+                      <span className="block px-3 py-1.5 text-xs text-neutral-400 dark:text-neutral-600 italic">Нет статей</span>
                     ) : (
                       catArticles.map((art) => {
                         const isCurrentArticle = article.id === art.id;
@@ -259,7 +267,7 @@ export default function ArticlePage() {
       {/* Content Columns */}
       <div className="flex-1 min-w-0 py-8 lg:px-4">
         <div className="flex items-center gap-1.5 text-xs text-neutral-400 dark:text-neutral-500 mb-6 font-medium">
-          <Link to="/" className="hover:text-indigo-500 transition-colors">Home</Link>
+          <Link to="/" className="hover:text-indigo-500 transition-colors">Главная</Link>
           <ChevronRight className="w-3 h-3" />
           {article.category_name && (
             <>
@@ -286,7 +294,7 @@ export default function ArticlePage() {
                 </span>
                 <span className="flex items-center gap-1">
                   <Eye className="w-3.5 h-3.5" />
-                  {article.views} views
+                  {article.views} {getViewPlural(article.views)}
                 </span>
               </div>
             </div>
@@ -296,7 +304,7 @@ export default function ArticlePage() {
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shrink-0 shadow-sm"
             >
               <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
-              Edit Article
+              Редактировать
             </Link>
           </div>
 
@@ -328,7 +336,7 @@ export default function ArticlePage() {
         <aside className="hidden xl:block w-56 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto py-8">
           <div className="border-l border-neutral-200 dark:border-neutral-800 pl-4 space-y-4">
             <h4 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">
-              On this page
+              На этой странице
             </h4>
             <nav className="space-y-2">
               {headings.map((heading) => (

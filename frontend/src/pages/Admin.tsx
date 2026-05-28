@@ -58,15 +58,15 @@ export default function Admin() {
   }, [articles, searchQuery, categoryFilter]);
 
   const handleDelete = async (id: number, title: string) => {
-    if (!window.confirm(`Are you sure you want to delete the article "${title}"?`)) return;
+    if (!window.confirm(`Вы уверены, что хотите удалить статью "${title}"?`)) return;
 
     try {
       await deleteArticle(id);
       setArticles(prev => prev.filter(art => art.id !== id));
-      alert('Article deleted successfully.');
+      alert('Статья успешно удалена.');
     } catch (err) {
       console.error(err);
-      alert('Failed to delete article.');
+      alert('Не удалось удалить статью.');
     }
   };
 
@@ -91,10 +91,10 @@ export default function Admin() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="font-outfit text-3xl font-extrabold tracking-tight text-neutral-950 dark:text-white">
-            Admin Dashboard
+            Панель управления
           </h1>
           <p className="text-neutral-500 dark:text-neutral-400 text-sm font-light mt-1">
-            Write documentation, manage categories, and audit reading engagement.
+            Создание статей, управление категориями и статистика просмотров.
           </p>
         </div>
 
@@ -103,7 +103,7 @@ export default function Admin() {
           className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 transition-all text-center justify-center"
         >
           <Plus className="w-4.5 h-4.5" />
-          New Article
+          Новая статья
         </Link>
       </div>
 
@@ -111,38 +111,38 @@ export default function Admin() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
           <div className="flex items-center justify-between mb-3 text-neutral-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Total Articles</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Всего статей</span>
             <BookOpen className="w-5 h-5 text-indigo-500" />
           </div>
           <div className="text-2xl font-bold font-outfit text-neutral-900 dark:text-white">{articles.length}</div>
-          <p className="text-[10px] text-neutral-400 mt-1">{draftCount} draft articles pending</p>
+          <p className="text-[10px] text-neutral-400 mt-1">{draftCount} в черновиках</p>
         </div>
 
         <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
           <div className="flex items-center justify-between mb-3 text-neutral-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Categories</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Разделы</span>
             <Layers className="w-5 h-5 text-violet-500" />
           </div>
           <div className="text-2xl font-bold font-outfit text-neutral-900 dark:text-white">{categories.length}</div>
-          <p className="text-[10px] text-neutral-400 mt-1">Tech segments defined</p>
+          <p className="text-[10px] text-neutral-400 mt-1">тех. разделов создано</p>
         </div>
 
         <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
           <div className="flex items-center justify-between mb-3 text-neutral-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Documentation Views</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Просмотры</span>
             <Eye className="w-5 h-5 text-indigo-500" />
           </div>
           <div className="text-2xl font-bold font-outfit text-neutral-900 dark:text-white">{totalViews}</div>
-          <p className="text-[10px] text-neutral-400 mt-1">Total page reads recorded</p>
+          <p className="text-[10px] text-neutral-400 mt-1">зафиксировано чтений</p>
         </div>
 
         <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
           <div className="flex items-center justify-between mb-3 text-neutral-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Performance</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Поиск</span>
             <TrendingUp className="w-5 h-5 text-emerald-500" />
           </div>
-          <div className="text-2xl font-bold font-outfit text-neutral-900 dark:text-white">Active</div>
-          <p className="text-[10px] text-neutral-400 mt-1">Elasticsearch engine synced</p>
+          <div className="text-2xl font-bold font-outfit text-neutral-900 dark:text-white">Активен</div>
+          <p className="text-[10px] text-neutral-400 mt-1">Elasticsearch синхронизирован</p>
         </div>
       </div>
 
@@ -153,7 +153,7 @@ export default function Admin() {
             <Search className="w-4 h-4 text-neutral-400 shrink-0" />
             <input
               type="text"
-              placeholder="Search local catalog..."
+              placeholder="Поиск по каталогу..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="bg-transparent text-xs text-neutral-950 dark:text-neutral-100 outline-none w-full placeholder-neutral-400"
@@ -161,13 +161,13 @@ export default function Admin() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-neutral-400">Category:</span>
+            <span className="text-xs text-neutral-400">Раздел:</span>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="text-xs border border-neutral-200 dark:border-neutral-800 rounded-lg px-2.5 py-1.5 bg-neutral-50 dark:bg-neutral-950 text-neutral-700 dark:text-neutral-300 outline-none focus:border-indigo-500"
             >
-              <option value="all">All Categories</option>
+              <option value="all">Все разделы</option>
               {categories.map(cat => (
                 <option key={cat.id} value={cat.slug}>{cat.name}</option>
               ))}
@@ -179,18 +179,18 @@ export default function Admin() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-neutral-50 dark:bg-neutral-950 text-neutral-400 dark:text-neutral-500 font-semibold text-xs border-b border-neutral-200 dark:border-neutral-800 select-none">
-                <th className="p-4">Article</th>
-                <th className="p-4">Category</th>
-                <th className="p-4 text-center">Views</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-right">Actions</th>
+                <th className="p-4">Статья</th>
+                <th className="p-4">Раздел</th>
+                <th className="p-4 text-center">Просмотры</th>
+                <th className="p-4">Статус</th>
+                <th className="p-4 text-right">Действия</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-200/50 dark:divide-neutral-800/80 text-xs">
               {filteredArticles.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="p-8 text-center text-neutral-400 dark:text-neutral-600">
-                    No articles found matching filters.
+                    Статей с такими фильтрами не найдено.
                   </td>
                 </tr>
               ) : (
@@ -210,7 +210,7 @@ export default function Admin() {
                     </td>
                     <td className="p-4">
                       <span className="text-[10px] uppercase font-semibold text-neutral-400 bg-neutral-100 dark:bg-neutral-900 px-2 py-0.5 rounded">
-                        {art.category_name || 'Uncategorized'}
+                        {art.category_name || 'Без раздела'}
                       </span>
                     </td>
                     <td className="p-4 text-center font-semibold text-neutral-700 dark:text-neutral-300">
@@ -219,11 +219,11 @@ export default function Admin() {
                     <td className="p-4">
                       {art.published ? (
                         <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-semibold border border-emerald-500/20">
-                          Published
+                          Опубликовано
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 font-semibold border border-amber-500/20">
-                          Draft
+                          Черновик
                         </span>
                       )}
                     </td>
@@ -253,8 +253,8 @@ export default function Admin() {
         </div>
 
         <div className="p-4 bg-neutral-50 dark:bg-neutral-950 border-t border-neutral-200/50 dark:border-neutral-800/80 text-[10px] text-neutral-400 flex items-center justify-between">
-          <span>Showing {filteredArticles.length} of {articles.length} articles</span>
-          <span>SaaS CMS Engine v2.0</span>
+          <span>Показано {filteredArticles.length} из {articles.length} статей</span>
+          <span>SaaS CMS-движок v2.0</span>
         </div>
       </div>
     </div>

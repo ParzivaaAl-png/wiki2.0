@@ -28,6 +28,22 @@ export default function Home() {
     loadData();
   }, []);
 
+  const getArticlePlural = (count: number) => {
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'статья';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'статьи';
+    return 'статей';
+  };
+
+  const getViewPlural = (count: number) => {
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'просмотр';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'просмотра';
+    return 'просмотров';
+  };
+
   const triggerGlobalSearch = () => {
     const event = new KeyboardEvent('keydown', {
       key: 'k',
@@ -86,7 +102,7 @@ export default function Home() {
           className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-indigo-500/10 dark:border-indigo-400/20 bg-indigo-500/5 text-indigo-600 dark:text-indigo-400 text-xs font-semibold mb-6 shadow-sm shadow-indigo-500/5"
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span>SaaS Documentation of 2026</span>
+          <span>SaaS Документация 2026</span>
         </motion.div>
 
         <motion.h1
@@ -95,8 +111,8 @@ export default function Home() {
           transition={{ duration: 0.5, delay: 0.1 }}
           className="font-outfit text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight mb-6 bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-700 dark:from-white dark:via-neutral-100 dark:to-neutral-400 bg-clip-text text-transparent"
         >
-          Documentation, <br className="sm:hidden" />
-          refined and instant.
+          Документация, <br className="sm:hidden" />
+          быстрая и совершенная.
         </motion.h1>
 
         <motion.p
@@ -105,7 +121,7 @@ export default function Home() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="text-neutral-500 dark:text-neutral-400 text-base sm:text-lg md:text-xl max-w-2xl mx-auto mb-8 font-light leading-relaxed"
         >
-          A minimalist tech-wiki search engine with instant autocomplete suggestions, fuzzy typo corrections, and beautiful Notion-like formatting.
+          Минималистичный справочник с моментальным автозаполнением, исправлением опечаток и красивым форматированием в стиле Notion.
         </motion.p>
 
         {/* Search Trigger */}
@@ -121,7 +137,7 @@ export default function Home() {
           >
             <Search className="w-5 h-5 text-neutral-400 shrink-0" />
             <span className="flex-1 text-left text-neutral-400 text-sm sm:text-base">
-              Search the knowledge base...
+              Поиск по базе знаний...
             </span>
             <kbd className="inline-flex h-6 select-none items-center gap-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-2 font-mono text-[11px] font-medium text-neutral-400">
               ⌘K
@@ -138,7 +154,7 @@ export default function Home() {
           viewport={{ once: true }}
           className="font-outfit text-sm font-semibold tracking-wider text-neutral-400 uppercase mb-6 px-1"
         >
-          Explore Categories
+          Разделы документации
         </motion.h2>
 
         <motion.div
@@ -168,13 +184,13 @@ export default function Home() {
 
               <div className="mt-6 flex items-center justify-between">
                 <span className="text-[11px] font-medium text-neutral-400 dark:text-neutral-500 uppercase tracking-wider bg-neutral-100 dark:bg-neutral-900/60 px-2 py-0.5 rounded">
-                  {cat.article_count || 0} articles
+                  {cat.article_count || 0} {getArticlePlural(cat.article_count || 0)}
                 </span>
                 <Link
                   to={`/categories/${cat.slug}`}
                   className="text-xs font-semibold text-indigo-500 dark:text-indigo-400 flex items-center gap-1 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all"
                 >
-                  Browse <ChevronRight className="w-3.5 h-3.5" />
+                  Перейти <ChevronRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
             </motion.div>
@@ -188,7 +204,7 @@ export default function Home() {
           <div className="flex items-center gap-2 mb-6 border-b border-neutral-200/50 dark:border-neutral-800 pb-3">
             <Clock className="w-4 h-4 text-neutral-400" />
             <h3 className="font-outfit text-sm font-semibold tracking-wider text-neutral-400 uppercase">
-              Recent Documentation
+              Последние обновления
             </h3>
           </div>
 
@@ -208,7 +224,7 @@ export default function Home() {
                     </span>
                     <span className="text-neutral-300 dark:text-neutral-800 text-xs">•</span>
                     <span className="flex items-center gap-1 text-[10px] text-neutral-400">
-                      <Eye className="w-3 h-3" /> {art.views} views
+                      <Eye className="w-3.5 h-3.5" /> {art.views} {getViewPlural(art.views)}
                     </span>
                   </div>
                   <Link 

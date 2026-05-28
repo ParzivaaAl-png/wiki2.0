@@ -36,7 +36,7 @@ function Header() {
             className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shadow-sm"
           >
             <ShieldAlert className="w-4 h-4 text-neutral-400" />
-            Admin
+            Админ-панель
           </Link>
 
           <ThemeToggle />

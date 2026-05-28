@@ -120,7 +120,7 @@ export default function Editor() {
       }
     } catch (err: any) {
       console.error(err);
-      alert(`Image upload failed: ${err.message}`);
+      alert(`Не удалось загрузить изображение: ${err.message}`);
     } finally {
       setIsUploading(false);
     }
@@ -129,7 +129,7 @@ export default function Editor() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !slug.trim() || !content.trim()) {
-      alert('Please fill out Title, Slug and Content.');
+      alert('Пожалуйста, заполните Название, Slug и Текст статьи.');
       return;
     }
 
@@ -153,7 +153,7 @@ export default function Editor() {
       navigate('/admin');
     } catch (err: any) {
       console.error(err);
-      alert(`Save failed: ${err.message}`);
+      alert(`Не удалось сохранить: ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -180,7 +180,7 @@ export default function Editor() {
           className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Cancel and return
+          Отмена и возврат
         </Link>
 
         <button
@@ -189,7 +189,7 @@ export default function Editor() {
           className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 transition-all cursor-pointer"
         >
           <Save className="w-4 h-4" />
-          {isSubmitting ? 'Saving...' : 'Save Article'}
+          {isSubmitting ? 'Сохранение...' : 'Сохранить статью'}
         </button>
       </div>
 
@@ -200,11 +200,11 @@ export default function Editor() {
           <div className="p-5 border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl shadow-premium dark:shadow-premium-dark space-y-4">
             <h3 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
               <Sparkles className="w-4.5 h-4.5 text-indigo-500" />
-              Settings &amp; Metadata
+              Настройки и метаданные
             </h3>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Slug URL</label>
+              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Slug (путь URL)</label>
               <input
                 type="text"
                 value={slug}
@@ -216,13 +216,13 @@ export default function Editor() {
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Category</label>
+              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Раздел</label>
               <select
                 value={categoryId || ''}
                 onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : null)}
                 className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
               >
-                <option value="">Choose category...</option>
+                <option value="">Выберите раздел...</option>
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
@@ -230,7 +230,7 @@ export default function Editor() {
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Tags (Press Enter)</label>
+              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Теги (нажмите Enter)</label>
               <div className="flex items-center gap-2 border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-1 bg-neutral-50 dark:bg-neutral-900/30 mb-2">
                 <TagIcon className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                 <input
@@ -238,7 +238,7 @@ export default function Editor() {
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   onKeyDown={handleAddTag}
-                  placeholder="add tag..."
+                  placeholder="добавить тег..."
                   className="bg-transparent text-xs text-neutral-900 dark:text-white outline-none w-full py-1"
                 />
               </div>
@@ -261,7 +261,7 @@ export default function Editor() {
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">Publish Article</span>
+              <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">Опубликовать статью</span>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
@@ -289,7 +289,7 @@ export default function Editor() {
                 }`}
               >
                 <Edit3 className="w-3.5 h-3.5" />
-                Write
+                Редактор
               </button>
               <button
                 type="button"
@@ -301,13 +301,13 @@ export default function Editor() {
                 }`}
               >
                 <Eye className="w-3.5 h-3.5" />
-                Preview
+                Предпросмотр
               </button>
             </div>
 
             <label className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 text-xs font-medium cursor-pointer transition-colors shadow-sm">
               <ImageIcon className="w-3.5 h-3.5" />
-              <span>{isUploading ? 'Uploading...' : 'Insert Image'}</span>
+              <span>{isUploading ? 'Загрузка...' : 'Вставить картинку'}</span>
               <input
                 type="file"
                 accept="image/*"
@@ -323,7 +323,7 @@ export default function Editor() {
               type="text"
               value={title}
               onChange={(e) => handleTitleChange(e.target.value)}
-              placeholder="Article title..."
+              placeholder="Название статьи..."
               required
               className="w-full text-xl sm:text-2xl font-extrabold text-neutral-950 dark:text-white placeholder-neutral-300 dark:placeholder-neutral-800 bg-transparent outline-none border-b border-neutral-100 dark:border-neutral-900 pb-2"
             />
@@ -332,7 +332,7 @@ export default function Editor() {
               type="text"
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
-              placeholder="Short paragraph summary describing this article..."
+              placeholder="Краткое описание (summary) этой статьи..."
               className="w-full text-xs text-neutral-500 bg-transparent outline-none placeholder-neutral-400 dark:placeholder-neutral-800"
             />
 
@@ -341,14 +341,14 @@ export default function Editor() {
                 id="content-textarea"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="# Write your Markdown content here..."
+                placeholder="# Напишите здесь содержимое в формате Markdown..."
                 required
                 className="w-full min-h-[450px] flex-1 bg-transparent text-sm text-neutral-900 dark:text-neutral-200 font-mono outline-none resize-y py-2 leading-relaxed"
               />
             ) : (
               <div className="prose-custom min-h-[450px] py-2 overflow-y-auto max-h-[60vh] border border-dashed border-neutral-200 dark:border-neutral-800 p-4 rounded-lg bg-neutral-50/20 dark:bg-neutral-950/20">
                 {content.trim() === '' ? (
-                  <span className="text-xs text-neutral-400 italic">Nothing to preview. Start writing content.</span>
+                  <span className="text-xs text-neutral-400 italic">Нечего показывать. Начните писать текст.</span>
                 ) : (
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {content}
