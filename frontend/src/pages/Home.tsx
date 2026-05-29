@@ -4,6 +4,7 @@ import { Search, Sparkles, Clock, ChevronRight, BookOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { fetchCategories, fetchArticles, Category, Article } from '../lib/api';
 import { CategoryIcon } from '../components/icon';
+import { SearchModal } from '../components/search-modal';
 
 export default function Home() {
   const [categories, setCategories] = React.useState<Category[]>([]);
@@ -36,14 +37,6 @@ export default function Home() {
     return 'статей';
   };
 
-  const triggerGlobalSearch = () => {
-    const event = new KeyboardEvent('keydown', {
-      key: 'k',
-      metaKey: true,
-      bubbles: true,
-    });
-    window.dispatchEvent(event);
-  };
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -116,25 +109,14 @@ export default function Home() {
           Минималистичный справочник с моментальным автозаполнением, исправлением опечаток и красивым форматированием в стиле Notion.
         </motion.p>
 
-        {/* Search Trigger */}
+        {/* Search Input Bar */}
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3, delay: 0.15 }}
           className="max-w-2xl mx-auto"
         >
-          <div 
-            onClick={triggerGlobalSearch}
-            className="flex items-center gap-4 px-5 py-4 rounded-xl border border-neutral-200 dark:border-neutral-800/80 bg-white dark:bg-neutral-950/80 hover:border-indigo-500/40 dark:hover:border-indigo-500/40 hover:shadow-glow dark:hover:shadow-glow transition-all duration-300 cursor-pointer shadow-premium dark:shadow-premium-dark"
-          >
-            <Search className="w-5 h-5 text-neutral-400 shrink-0" />
-            <span className="flex-1 text-left text-neutral-400 text-sm sm:text-base">
-              Поиск по базе знаний...
-            </span>
-            <kbd className="hidden sm:inline-flex h-6 select-none items-center gap-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-2 font-mono text-[11px] font-medium text-neutral-400">
-              ⌘K
-            </kbd>
-          </div>
+          <SearchModal variant="hero" />
         </motion.div>
       </section>
 
