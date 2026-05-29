@@ -27,6 +27,7 @@ export default function Editor() {
   const [published, setPublished] = React.useState(true);
   const [tags, setTags] = React.useState<string[]>([]);
   const [newTag, setNewTag] = React.useState('');
+  const [position, setPosition] = React.useState<number>(0);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -47,6 +48,7 @@ export default function Editor() {
           setCategoryId(article.category_id);
           setPublished(article.published);
           setTags(article.tags || []);
+          setPosition(article.position || 0);
         }
       } catch (err) {
         console.error('Failed to load editor data:', err);
@@ -106,6 +108,7 @@ export default function Editor() {
       category_id: categoryId,
       published,
       tags,
+      position,
     };
 
     try {
@@ -193,6 +196,18 @@ export default function Editor() {
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Порядковый номер (Позиция)</label>
+              <input
+                type="number"
+                value={position}
+                onChange={(e) => setPosition(Number(e.target.value))}
+                placeholder="0"
+                min="0"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
+              />
             </div>
 
             <div>

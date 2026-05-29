@@ -88,6 +88,10 @@ export const initializeDatabase = async () => {
       );
     `;
     await pool.query(createAuditLogsTableQuery);
+    
+    // Ensure articles table has position column for sorting
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS position INT DEFAULT 0');
+    
     console.log('Database tables verified/created successfully.');
   } catch (error) {
     console.error('Failed to initialize database tables:', error);

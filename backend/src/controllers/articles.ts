@@ -51,7 +51,7 @@ export const getArticle = async (req: Request, res: Response) => {
 
 export const createArticle = async (req: Request, res: Response) => {
   try {
-    const { title, slug, content, summary, category_id, published, tags } = req.body;
+    const { title, slug, content, summary, category_id, published, tags, position } = req.body;
     
     if (!title || !slug || !content) {
       return res.status(400).json({ error: 'Title, slug, and content are required fields.' });
@@ -65,6 +65,7 @@ export const createArticle = async (req: Request, res: Response) => {
       category_id: category_id ? Number(category_id) : null,
       published: published === undefined ? true : !!published,
       tags: tags || [],
+      position: position !== undefined ? Number(position) : 0,
     });
 
     // Auto-index to Meilisearch
@@ -96,7 +97,7 @@ export const createArticle = async (req: Request, res: Response) => {
 export const updateArticle = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, slug, content, summary, category_id, published, tags } = req.body;
+    const { title, slug, content, summary, category_id, published, tags, position } = req.body;
 
     if (!title || !slug || !content) {
       return res.status(400).json({ error: 'Title, slug, and content are required.' });
@@ -110,6 +111,7 @@ export const updateArticle = async (req: Request, res: Response) => {
       category_id: category_id ? Number(category_id) : null,
       published: published === undefined ? true : !!published,
       tags: tags || [],
+      position: position !== undefined ? Number(position) : 0,
     });
 
     if (!article) {

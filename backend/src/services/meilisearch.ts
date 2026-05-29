@@ -217,6 +217,37 @@ export const syncIfNeeded = async () => {
 };
 
 /**
+ * Triggers a manual full re-sync of all database articles into Meilisearch index.
+ */
+export const triggerFullSync = async () => {
+  try {
+    console.log('Starting full re-sync of all articles to Meilisearch...');
+    const dbArticles = await ArticleModel.getAllArticles({ publishedOnly: false });
+    
+    const docs: ArticleDocument[] = dbArticles.map((art) => ({
+      id: art.id,
+      title: art.title,
+      slug: art.slug,
+      content: art.content,
+      summary: art.summary,
+      categoryName: art.category_slug || '',
+      tags: art.tags,
+      published: art.published,
+      createdAt: art.created_at instanceof Date ? art.created_at.toISOString() : new Date(art.created_at).toISOString(),
+    }));
+
+    await msClient.index(INDEX_NAME).deleteAllDocuments();
+    
+    if (docs.length > 0) {
+      await bulkSyncArticles(docs);
+    }
+    console.log(`Full sync completed. Synced ${docs.length} articles.`);
+  } catch (error) {
+    console.error('Failed to run triggerFullSync:', error);
+  }
+};
+
+/**
  * Custom helper to extract matching snippets with highlight tags from the formatted HTML content,
  * mimicking Elasticsearch's fragments highlight system.
  */

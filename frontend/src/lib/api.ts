@@ -76,6 +76,7 @@ export interface Article {
   category_slug?: string;
   published: boolean;
   views: number;
+  position: number;
   created_at: string;
   updated_at: string;
   tags: string[];
@@ -244,6 +245,32 @@ export async function fetchCategories(): Promise<Category[]> {
 
 export async function fetchCategory(slugOrId: string | number): Promise<Category> {
   return apiCallWithCache<Category>(`/categories/${slugOrId}`, { cache: 'no-store' });
+}
+
+export async function createCategory(data: Omit<Category, 'id' | 'article_count'>): Promise<Category> {
+  clearApiCache();
+  return apiCall<Category>('/categories', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateCategory(
+  id: number,
+  data: Omit<Category, 'id' | 'article_count'>
+): Promise<Category> {
+  clearApiCache();
+  return apiCall<Category>(`/categories/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteCategory(id: number): Promise<void> {
+  clearApiCache();
+  return apiCall<void>(`/categories/${id}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function fetchArticles(params?: {

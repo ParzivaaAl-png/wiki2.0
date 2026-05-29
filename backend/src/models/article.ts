@@ -12,6 +12,7 @@ export interface Article {
   category_slug?: string;
   published: boolean;
   views: number;
+  position: number;
   created_at: Date;
   updated_at: Date;
   tags: string[];
@@ -56,10 +57,10 @@ export const getAllArticles = async (options: {
       LEFT JOIN article_tags t ON a.id = t.article_id
       WHERE ${whereClauses.join(' AND ')}
       GROUP BY a.id, c.name, c.slug
-      ORDER BY a.created_at DESC
+      ORDER BY a.position ASC, a.created_at DESC
     `;
   } else {
-    sql += ` ORDER BY a.created_at DESC`;
+    sql += ` ORDER BY a.position ASC, a.created_at DESC`;
   }
 
   const res = await query(sql, params);
@@ -110,6 +111,7 @@ export const createArticle = async (data: {
   author_id?: number | null;
   published: boolean;
   tags: string[];
+  position?: number;
 }): Promise<Article> => {
   const client = await pool.connect();
   try {
@@ -117,8 +119,8 @@ export const createArticle = async (data: {
     
     // Insert Article
     const artSql = `
-      INSERT INTO articles (title, slug, content, summary, category_id, author_id, published)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO articles (title, slug, content, summary, category_id, author_id, published, position)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `;
     const artRes = await client.query(artSql, [
@@ -129,6 +131,7 @@ export const createArticle = async (data: {
       data.category_id,
       data.author_id || null,
       data.published,
+      data.position || 0,
     ]);
     const article = artRes.rows[0];
 
@@ -164,6 +167,7 @@ export const updateArticle = async (
     category_id: number | null;
     published: boolean;
     tags: string[];
+    position?: number;
   }
 ): Promise<Article | null> => {
   const client = await pool.connect();
@@ -173,8 +177,8 @@ export const updateArticle = async (
     // Update Article
     const artSql = `
       UPDATE articles
-      SET title = $1, slug = $2, content = $3, summary = $4, category_id = $5, published = $6, updated_at = NOW()
-      WHERE id = $7
+      SET title = $1, slug = $2, content = $3, summary = $4, category_id = $5, published = $6, position = $7, updated_at = NOW()
+      WHERE id = $8
       RETURNING *
     `;
     const artRes = await client.query(artSql, [
@@ -184,6 +188,7 @@ export const updateArticle = async (
       data.summary,
       data.category_id,
       data.published,
+      data.position || 0,
       id,
     ]);
 

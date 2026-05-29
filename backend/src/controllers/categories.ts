@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as CategoryModel from '../models/category';
+import { triggerFullSync } from '../services/meilisearch';
 
 export const getCategories = async (req: Request, res: Response) => {
   try {
@@ -59,6 +60,10 @@ export const updateCategory = async (req: Request, res: Response) => {
     if (!category) {
       return res.status(404).json({ error: 'Category not found' });
     }
+    
+    // Trigger Meilisearch re-sync in background to reflect new category details/slugs
+    triggerFullSync().catch(err => console.error('Failed to sync Meilisearch after category update:', err));
+
     res.json(category);
   } catch (error: any) {
     console.error('Error updating category:', error);
@@ -73,6 +78,10 @@ export const deleteCategory = async (req: Request, res: Response) => {
     if (!success) {
       return res.status(404).json({ error: 'Category not found' });
     }
+    
+    // Trigger Meilisearch re-sync in background to clear category associations
+    triggerFullSync().catch(err => console.error('Failed to sync Meilisearch after category deletion:', err));
+
     res.json({ message: 'Category deleted successfully' });
   } catch (error: any) {
     console.error('Error deleting category:', error);
