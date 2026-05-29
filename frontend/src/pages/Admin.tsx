@@ -61,7 +61,7 @@ export default function Admin() {
     setIsImporting(true);
     try {
       await importArticle(file);
-      alert('Статья успешно импортирована, извлечен текст и настроено индексирование в Elasticsearch!');
+      alert('Статья успешно импортирована, извлечен текст и настроено индексирование в Meilisearch!');
       await loadAdminData();
     } catch (err: any) {
       console.error(err);
@@ -219,7 +219,7 @@ export default function Admin() {
                 <TrendingUp className="w-5 h-5 text-emerald-500" />
               </div>
               <div className="text-2xl font-bold font-outfit text-neutral-900 dark:text-white">Активен</div>
-              <p className="text-[10px] text-neutral-400 mt-1">Elasticsearch синхронизирован</p>
+              <p className="text-[10px] text-neutral-400 mt-1">Meilisearch синхронизирован</p>
             </div>
           </div>
 

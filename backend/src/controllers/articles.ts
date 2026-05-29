@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import * as fs from 'fs';
 import * as ArticleModel from '../models/article';
-import * as esService from '../services/elasticsearch';
+import * as msService from '../services/meilisearch';
 import { parseDocument } from '../services/parser';
 import { AuthenticatedRequest } from '../middleware/auth';
 
@@ -67,9 +67,9 @@ export const createArticle = async (req: Request, res: Response) => {
       tags: tags || [],
     });
 
-    // Auto-index to Elasticsearch
+    // Auto-index to Meilisearch
     if (article.published) {
-      const doc: esService.ArticleDocument = {
+      const doc: msService.ArticleDocument = {
         id: article.id,
         title: article.title,
         slug: article.slug,
@@ -80,9 +80,9 @@ export const createArticle = async (req: Request, res: Response) => {
         published: article.published,
         createdAt: article.created_at.toISOString(),
       };
-      // ES operation runs in background so as to not block client response
-      esService.indexArticle(doc).catch(err => 
-        console.error('Failed to auto-index new article to ES:', err)
+      // Meilisearch operation runs in background so as to not block client response
+      msService.indexArticle(doc).catch(err => 
+        console.error('Failed to auto-index new article to Meilisearch:', err)
       );
     }
 
@@ -116,9 +116,9 @@ export const updateArticle = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Article not found' });
     }
 
-    // Auto-index or delete from Elasticsearch depending on published status
+    // Auto-index or delete from Meilisearch depending on published status
     if (article.published) {
-      const doc: esService.ArticleDocument = {
+      const doc: msService.ArticleDocument = {
         id: article.id,
         title: article.title,
         slug: article.slug,
@@ -129,13 +129,13 @@ export const updateArticle = async (req: Request, res: Response) => {
         published: article.published,
         createdAt: article.created_at.toISOString(),
       };
-      esService.indexArticle(doc).catch(err => 
-        console.error('Failed to update ES index for article:', err)
+      msService.indexArticle(doc).catch(err => 
+        console.error('Failed to update Meilisearch index for article:', err)
       );
     } else {
       // If unpublished, make sure it is removed from index
-      esService.deleteArticle(article.id).catch(err =>
-        console.error('Failed to remove unpublished article from ES:', err)
+      msService.deleteArticle(article.id).catch(err =>
+        console.error('Failed to remove unpublished article from Meilisearch:', err)
       );
     }
 
@@ -155,9 +155,9 @@ export const deleteArticle = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Article not found' });
     }
 
-    // Remove from Elasticsearch
-    esService.deleteArticle(Number(id)).catch(err =>
-      console.error('Failed to delete article from ES index:', err)
+    // Remove from Meilisearch
+    msService.deleteArticle(Number(id)).catch(err =>
+      console.error('Failed to delete article from Meilisearch index:', err)
     );
 
     res.json({ message: 'Article deleted successfully' });
@@ -171,7 +171,7 @@ export const searchArticles = async (req: Request, res: Response) => {
   try {
     const { q, category, tag } = req.query;
     
-    const results = await esService.searchArticles(
+    const results = await msService.searchArticles(
       (q as string) || '',
       category as string,
       tag as string
@@ -179,7 +179,7 @@ export const searchArticles = async (req: Request, res: Response) => {
     
     res.json(results);
   } catch (error: any) {
-    console.error('Elasticsearch search request failed:', error);
+    console.error('Meilisearch search request failed:', error);
     res.status(500).json({ error: 'Search Service Unavailable', details: error.message });
   }
 };
@@ -188,11 +188,11 @@ export const suggestArticles = async (req: Request, res: Response) => {
   try {
     const { q } = req.query;
     
-    const results = await esService.suggestArticles((q as string) || '');
+    const results = await msService.suggestArticles((q as string) || '');
     
     res.json(results);
   } catch (error: any) {
-    console.error('Elasticsearch suggestions request failed:', error);
+    console.error('Meilisearch suggestions request failed:', error);
     res.status(500).json({ error: 'Suggestions Service Unavailable', details: error.message });
   }
 };
@@ -254,8 +254,8 @@ export const importArticle = async (req: AuthenticatedRequest, res: Response) =>
       tags: [],
     });
 
-    // Index to Elasticsearch
-    const doc: esService.ArticleDocument = {
+    // Index to Meilisearch
+    const doc: msService.ArticleDocument = {
       id: article.id,
       title: article.title,
       slug: article.slug,
@@ -267,7 +267,7 @@ export const importArticle = async (req: AuthenticatedRequest, res: Response) =>
       createdAt: article.created_at.toISOString(),
     };
     
-    await esService.indexArticle(doc);
+    await msService.indexArticle(doc);
 
     // Clean up local temp file
     if (fs.existsSync(tempPath)) {

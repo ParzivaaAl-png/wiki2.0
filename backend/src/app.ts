@@ -6,11 +6,11 @@ import dotenv from 'dotenv';
 import apiRouter from './routes/api';
 import { checkDatabaseConnection } from './config/db';
 import { 
-  checkElasticsearchConnection, 
-  initializeElasticsearch, 
+  checkMeilisearchConnection, 
+  initializeMeilisearch, 
   bulkSyncArticles,
   ArticleDocument
-} from './services/elasticsearch';
+} from './services/meilisearch';
 import * as ArticleModel from './models/article';
 
 dotenv.config();
@@ -48,19 +48,19 @@ const startServer = async () => {
     process.exit(1);
   }
 
-  // 2. Verify ES is running
-  const esConnected = await checkElasticsearchConnection();
-  if (!esConnected) {
-    console.error('CRITICAL: Elasticsearch is unreachable. Exiting.');
+  // 2. Verify Meilisearch is running
+  const msConnected = await checkMeilisearchConnection();
+  if (!msConnected) {
+    console.error('CRITICAL: Meilisearch is unreachable. Exiting.');
     process.exit(1);
   }
 
-  // 3. Initialize ES Index mapping & analyzers
-  await initializeElasticsearch();
+  // 3. Initialize Meilisearch index & settings
+  await initializeMeilisearch();
 
-  // 4. Synchronize DB Articles with Elasticsearch Index
+  // 4. Synchronize DB Articles with Meilisearch Index
   try {
-    console.log('Synchronizing database articles with Elasticsearch...');
+    console.log('Synchronizing database articles with Meilisearch...');
     const dbArticles = await ArticleModel.getAllArticles({ publishedOnly: false });
     
     const docs: ArticleDocument[] = dbArticles.map((art) => ({
@@ -76,9 +76,9 @@ const startServer = async () => {
     }));
 
     await bulkSyncArticles(docs);
-    console.log('Database and Elasticsearch sync completed.');
+    console.log('Database and Meilisearch sync completed.');
   } catch (err) {
-    console.error('Failed to sync PostgreSQL data with Elasticsearch:', err);
+    console.error('Failed to sync PostgreSQL data with Meilisearch:', err);
   }
 
   // 5. Start listening

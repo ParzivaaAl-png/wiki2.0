@@ -21,22 +21,19 @@ services:
     networks:
       - wiki-network
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+  meilisearch:
+    image: getmeili/meilisearch:v1.7.6
     container_name: wiki-search
     environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - xpack.security.http.ssl.enabled=false
-      - xpack.security.transport.ssl.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - MEILI_HOST=0.0.0.0:7700
+      - MEILI_NO_ANALYTICS=true
+      - MEILI_MASTER_KEY=masterKey
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - "7700:7700"
     volumes:
-      - esdata:/usr/share/elasticsearch/data
+      - meilidata:/data.ms
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      test: ["CMD", "sh", "-c", "wget --no-verbose --tries=1 --spider http://localhost:7700/health || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -53,12 +50,13 @@ services:
     environment:
       - PORT=5000
       - DATABASE_URL=postgresql://wiki_user:wiki_password@postgres:5432/wiki_db
-      - ELASTICSEARCH_NODE=http://elasticsearch:9200
+      - MEILISEARCH_HOST=http://meilisearch:7700
+      - MEILISEARCH_API_KEY=masterKey
       - NODE_ENV=production
     depends_on:
       postgres:
         condition: service_healthy
-      elasticsearch:
+      meilisearch:
         condition: service_healthy
     networks:
       - wiki-network
@@ -79,7 +77,7 @@ services:
 
 volumes:
   pgdata:
-  esdata:
+  meilidata:
 
 networks:
   wiki-network:
