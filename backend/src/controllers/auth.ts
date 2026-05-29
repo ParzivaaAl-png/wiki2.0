@@ -15,8 +15,8 @@ const generateTokens = (userId: number) => {
 
 const setCookieOptions = (maxAgeMs: number) => ({
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict' as const,
+  secure: process.env.NODE_ENV === 'production' ? true : false,
+  sameSite: process.env.NODE_ENV === 'production' ? ('none' as const) : ('lax' as const),
   maxAge: maxAgeMs,
 });
 
@@ -89,8 +89,8 @@ export const login = async (req: Request, res: Response) => {
 };
 
 export const logout = (req: Request, res: Response) => {
-  res.clearCookie('accessToken');
-  res.clearCookie('refreshToken');
+  res.clearCookie('accessToken', setCookieOptions(0));
+  res.clearCookie('refreshToken', setCookieOptions(0));
   res.json({ message: 'Logged out successfully' });
 };
 
