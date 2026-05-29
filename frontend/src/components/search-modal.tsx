@@ -199,7 +199,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                       <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
                       <span className="text-sm truncate max-w-[280px]" dangerouslySetInnerHTML={{ __html: art.title }} />
                       <span className="text-[9px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium shrink-0">
-                        {art.categoryName.replace('-', ' ')}
+                        {(art.categoryName || '').replace('-', ' ')}
                       </span>
                     </div>
                     {isCurrent && <CornerDownLeft className="w-3.5 h-3.5 text-indigo-400 shrink-0" />}
@@ -234,7 +234,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                         из: <strong className="text-neutral-600 dark:text-neutral-300 font-semibold" dangerouslySetInnerHTML={{ __html: match.articleTitle }} />
                       </span>
                       <span className="text-[9px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium">
-                        {match.categoryName.replace('-', ' ')}
+                        {(match.categoryName || '').replace('-', ' ')}
                       </span>
                     </div>
                     
@@ -325,7 +325,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                                 <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
                                 <span dangerouslySetInnerHTML={{ __html: art.title }} />
                                 <span className="text-[10px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium">
-                                  {art.categoryName.replace('-', ' ')}
+                                  {(art.categoryName || '').replace('-', ' ')}
                                 </span>
                               </div>
                             </li>
@@ -351,7 +351,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                                   из статьи: <strong className="text-neutral-600 dark:text-neutral-300 font-semibold" dangerouslySetInnerHTML={{ __html: match.articleTitle }} />
                                 </span>
                                 <span className="text-[10px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium">
-                                  {match.categoryName.replace('-', ' ')}
+                                  {(match.categoryName || '').replace('-', ' ')}
                                 </span>
                               </div>
                               <p 

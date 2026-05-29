@@ -1,5 +1,6 @@
 const getApiUrl = () => {
-  return import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  return import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://wiki-backend-atnp.onrender.com/api';
 };
 
 // Token storage for cross-origin auth fallback (Safari ITP blocks third-party cookies)
