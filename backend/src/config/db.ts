@@ -91,8 +91,16 @@ export const initializeDatabase = async () => {
     
     // Ensure articles table has position column for sorting
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS position INT DEFAULT 0');
+
+    // Create database indexes for performance speedup
+    console.log('Creating database indexes for query performance...');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_category_id ON articles(category_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_author_id ON articles(author_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_published_position ON articles(published, position)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_categories_position ON categories(position)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id)');
     
-    console.log('Database tables verified/created successfully.');
+    console.log('Database tables and indexes verified/created successfully.');
   } catch (error) {
     console.error('Failed to initialize database tables:', error);
   }

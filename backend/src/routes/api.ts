@@ -93,5 +93,6 @@ router.get('/admin/sessions', requireAuth, requireRole(['Admin']), authControlle
 router.delete('/admin/sessions/:id', requireAuth, requireRole(['Admin']), authController.deleteUserSession);
 router.put('/admin/users/:id', requireAuth, requireRole(['Admin']), authController.updateUserByAdmin);
 router.get('/admin/users/:id/history', requireAuth, requireRole(['Admin']), authController.getUserHistory);
+router.post('/admin/clear-cache', requireAuth, requireRole(['Admin']), articlesController.reindexAndClearCache);
 
 export default router;

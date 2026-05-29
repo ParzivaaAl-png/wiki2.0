@@ -285,3 +285,14 @@ export const importArticle = async (req: AuthenticatedRequest, res: Response) =>
     res.status(500).json({ error: 'Document import failed', details: error.message });
   }
 };
+
+export const reindexAndClearCache = async (req: Request, res: Response) => {
+  try {
+    console.log('Triggering manual search index sync and cache clearing...');
+    await msService.triggerFullSync();
+    res.json({ message: 'Кэш и поисковый индекс Meilisearch успешно очищены и синхронизированы!' });
+  } catch (error: any) {
+    console.error('Error clearing cache/syncing Meilisearch:', error);
+    res.status(500).json({ error: 'Failed to reindex', details: error.message });
+  }
+};

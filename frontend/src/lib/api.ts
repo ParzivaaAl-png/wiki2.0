@@ -484,4 +484,11 @@ export async function fetchUserHistory(userId: number): Promise<UserAuditLog[]> 
   return apiCall<UserAuditLog[]>(`/admin/users/${userId}/history`);
 }
 
+export async function clearServerCache(): Promise<{ message: string }> {
+  clearApiCache();
+  return apiCall<{ message: string }>('/admin/clear-cache', {
+    method: 'POST',
+  });
+}
+
 
