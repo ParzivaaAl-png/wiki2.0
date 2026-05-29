@@ -24,8 +24,8 @@ Wiki 2.0 — это быстрая и современная база знани
 
 | Переменная | Описание | Значение локально |
 | --- | --- | --- |
-| `MEILISEARCH_HOST` | URL-адрес поискового сервера Meilisearch | `http://localhost:7700` |
-| `MEILISEARCH_API_KEY` | Мастер-ключ авторизации API | `masterKey` |
+| `MEILI_HOST` | URL-адрес поискового сервера Meilisearch | `http://localhost:7700` |
+| `MEILI_MASTER_KEY` | Мастер-ключ авторизации API | `masterKey` |
 
 ---
 

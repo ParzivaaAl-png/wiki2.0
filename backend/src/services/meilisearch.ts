@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-let msHost = process.env.MEILISEARCH_HOST || 'http://localhost:7700';
-const msApiKey = process.env.MEILISEARCH_API_KEY || '';
+let msHost = process.env.MEILI_HOST || 'http://localhost:7700';
+const msApiKey = process.env.MEILI_MASTER_KEY || '';
 
 // Prepend protocol if not specified (important for Render dynamic hostnames)
 if (!msHost.startsWith('http://') && !msHost.startsWith('https://')) {
@@ -65,7 +65,7 @@ export const initializeMeilisearch = async () => {
       indexExists = true;
       console.log(`Meilisearch index "${INDEX_NAME}" already exists.`);
     } catch (err: any) {
-      if (err.code !== 'index_not_found') {
+      if (err.cause?.code !== 'index_not_found' && err.code !== 'index_not_found') {
         throw err;
       }
     }
