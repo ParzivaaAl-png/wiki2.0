@@ -3,8 +3,17 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const msHost = process.env.MEILISEARCH_HOST || 'http://localhost:7700';
+let msHost = process.env.MEILISEARCH_HOST || 'http://localhost:7700';
 const msApiKey = process.env.MEILISEARCH_API_KEY || '';
+
+// Prepend protocol if not specified (important for Render dynamic hostnames)
+if (!msHost.startsWith('http://') && !msHost.startsWith('https://')) {
+  if (msHost.includes('onrender.com') || msHost.includes('vercel.app')) {
+    msHost = `https://${msHost}`;
+  } else {
+    msHost = `http://${msHost}`;
+  }
+}
 
 export const msClient = new Meilisearch({
   host: msHost,
