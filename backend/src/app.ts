@@ -18,6 +18,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust proxy (Render runs behind Cloudflare/nginx reverse proxy)
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors({
   origin: true, // Allow requests from any origin or dynamic origins

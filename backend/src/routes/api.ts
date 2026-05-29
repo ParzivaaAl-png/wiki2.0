@@ -58,9 +58,9 @@ router.post('/auth/logout', authController.logout);
 router.post('/auth/refresh', authController.refresh);
 router.get('/auth/me', requireAuth, authController.getMe);
 
-// Search routes
-router.get('/search', requireAuth, articlesController.searchArticles);
-router.get('/search/suggest', requireAuth, articlesController.suggestArticles);
+// Search routes (public — no auth required; results already filtered by published=true)
+router.get('/search', articlesController.searchArticles);
+router.get('/search/suggest', articlesController.suggestArticles);
 
 // Article routes (Read-only for public, writes protected)
 router.get('/articles', articlesController.getArticles);
