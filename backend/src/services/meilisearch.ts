@@ -6,8 +6,12 @@ dotenv.config();
 let msHost = process.env.MEILI_HOST || 'http://localhost:7700';
 const msApiKey = process.env.MEILI_MASTER_KEY || '';
 
-// Prepend protocol if not specified (important for Render dynamic hostnames)
-if (!msHost.startsWith('http://') && !msHost.startsWith('https://')) {
+// Handle Render Free Plan private networking limitation:
+// Rewrite internal hostport (e.g., wiki-search-90mm:7700) to the public URL (https://wiki-search-90mm.onrender.com)
+if (msHost.includes('wiki-search-') && msHost.includes(':7700')) {
+  const hostOnly = msHost.replace('http://', '').replace('https://', '').split(':')[0];
+  msHost = `https://${hostOnly}.onrender.com`;
+} else if (!msHost.startsWith('http://') && !msHost.startsWith('https://')) {
   if (msHost.includes('onrender.com') || msHost.includes('vercel.app')) {
     msHost = `https://${msHost}`;
   } else {
