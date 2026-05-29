@@ -1,7 +1,28 @@
 const getApiUrl = () => {
-  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
-  return import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://wiki-backend-atnp.onrender.com/api';
+  let apiUrl = import.meta.env.VITE_API_URL || '';
+  
+  if (!apiUrl) {
+    apiUrl = import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://wiki-backend-atnp.onrender.com/api';
+  }
+
+  // If the API URL points to localhost, but the user is accessing the site from another device
+  // (e.g. using the server's local IP address like 192.168.1.5), resolve the backend host dynamically.
+  if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost') {
+    if (apiUrl.includes('localhost')) {
+      return apiUrl.replace('localhost', window.location.hostname);
+    }
+    // If it's a production build running locally, direct requests to the current hostname's backend port
+    const isCloud = window.location.hostname.includes('onrender.com') || 
+                    window.location.hostname.includes('vercel.app') || 
+                    window.location.hostname.includes('github.io');
+    if (!isCloud && !import.meta.env.DEV) {
+      return `http://${window.location.hostname}:5000/api`;
+    }
+  }
+
+  return apiUrl;
 };
+
 
 // Token storage for cross-origin auth fallback (Safari ITP blocks third-party cookies)
 let memoryToken: string | null = null;
