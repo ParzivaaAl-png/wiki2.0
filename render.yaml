@@ -1,11 +1,22 @@
-databases:
-  - name: wiki-db
-    databaseName: wiki_db
-    user: wiki_user
-    plan: free
-
 services:
-  # 1. Express Backend Web Service
+  # 1. Meilisearch Web Service (Docker container)
+  - type: web
+    name: wiki-search
+    env: docker
+    dockerfilePath: meilisearch/Dockerfile
+    dockerContext: meilisearch
+    plan: free
+    envVars:
+      - key: MEILI_HOST
+        value: "0.0.0.5" # Listen on all interfaces inside container
+      - key: MEILI_PORT
+        value: "7700"
+      - key: MEILI_NO_ANALYTICS
+        value: "true"
+      - key: MEILI_MASTER_KEY
+        value: "masterKey"
+
+  # 2. Express Backend Web Service
   - type: web
     name: wiki-backend
     env: docker
@@ -22,17 +33,12 @@ services:
           name: wiki-db
           property: connectionString
       - key: MEILISEARCH_HOST
-        value: "https://your-meilisearch-instance.onrender.com"
+        value: "http://wiki-search:7700" # Internal network connection to Meilisearch
       - key: MEILISEARCH_API_KEY
-        value: "your-meilisearch-api-key"
+        value: "masterKey"
 
-  # 2. Vite Frontend Static Site (Размещается на CDN, никогда не засыпает)
-  - type: static
-    name: wiki-frontend
+databases:
+  - name: wiki-db
+    databaseName: wiki_db
+    user: wiki_user
     plan: free
-    rootDir: frontend
-    buildCommand: npm run build
-    publishDir: dist
-    envVars:
-      - key: VITE_API_URL
-        value: "https://wiki-backend.onrender.com/api" # Замените на публичный URL вашего бэкенда на Render
