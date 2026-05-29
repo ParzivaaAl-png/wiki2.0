@@ -8,13 +8,13 @@ services:
     plan: free
     envVars:
       - key: MEILI_HOST
-        value: "0.0.0.5" # Listen on all interfaces inside container
+        value: "0.0.0.0" # Correct bind-all interface
       - key: MEILI_PORT
         value: "7700"
       - key: MEILI_NO_ANALYTICS
         value: "true"
       - key: MEILI_MASTER_KEY
-        value: "masterKey"
+        value: "superSecretMeilisearchMasterKey2026" # Production-ready key (>= 16 bytes)
 
   # 2. Express Backend Web Service
   - type: web
@@ -33,9 +33,9 @@ services:
           name: wiki-db
           property: connectionString
       - key: MEILISEARCH_HOST
-        value: "http://wiki-search:7700" # Internal network connection to Meilisearch
+        value: "http://wiki-search:7700" # Internal connection
       - key: MEILISEARCH_API_KEY
-        value: "masterKey"
+        value: "superSecretMeilisearchMasterKey2026"
 
 databases:
   - name: wiki-db
