@@ -60,6 +60,14 @@ export interface Suggestion {
   categoryName: string;
 }
 
+// In-memory cache for fast page navigation (TTL of 15 seconds)
+const apiCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 15000;
+
+export function clearApiCache() {
+  apiCache.clear();
+}
+
 // Helper to make API calls with cookies included and error handling
 async function apiCall<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = path.startsWith('http') ? path : `${getApiUrl()}${path}`;
@@ -91,12 +99,32 @@ async function apiCall<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json();
 }
 
+// Cached API call wrapper for read-only queries
+async function apiCallWithCache<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const isGet = !options.method || options.method === 'GET';
+  
+  if (!isGet) {
+    clearApiCache();
+    return apiCall<T>(path, options);
+  }
+
+  const cacheKey = `${path}_${JSON.stringify(options)}`;
+  const cached = apiCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data as T;
+  }
+
+  const data = await apiCall<T>(path, options);
+  apiCache.set(cacheKey, { data, timestamp: Date.now() });
+  return data;
+}
+
 export async function fetchCategories(): Promise<Category[]> {
-  return apiCall<Category[]>('/categories', { cache: 'no-store' });
+  return apiCallWithCache<Category[]>('/categories', { cache: 'no-store' });
 }
 
 export async function fetchCategory(slugOrId: string | number): Promise<Category> {
-  return apiCall<Category>(`/categories/${slugOrId}`, { cache: 'no-store' });
+  return apiCallWithCache<Category>(`/categories/${slugOrId}`, { cache: 'no-store' });
 }
 
 export async function fetchArticles(params?: {
@@ -109,11 +137,11 @@ export async function fetchArticles(params?: {
   if (params?.tag) queryParams.set('tag', params.tag);
   if (params?.all) queryParams.set('all', 'true');
 
-  return apiCall<Article[]>(`/articles?${queryParams.toString()}`, { cache: 'no-store' });
+  return apiCallWithCache<Article[]>(`/articles?${queryParams.toString()}`, { cache: 'no-store' });
 }
 
 export async function fetchArticle(slugOrId: string | number): Promise<Article> {
-  return apiCall<Article>(`/articles/${slugOrId}`, { cache: 'no-store' });
+  return apiCallWithCache<Article>(`/articles/${slugOrId}`, { cache: 'no-store' });
 }
 
 export async function searchArticles(
@@ -125,14 +153,15 @@ export async function searchArticles(
   if (category) queryParams.set('category', category);
   if (tag) queryParams.set('tag', tag);
 
-  return apiCall<SearchResult[]>(`/search?${queryParams.toString()}`, { cache: 'no-store' });
+  return apiCallWithCache<SearchResult[]>(`/search?${queryParams.toString()}`, { cache: 'no-store' });
 }
 
 export async function suggestArticles(q: string): Promise<Suggestion[]> {
-  return apiCall<Suggestion[]>(`/search/suggest?q=${encodeURIComponent(q)}`, { cache: 'no-store' });
+  return apiCallWithCache<Suggestion[]>(`/search/suggest?q=${encodeURIComponent(q)}`, { cache: 'no-store' });
 }
 
 export async function createArticle(data: Omit<Article, 'id' | 'created_at' | 'updated_at' | 'views'>): Promise<Article> {
+  clearApiCache();
   return apiCall<Article>('/articles', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -143,6 +172,7 @@ export async function updateArticle(
   id: number,
   data: Omit<Article, 'id' | 'created_at' | 'updated_at' | 'views'>
 ): Promise<Article> {
+  clearApiCache();
   return apiCall<Article>(`/articles/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -150,23 +180,26 @@ export async function updateArticle(
 }
 
 export async function deleteArticle(id: number): Promise<void> {
+  clearApiCache();
   return apiCall<void>(`/articles/${id}`, {
     method: 'DELETE',
   });
 }
 
 export async function uploadImage(file: File): Promise<{ url: string }> {
-  const formData = new FormData();
-  formData.append('image', file);
-
   return apiCall<{ url: string }>('/upload', {
     method: 'POST',
-    body: formData,
+    body: (() => {
+      const formData = new FormData();
+      formData.append('image', file);
+      return formData;
+    })(),
   });
 }
 
 // Authentication API
 export async function loginUser(username: string, password: string): Promise<{ user: User; accessToken: string }> {
+  clearApiCache();
   return apiCall<{ user: User; accessToken: string }>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
@@ -174,6 +207,7 @@ export async function loginUser(username: string, password: string): Promise<{ u
 }
 
 export async function registerUser(username: string, name: string, password: string): Promise<{ user: User; accessToken: string }> {
+  clearApiCache();
   return apiCall<{ user: User; accessToken: string }>('/auth/register', {
     method: 'POST',
     body: JSON.stringify({ username, name, password }),
@@ -181,17 +215,19 @@ export async function registerUser(username: string, name: string, password: str
 }
 
 export async function logoutUser(): Promise<{ message: string }> {
+  clearApiCache();
   return apiCall<{ message: string }>('/auth/logout', {
     method: 'POST',
   });
 }
 
 export async function fetchMe(): Promise<User> {
-  return apiCall<User>('/auth/me', { cache: 'no-store' });
+  return apiCallWithCache<User>('/auth/me', { cache: 'no-store' });
 }
 
 // Article Import API
 export async function importArticle(file: File): Promise<Article> {
+  clearApiCache();
   const formData = new FormData();
   formData.append('file', file);
 
@@ -203,10 +239,11 @@ export async function importArticle(file: File): Promise<Article> {
 
 // Admin User Management API
 export async function adminFetchUsers(): Promise<User[]> {
-  return apiCall<User[]>('/admin/users', { cache: 'no-store' });
+  return apiCallWithCache<User[]>('/admin/users', { cache: 'no-store' });
 }
 
 export async function adminCreateUser(data: Omit<User, 'id' | 'is_blocked'> & { password: string }): Promise<User> {
+  clearApiCache();
   return apiCall<User>('/admin/users', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -214,6 +251,7 @@ export async function adminCreateUser(data: Omit<User, 'id' | 'is_blocked'> & { 
 }
 
 export async function adminChangeRole(userId: number, role: 'Admin' | 'Editor' | 'User'): Promise<{ message: string }> {
+  clearApiCache();
   return apiCall<{ message: string }>(`/admin/users/${userId}/role`, {
     method: 'PUT',
     body: JSON.stringify({ role }),
@@ -221,6 +259,7 @@ export async function adminChangeRole(userId: number, role: 'Admin' | 'Editor' |
 }
 
 export async function adminToggleBlock(userId: number, is_blocked: boolean): Promise<{ message: string }> {
+  clearApiCache();
   return apiCall<{ message: string }>(`/admin/users/${userId}/block`, {
     method: 'PUT',
     body: JSON.stringify({ is_blocked }),
@@ -228,6 +267,7 @@ export async function adminToggleBlock(userId: number, is_blocked: boolean): Pro
 }
 
 export async function adminResetPassword(userId: number, password: string): Promise<{ message: string }> {
+  clearApiCache();
   return apiCall<{ message: string }>(`/admin/users/${userId}/reset-password`, {
     method: 'PUT',
     body: JSON.stringify({ password }),
@@ -235,6 +275,7 @@ export async function adminResetPassword(userId: number, password: string): Prom
 }
 
 export async function adminDeleteUser(userId: number): Promise<{ message: string }> {
+  clearApiCache();
   return apiCall<{ message: string }>(`/admin/users/${userId}`, {
     method: 'DELETE',
   });

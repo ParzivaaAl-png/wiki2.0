@@ -131,7 +131,7 @@ export default function Home() {
             <span className="flex-1 text-left text-neutral-400 text-sm sm:text-base">
               Поиск по базе знаний...
             </span>
-            <kbd className="inline-flex h-6 select-none items-center gap-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-2 font-mono text-[11px] font-medium text-neutral-400">
+            <kbd className="hidden sm:inline-flex h-6 select-none items-center gap-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-2 font-mono text-[11px] font-medium text-neutral-400">
               ⌘K
             </kbd>
           </div>

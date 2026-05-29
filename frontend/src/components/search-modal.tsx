@@ -270,12 +270,12 @@ export function SearchModal() {
               </div>
 
               <div className="flex items-center justify-between px-4 py-2 bg-neutral-50 dark:bg-neutral-900/40 border-t border-neutral-200/80 dark:border-neutral-900 text-[10px] text-neutral-400 select-none">
-                <div className="flex gap-3">
+                <div className="hidden sm:flex gap-3">
                   <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">↑↓</kbd> Навигация</span>
                   <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">Enter</kbd> Открыть</span>
                   <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">Esc</kbd> Закрыть</span>
                 </div>
-                <div>Поиск с автодополнением активен</div>
+                <div className="w-full sm:w-auto text-center sm:text-right">Поиск с автодополнением активен</div>
               </div>
             </motion.div>
           </div>

@@ -328,6 +328,31 @@ export default function ArticlePage() {
             </div>
           )}
 
+          {/* Mobile Table of Contents */}
+          {headings.length > 0 && (
+            <div className="block xl:hidden mb-6 border border-neutral-200 dark:border-neutral-800/80 bg-neutral-50/50 dark:bg-neutral-900/30 rounded-xl p-4">
+              <details className="group">
+                <summary className="flex items-center justify-between text-xs font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider cursor-pointer list-none select-none">
+                  <span>Содержание статьи</span>
+                  <ChevronDown className="w-4 h-4 text-neutral-400 group-open:rotate-180 transition-transform" />
+                </summary>
+                <nav className="mt-3 space-y-2 border-l border-neutral-200 dark:border-neutral-800 pl-3">
+                  {headings.map((heading) => (
+                    <a
+                      key={heading.id}
+                      href={`#${heading.id}`}
+                      className={`block text-xs text-neutral-600 dark:text-neutral-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors ${
+                        heading.level === 3 ? 'pl-3 text-[11px] text-neutral-500 dark:text-neutral-500' : 'font-medium'
+                      }`}
+                    >
+                      {heading.text}
+                    </a>
+                  ))}
+                </nav>
+              </details>
+            </div>
+          )}
+
           <ReactMarkdown 
             remarkPlugins={[remarkGfm]} 
             components={MarkdownComponents}
