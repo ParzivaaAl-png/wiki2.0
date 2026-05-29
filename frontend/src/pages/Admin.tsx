@@ -291,14 +291,6 @@ export default function Admin() {
             <Plus className="w-4.5 h-4.5 text-indigo-500" />
             <span>Создать раздел</span>
           </button>
-
-          <Link
-            to="/admin/editor/new"
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 transition-all text-center justify-center"
-          >
-            <Plus className="w-4.5 h-4.5" />
-            Новая статья
-          </Link>
         </div>
       </div>
 
@@ -594,6 +586,16 @@ export default function Admin() {
                                 </div>
                               ))
                             )}
+
+                            <div className="pt-3 flex justify-start pl-2">
+                              <Link
+                                to={`/admin/editor/new?category_id=${cat.id}`}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-indigo-200 hover:border-indigo-500 hover:bg-indigo-500/5 text-indigo-600 dark:border-indigo-800 dark:hover:border-indigo-500 dark:hover:bg-indigo-500/10 dark:text-indigo-400 rounded-lg text-xs font-semibold transition-all select-none cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Добавить статью в этот раздел</span>
+                              </Link>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -708,6 +710,16 @@ export default function Admin() {
                               </div>
                             </div>
                           ))}
+
+                          <div className="pt-3 flex justify-start pl-2">
+                            <Link
+                              to="/admin/editor/new"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-neutral-350 hover:border-neutral-500 hover:bg-neutral-500/5 text-neutral-600 dark:border-neutral-800 dark:hover:border-neutral-550 dark:hover:bg-neutral-550/10 dark:text-neutral-450 rounded-lg text-xs font-semibold transition-all select-none cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Добавить статью без раздела</span>
+                            </Link>
+                          </div>
                         </div>
                       )}
                     </div>

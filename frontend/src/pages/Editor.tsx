@@ -49,6 +49,12 @@ export default function Editor() {
           setPublished(article.published);
           setTags(article.tags || []);
           setPosition(article.position || 0);
+        } else {
+          const queryParams = new URLSearchParams(window.location.search);
+          const queryCatId = queryParams.get('category_id');
+          if (queryCatId) {
+            setCategoryId(Number(queryCatId));
+          }
         }
       } catch (err) {
         console.error('Failed to load editor data:', err);
