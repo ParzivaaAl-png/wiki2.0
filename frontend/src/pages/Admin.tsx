@@ -60,7 +60,7 @@ export default function Admin() {
         fetchArticles({ all: true }), // fetches all including drafts
         fetchCategories(),
       ]);
-      setArticles(arts);
+      setArticles(arts.filter(art => !art.slug.startsWith('auto-list-')));
       setCategories(cats);
     } catch (err) {
       console.error('Failed to load admin catalog:', err);

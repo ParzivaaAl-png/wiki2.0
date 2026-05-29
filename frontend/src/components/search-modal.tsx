@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, Sparkles, X, FileText, CornerDownLeft } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Search, Sparkles, X, FileText, CornerDownLeft, MapPin, CheckCircle2, XCircle, Info, Car, ChevronRight } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { searchArticles, SearchResult } from '../lib/api';
 import { createPortal } from 'react-dom';
+import { CITIES, TARIFFS, findCarMatch, getCarStatus } from '../lib/classifier-data';
 
 interface SearchBarProps {
   variant?: 'header' | 'hero';
@@ -16,6 +17,22 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
   const [results, setResults] = React.useState<SearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(false);
+
+  const [selectedCity, setSelectedCity] = React.useState(CITIES[0]);
+  const [selectedYear, setSelectedYear] = React.useState(2020);
+  const [mobileTab, setMobileTab] = React.useState<'results' | 'classifier'>('results');
+
+  const matchedCar = React.useMemo(() => {
+    return findCarMatch(query);
+  }, [query]);
+
+  React.useEffect(() => {
+    if (matchedCar) {
+      setMobileTab('classifier');
+    } else {
+      setMobileTab('results');
+    }
+  }, [matchedCar]);
 
   const navigate = useNavigate();
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -78,7 +95,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
       setIsLoading(true);
       try {
         const resData = await searchArticles(query);
-        setResults(resData);
+        setResults(resData.filter(res => !res.slug.startsWith('auto-list-')));
         setSelectedIndex(0);
       } catch (err) {
         console.error('Search error:', err);
@@ -168,9 +185,9 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
     }
   };
 
-  const renderDropdownContent = () => {
+  const renderResultsList = () => {
     return (
-      <div className="flex-1 overflow-y-auto p-2">
+      <>
         {results.length === 0 && !isLoading && (
           <div className="py-6 text-center text-neutral-400 text-sm">
             Ничего не найдено по запросу &quot;<span className="text-neutral-900 dark:text-white font-semibold">{query}</span>&quot;.
@@ -226,7 +243,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                     className={`p-2.5 rounded-lg cursor-pointer transition-colors border ${
                       isCurrent
                         ? 'bg-indigo-500/5 border-indigo-500/20 text-neutral-900 dark:text-neutral-50'
-                        : 'hover:bg-neutral-50 dark:hover:bg-neutral-900/30 border-transparent text-neutral-700 dark:text-neutral-300'
+                        : 'hover:bg-neutral-50 dark:hover:bg-neutral-900/30 border-transparent text-neutral-700 dark:text-neutral-305'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
@@ -239,7 +256,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                     </div>
                     
                     <p 
-                      className="text-[11px] text-neutral-500 dark:text-neutral-400 border-l-2 border-neutral-200 dark:border-neutral-800 pl-2 mt-1 italic font-light leading-relaxed line-clamp-2"
+                      className="text-[11px] text-neutral-550 dark:text-neutral-400 border-l-2 border-neutral-200 dark:border-neutral-800 pl-2 mt-1 italic font-light leading-relaxed line-clamp-2"
                       dangerouslySetInnerHTML={{ __html: `... ${match.snippet} ...` }}
                     />
                   </li>
@@ -248,6 +265,129 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
             </ul>
           </div>
         )}
+      </>
+    );
+  };
+
+  const renderCarWidgetContent = () => {
+    if (!matchedCar) return null;
+    const statuses = getCarStatus(matchedCar.brand, matchedCar.model, selectedYear, selectedCity.id);
+    
+    return (
+      <div className="flex flex-col h-full justify-between">
+        <div>
+          <div className="flex items-start gap-2 pb-3 border-b border-neutral-200 dark:border-neutral-800">
+            <div className="p-1.5 bg-indigo-500/10 rounded-lg text-indigo-500 shrink-0">
+              <Car className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-neutral-900 dark:text-white leading-tight">
+                {matchedCar.brand} {matchedCar.model}
+              </h4>
+              <p className="text-[10px] text-neutral-400 mt-0.5">Классификатор Яндекс Про</p>
+            </div>
+          </div>
+
+          {/* Quick select widgets */}
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            <div className="space-y-1">
+              <label className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wider">Город</label>
+              <select 
+                value={selectedCity.id}
+                onChange={(e) => {
+                  const city = CITIES.find(c => c.id === e.target.value);
+                  if (city) setSelectedCity(city);
+                }}
+                className="w-full bg-white dark:bg-neutral-900 border border-neutral-205 dark:border-neutral-800 rounded px-1.5 py-1 text-[11px] text-neutral-800 dark:text-neutral-200 outline-none"
+              >
+                {CITIES.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wider">Год авто</label>
+              <select 
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded px-1.5 py-1 text-[11px] text-neutral-800 dark:text-neutral-200 outline-none"
+              >
+                {Array.from({ length: 2027 - 1980 }, (_, i) => 2026 - i).map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Tariff status list */}
+          <div className="mt-3.5 space-y-1.5 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+            {!statuses ? (
+              <div className="text-[10px] text-rose-500 py-1 font-medium">
+                Этот автомобиль не поддерживается тарифами в г. {selectedCity.name}
+              </div>
+            ) : (
+              TARIFFS.map(t => {
+                const res = statuses[t.key];
+                if (!res) return null;
+                return (
+                  <div key={t.key} className="flex items-center justify-between text-[11px] py-1 border-b border-neutral-100 dark:border-neutral-900/60 last:border-0">
+                    <span className="font-medium text-neutral-700 dark:text-neutral-350">{t.name}</span>
+                    <span className="flex items-center gap-1">
+                      {res.fits ? (
+                        <>
+                          <CheckCircle2 className="w-3 h-3 text-emerald-505 shrink-0" />
+                          <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-500/10 px-1 py-0.5 rounded shrink-0">Подходит</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-3 h-3 text-rose-505 shrink-0" />
+                          <span className="text-[9px] text-rose-600 dark:text-rose-400 font-semibold bg-rose-500/10 px-1 py-0.5 rounded shrink-0">От {res.minYear} г.</span>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-neutral-200 dark:border-neutral-800 shrink-0">
+          <Link 
+            to="/categories/tariffs"
+            onClick={() => {
+              setIsOpen(false);
+              setIsFocused(false);
+            }}
+            className="w-full flex items-center justify-center gap-1 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold shadow-sm transition-all"
+          >
+            Открыть в калькуляторе
+            <ChevronRight className="w-3 h-3" />
+          </Link>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDropdownContent = () => {
+    if (matchedCar) {
+      return (
+        <div className="flex divide-x divide-neutral-200 dark:divide-neutral-800 overflow-hidden h-[350px]">
+          {/* Left Side: Standard Search Results */}
+          <div className="flex-1 overflow-y-auto p-2 scrollbar-thin">
+            {renderResultsList()}
+          </div>
+          {/* Right Side: Interactive Car Checker Widget */}
+          <div className="w-[300px] bg-neutral-50/50 dark:bg-neutral-900/30 p-3 shrink-0 overflow-hidden">
+            {renderCarWidgetContent()}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex-1 overflow-y-auto p-2">
+        {renderResultsList()}
       </div>
     );
   };
@@ -303,65 +443,99 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
 
                 {query.trim().length >= 2 && (
                   <>
-                    {results.length === 0 && !isLoading && (
-                      <div className="py-8 text-center text-neutral-400 text-sm">
-                        Ничего не найдено по запросу &quot;<span className="text-neutral-900 dark:text-white font-semibold">{query}</span>&quot;.
+                    {/* Tabs on Mobile */}
+                    {matchedCar && (
+                      <div className="flex border-b border-neutral-200 dark:border-neutral-800 mb-3 px-1">
+                        <button
+                          onClick={() => setMobileTab('results')}
+                          className={`flex-1 py-2 text-center text-xs font-bold transition-all border-b-2 ${
+                            mobileTab === 'results' 
+                              ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 font-semibold' 
+                              : 'border-transparent text-neutral-400 dark:text-neutral-500'
+                          }`}
+                        >
+                          Результаты ({results.length})
+                        </button>
+                        <button
+                          onClick={() => setMobileTab('classifier')}
+                          className={`flex-1 py-2 text-center text-xs font-bold transition-all border-b-2 ${
+                            mobileTab === 'classifier' 
+                              ? 'border-indigo-500 text-indigo-650 dark:text-indigo-400 font-semibold' 
+                              : 'border-transparent text-neutral-400 dark:text-neutral-500'
+                          }`}
+                        >
+                          Классификатор: {matchedCar.brand}
+                        </button>
                       </div>
                     )}
 
-                    {matchedArticles.length > 0 && (
-                      <div className="mb-4">
-                        <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                          Статьи
-                        </div>
-                        <ul className="space-y-1">
-                          {matchedArticles.map((art) => (
-                            <li
-                              key={`art-${art.id}`}
-                              onClick={() => handleSelect(art.slug)}
-                              className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900/50 text-neutral-700 dark:text-neutral-300"
-                            >
-                              <div className="flex items-center gap-2">
-                                <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
-                                <span dangerouslySetInnerHTML={{ __html: art.title }} />
-                                <span className="text-[10px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium">
-                                  {(art.categoryName || '').replace('-', ' ')}
-                                </span>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
+                    {mobileTab === 'classifier' && matchedCar ? (
+                      <div className="p-3 bg-neutral-50 dark:bg-neutral-900/20 border border-neutral-200/50 dark:border-neutral-800 rounded-xl">
+                        {renderCarWidgetContent()}
                       </div>
-                    )}
+                    ) : (
+                      <>
+                        {results.length === 0 && !isLoading && (
+                          <div className="py-8 text-center text-neutral-400 text-sm">
+                            Ничего не найдено по запросу &quot;<span className="text-neutral-900 dark:text-white font-semibold">{query}</span>&quot;.
+                          </div>
+                        )}
 
-                    {textMatches.length > 0 && (
-                      <div>
-                        <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                          Совпадения в тексте
-                        </div>
-                        <ul className="space-y-2">
-                          {textMatches.map((match, idx) => (
-                            <li
-                              key={`match-${match.slug}-${idx}`}
-                              onClick={() => handleSelect(match.slug, match.matchedWord)}
-                              className="p-3 rounded-lg cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900/30 border-transparent text-neutral-700 dark:text-neutral-300"
-                            >
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
-                                  из статьи: <strong className="text-neutral-600 dark:text-neutral-300 font-semibold" dangerouslySetInnerHTML={{ __html: match.articleTitle }} />
-                                </span>
-                                <span className="text-[10px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium">
-                                  {(match.categoryName || '').replace('-', ' ')}
-                                </span>
-                              </div>
-                              <p 
-                                className="text-xs text-neutral-500 dark:text-neutral-400 border-l-2 border-neutral-200 dark:border-neutral-800 pl-2 mt-1.5 italic font-light leading-relaxed"
-                                dangerouslySetInnerHTML={{ __html: `... ${match.snippet} ...` }}
-                              />
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                        {matchedArticles.length > 0 && (
+                          <div className="mb-4">
+                            <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                              Статьи
+                            </div>
+                            <ul className="space-y-1">
+                              {matchedArticles.map((art) => (
+                                <li
+                                  key={`art-${art.id}`}
+                                  onClick={() => handleSelect(art.slug)}
+                                  className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900/50 text-neutral-700 dark:text-neutral-300"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
+                                    <span dangerouslySetInnerHTML={{ __html: art.title }} />
+                                    <span className="text-[10px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium">
+                                      {(art.categoryName || '').replace('-', ' ')}
+                                    </span>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {textMatches.length > 0 && (
+                          <div>
+                            <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                              Совпадения в тексте
+                            </div>
+                            <ul className="space-y-2">
+                              {textMatches.map((match, idx) => (
+                                <li
+                                  key={`match-${match.slug}-${idx}`}
+                                  onClick={() => handleSelect(match.slug, match.matchedWord)}
+                                  className="p-3 rounded-lg cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900/30 border-transparent text-neutral-750 dark:text-neutral-300"
+                                >
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
+                                      из статьи: <strong className="text-neutral-600 dark:text-neutral-300 font-semibold" dangerouslySetInnerHTML={{ __html: match.articleTitle }} />
+                                    </span>
+                                    <span className="text-[10px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium">
+                                      {(match.categoryName || '').replace('-', ' ')}
+                                    </span>
+                                  </div>
+                                  <p 
+                                    className="text-xs text-neutral-500 dark:text-neutral-400 border-l-2 border-neutral-200 dark:border-neutral-800 pl-2 mt-1.5 italic font-light leading-relaxed"
+                                    dangerouslySetInnerHTML={{ __html: `... ${match.snippet} ...` }}
+                                  />
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </>
                     )}
                   </>
                 )}
@@ -437,7 +611,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.99 }}
               transition={{ duration: 0.15 }}
-              className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[350px]"
+              className={`absolute top-full left-0 right-0 mt-2 bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[350px] transition-all duration-300 ${matchedCar ? 'md:left-[-50px] md:right-[-50px]' : ''}`}
             >
               {renderDropdownContent()}
             </motion.div>
@@ -505,7 +679,9 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.99 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-full right-0 mt-2 w-[420px] bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[350px]"
+            className={`absolute top-full right-0 mt-2 bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[350px] transition-all duration-300 ${
+              matchedCar ? 'w-[720px]' : 'w-[420px]'
+            }`}
           >
             {renderDropdownContent()}
           </motion.div>
