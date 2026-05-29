@@ -9,7 +9,8 @@ import {
   checkMeilisearchConnection, 
   initializeMeilisearch, 
   bulkSyncArticles,
-  ArticleDocument
+  ArticleDocument,
+  msClient
 } from './services/meilisearch';
 import * as ArticleModel from './models/article';
 
@@ -38,6 +39,19 @@ app.use('/api', apiRouter);
 // Health Check
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date() });
+});
+
+// Health Check for Search (Meilisearch) - Proxies to Meilisearch using GET to keep it awake
+app.get('/health/search', async (req, res) => {
+  try {
+    const healthy = await msClient.isHealthy();
+    if (healthy) {
+      return res.json({ status: 'OK', search: 'available', timestamp: new Date() });
+    }
+    return res.status(503).json({ status: 'ERROR', search: 'unavailable', timestamp: new Date() });
+  } catch (err: any) {
+    return res.status(500).json({ status: 'ERROR', details: err.message, timestamp: new Date() });
+  }
 });
 
 // Startup logic
