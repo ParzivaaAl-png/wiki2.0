@@ -1,4 +1,4 @@
-import { Meilisearch } from 'meilisearch/dist/index';
+import { Meilisearch } from 'meilisearch';
 import dotenv from 'dotenv';
 
 dotenv.config();
