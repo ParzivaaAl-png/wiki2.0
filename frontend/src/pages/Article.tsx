@@ -192,7 +192,7 @@ export default function ArticlePage() {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
+                    transition={{ duration: 0.12 }}
                     className="overflow-hidden pl-5 border-l border-neutral-200 dark:border-neutral-800 ml-4 space-y-0.5"
                   >
                     {catArticles.length === 0 ? (
@@ -257,7 +257,7 @@ export default function ArticlePage() {
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
-              transition={{ type: 'tween', duration: 0.3 }}
+              transition={{ type: 'tween', duration: 0.18 }}
               className="relative w-80 max-w-[85vw] h-full"
             >
               <button

@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /admin
+Disallow: /login
+Disallow: /admin/*
+
+Sitemap: https://wiki2-frontend.vercel.app/sitemap.xml
