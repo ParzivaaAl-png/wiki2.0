@@ -23,7 +23,10 @@ services:
       - wiki-network
 
   meilisearch:
-    image: getmeili/meilisearch:v1.7.6
+    build:
+      context: ./meilisearch
+      dockerfile: Dockerfile
+    image: wiki-search-local:latest
     container_name: wiki-search
     environment:
       - MEILI_HTTP_ADDR=0.0.0.0:7700
