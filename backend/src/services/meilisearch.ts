@@ -1,5 +1,6 @@
 import { Meilisearch } from 'meilisearch';
 import dotenv from 'dotenv';
+import * as ArticleModel from '../models/article';
 
 dotenv.config();
 
@@ -159,6 +160,37 @@ export const bulkSyncArticles = async (articles: ArticleDocument[]) => {
 };
 
 /**
+ * Check if meilisearch has 0 documents and sync from database if so (self-healing)
+ */
+export const syncIfNeeded = async () => {
+  try {
+    const stats = await msClient.index(INDEX_NAME).getStats();
+    if (stats.numberOfDocuments === 0) {
+      console.log('Meilisearch index is empty. Checking DB articles for sync...');
+      const dbArticles = await ArticleModel.getAllArticles({ publishedOnly: false });
+      if (dbArticles.length > 0) {
+        console.log(`Found ${dbArticles.length} articles in DB. Bulk syncing to Meilisearch...`);
+        const docs: ArticleDocument[] = dbArticles.map((art) => ({
+          id: art.id,
+          title: art.title,
+          slug: art.slug,
+          content: art.content,
+          summary: art.summary,
+          categoryName: art.category_slug || '',
+          tags: art.tags,
+          published: art.published,
+          createdAt: art.created_at instanceof Date ? art.created_at.toISOString() : new Date(art.created_at).toISOString(),
+        }));
+        await bulkSyncArticles(docs);
+        console.log('Bulk sync completed successfully.');
+      }
+    }
+  } catch (err) {
+    console.error('Failed to run syncIfNeeded:', err);
+  }
+};
+
+/**
  * Custom helper to extract matching snippets with highlight tags from the formatted HTML content,
  * mimicking Elasticsearch's fragments highlight system.
  */
@@ -204,6 +236,7 @@ export const searchArticles = async (
   categorySlug?: string,
   tagName?: string
 ) => {
+  await syncIfNeeded();
   try {
     const filterArray: string[] = ['published = true'];
 
@@ -258,6 +291,7 @@ export const searchArticles = async (
  * Auto-completion suggestions provider.
  */
 export const suggestArticles = async (queryText: string) => {
+  await syncIfNeeded();
   try {
     if (!queryText || queryText.trim().length === 0) return [];
 
