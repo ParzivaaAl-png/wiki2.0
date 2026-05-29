@@ -2,6 +2,27 @@ const getApiUrl = () => {
   return import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 };
 
+// Token storage for cross-origin auth fallback (Safari ITP blocks third-party cookies)
+let memoryToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  memoryToken = token;
+  if (token) {
+    localStorage.setItem('wiki_access_token', token);
+  } else {
+    localStorage.removeItem('wiki_access_token');
+  }
+}
+
+export function getAuthToken(): string | null {
+  return memoryToken || localStorage.getItem('wiki_access_token');
+}
+
+export function clearAuthToken() {
+  memoryToken = null;
+  localStorage.removeItem('wiki_access_token');
+}
+
 export interface Category {
   id: number;
   name: string;
@@ -71,11 +92,20 @@ export function clearApiCache() {
 // Helper to make API calls with cookies included and error handling
 async function apiCall<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = path.startsWith('http') ? path : `${getApiUrl()}${path}`;
+  
+  // Build auth headers — include Bearer token as fallback for cross-origin cookie issues
+  const authHeaders: Record<string, string> = {};
+  const token = getAuthToken();
+  if (token) {
+    authHeaders['Authorization'] = `Bearer ${token}`;
+  }
+  
   const response = await fetch(url, {
     ...options,
     credentials: 'include',
     headers: {
       ...(!(options.body instanceof FormData) && { 'Content-Type': 'application/json' }),
+      ...authHeaders,
       ...options.headers,
     },
   });
@@ -200,22 +230,33 @@ export async function uploadImage(file: File): Promise<{ url: string }> {
 // Authentication API
 export async function loginUser(username: string, password: string): Promise<{ user: User; accessToken: string }> {
   clearApiCache();
-  return apiCall<{ user: User; accessToken: string }>('/auth/login', {
+  const result = await apiCall<{ user: User; accessToken: string }>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
+  // Store token for cross-origin auth fallback
+  if (result.accessToken) {
+    setAuthToken(result.accessToken);
+  }
+  return result;
 }
 
 export async function registerUser(username: string, name: string, password: string): Promise<{ user: User; accessToken: string }> {
   clearApiCache();
-  return apiCall<{ user: User; accessToken: string }>('/auth/register', {
+  const result = await apiCall<{ user: User; accessToken: string }>('/auth/register', {
     method: 'POST',
     body: JSON.stringify({ username, name, password }),
   });
+  // Store token for cross-origin auth fallback
+  if (result.accessToken) {
+    setAuthToken(result.accessToken);
+  }
+  return result;
 }
 
 export async function logoutUser(): Promise<{ message: string }> {
   clearApiCache();
+  clearAuthToken();
   return apiCall<{ message: string }>('/auth/logout', {
     method: 'POST',
   });

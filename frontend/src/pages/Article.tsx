@@ -153,7 +153,7 @@ export default function ArticlePage() {
   }
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-white dark:bg-neutral-950 p-4 border-r border-neutral-200/50 dark:border-neutral-800/50">
+    <div className="flex flex-col h-full bg-neutral-50 dark:bg-neutral-900/60 p-4 border-r border-neutral-200/50 dark:border-neutral-800/50">
       <div className="flex items-center gap-2 mb-6 px-2 text-indigo-500 font-semibold tracking-tight text-sm uppercase">
         <BookOpen className="w-4 h-4" />
         <span>Вики-документация</span>
@@ -229,7 +229,7 @@ export default function ArticlePage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-6">
       
       {/* Left Sidebar */}
-      <aside className="hidden lg:block w-64 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
+      <aside className="hidden lg:block w-64 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto bg-neutral-50 dark:bg-neutral-900/60">
         {sidebarContent}
       </aside>
 

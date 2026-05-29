@@ -5,6 +5,7 @@ import { ThemeProvider } from './components/theme-provider';
 import { ThemeToggle } from './components/theme-toggle';
 import { SearchModal } from './components/search-modal';
 import { AuthProvider, useAuth } from './lib/auth-context';
+import { ErrorBoundary } from './components/error-boundary';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Import Pages
@@ -213,12 +214,14 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <AppContent />
-        </BrowserRouter>
-      </AuthProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }

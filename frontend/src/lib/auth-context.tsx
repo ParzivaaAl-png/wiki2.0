@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, fetchMe, loginUser, registerUser, logoutUser } from './api';
+import { User, fetchMe, loginUser, registerUser, logoutUser, clearAuthToken } from './api';
 
 interface AuthContextType {
   user: User | null;
@@ -64,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
     } catch (err) {
       // Even if api logout fails, clear local state
+      clearAuthToken();
       setUser(null);
       throw err;
     } finally {
