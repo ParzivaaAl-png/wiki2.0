@@ -33,9 +33,7 @@ services:
           name: wiki-db
           property: connectionString
       - key: MEILISEARCH_HOST
-        fromService:
-          name: wiki-search
-          property: host
+        value: "http://wiki-search:7700"
       - key: MEILISEARCH_API_KEY
         value: "superSecretMeilisearchMasterKey2026"
 
