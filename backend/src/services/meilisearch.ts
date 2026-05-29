@@ -15,6 +15,8 @@ if (!msHost.startsWith('http://') && !msHost.startsWith('https://')) {
   }
 }
 
+console.log('Meilisearch client initialized with host:', msHost);
+
 export const msClient = new Meilisearch({
   host: msHost,
   apiKey: msApiKey,
