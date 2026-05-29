@@ -49,6 +49,7 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
 
 function Header() {
   const { user, logout } = useAuth();
+  const location = useLocation();
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-neutral-200/50 dark:border-neutral-800/50 glass-header shadow-sm transition-all duration-300">
@@ -63,7 +64,7 @@ function Header() {
             Wiki 2.0
           </span>
         </Link>
-
+ 
         {/* Navigation Actions */}
         <div className="flex items-center gap-1.5 sm:gap-3">
           {user && <SearchModal />}
@@ -92,7 +93,7 @@ function Header() {
                 <span className="text-xs font-bold text-neutral-950 dark:text-neutral-100">{user.name}</span>
                 <span className="text-[9px] text-neutral-400 uppercase font-bold tracking-wider">{user.role === 'Admin' ? 'Админ' : user.role === 'Editor' ? 'Редактор' : 'Пользователь'}</span>
               </div>
-
+ 
               <button 
                 onClick={() => logout()}
                 className="px-2 sm:px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 text-xs sm:text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-900/50 text-neutral-500 hover:text-red-500 transition-colors shadow-sm"
@@ -101,15 +102,17 @@ function Header() {
               </button>
             </div>
           ) : (
-            <Link 
-              to="/login"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-all shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20"
-            >
-              <LogIn className="w-4 h-4" />
-              <span className="hidden sm:inline">Войти</span>
-            </Link>
+            location.pathname !== '/login' && (
+              <Link 
+                to="/login"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-all shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20"
+              >
+                <LogIn className="w-4.5 h-4.5" />
+                <span className="hidden sm:inline">Войти</span>
+              </Link>
+            )
           )}
-
+ 
           <ThemeToggle />
         </div>
       </div>
