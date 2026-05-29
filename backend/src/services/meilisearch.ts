@@ -72,7 +72,12 @@ export const initializeMeilisearch = async () => {
       indexExists = true;
       console.log(`Meilisearch index "${INDEX_NAME}" already exists.`);
     } catch (err: any) {
-      if (err.cause?.code !== 'index_not_found' && err.code !== 'index_not_found') {
+      const isNotFound =
+        err.code === 'index_not_found' ||
+        err.cause?.code === 'index_not_found' ||
+        err.message?.includes('not found') ||
+        err.message?.includes('index_not_found');
+      if (!isNotFound) {
         throw err;
       }
     }
@@ -164,9 +169,30 @@ export const bulkSyncArticles = async (articles: ArticleDocument[]) => {
  */
 export const syncIfNeeded = async () => {
   try {
-    const stats = await msClient.index(INDEX_NAME).getStats();
-    if (stats.numberOfDocuments === 0) {
-      console.log('Meilisearch index is empty. Checking DB articles for sync...');
+    let needSync = false;
+    try {
+      const stats = await msClient.index(INDEX_NAME).getStats();
+      if (stats.numberOfDocuments === 0) {
+        needSync = true;
+      }
+    } catch (err: any) {
+      // If index doesn't exist, we must initialize it and then sync
+      const isNotFound =
+        err.code === 'index_not_found' ||
+        err.cause?.code === 'index_not_found' ||
+        err.message?.includes('not found') ||
+        err.message?.includes('index_not_found');
+      if (isNotFound) {
+        console.log(`Index "${INDEX_NAME}" not found in Meilisearch. Initializing index...`);
+        await initializeMeilisearch();
+        needSync = true;
+      } else {
+        throw err;
+      }
+    }
+
+    if (needSync) {
+      console.log('Meilisearch index is empty or uninitialized. Checking DB articles for sync...');
       const dbArticles = await ArticleModel.getAllArticles({ publishedOnly: false });
       if (dbArticles.length > 0) {
         console.log(`Found ${dbArticles.length} articles in DB. Bulk syncing to Meilisearch...`);
