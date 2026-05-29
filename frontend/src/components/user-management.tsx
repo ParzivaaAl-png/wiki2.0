@@ -4,22 +4,24 @@ import {
   UserPlus, 
   Shield, 
   Ban, 
-  Key, 
   Trash2, 
   Search, 
-  Lock, 
-  Check, 
   X, 
-  AlertTriangle 
+  Edit3,
+  ChevronDown,
+  ChevronUp,
+  Clock
 } from 'lucide-react';
 import { 
   adminFetchUsers, 
   adminCreateUser, 
   adminChangeRole, 
   adminToggleBlock, 
-  adminResetPassword, 
   adminDeleteUser, 
-  User as UserType 
+  adminUpdateUser,
+  fetchUserHistory,
+  User as UserType,
+  UserAuditLog
 } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 
@@ -37,10 +39,15 @@ export default function UserManagement() {
   const [newRole, setNewRole] = React.useState<'Admin' | 'Editor' | 'User'>('User');
   const [createError, setCreateError] = React.useState<string | null>(null);
 
-  // Reset Password Dialog State
-  const [resetUserId, setResetUserId] = React.useState<number | null>(null);
-  const [resetPasswordValue, setResetPasswordValue] = React.useState('');
-  const [resetError, setResetError] = React.useState<string | null>(null);
+  // Edit User Modal State
+  const [editUser, setEditUser] = React.useState<UserType | null>(null);
+  const [editUsername, setEditUsername] = React.useState('');
+  const [editName, setEditName] = React.useState('');
+  const [editPassword, setEditPassword] = React.useState('');
+  const [editError, setEditError] = React.useState<string | null>(null);
+  const [history, setHistory] = React.useState<UserAuditLog[]>([]);
+  const [isHistoryExpanded, setIsHistoryExpanded] = React.useState(false);
+  const [isHistoryLoading, setIsHistoryLoading] = React.useState(false);
 
   const loadUsers = async () => {
     setIsLoading(true);
@@ -107,23 +114,50 @@ export default function UserManagement() {
     }
   };
 
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setResetError(null);
+  const handleOpenEditModal = async (u: UserType) => {
+    setEditUser(u);
+    setEditUsername(u.username);
+    setEditName(u.name);
+    setEditPassword('');
+    setEditError(null);
+    setIsHistoryExpanded(false);
+    setHistory([]);
+    
+    // Load history
+    setIsHistoryLoading(true);
+    try {
+      const logs = await fetchUserHistory(u.id);
+      setHistory(logs);
+    } catch (err) {
+      console.error('Failed to load user history:', err);
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
 
-    if (!resetUserId) return;
-    if (resetPasswordValue.length < 6) {
-      setResetError('Пароль должен быть не менее 6 символов.');
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditError(null);
+    if (!editUser) return;
+
+    if (!editUsername.trim() || !editName.trim()) {
+      setEditError('Логин и ФИО обязательны.');
       return;
     }
 
     try {
-      await adminResetPassword(resetUserId, resetPasswordValue);
-      setResetUserId(null);
-      setResetPasswordValue('');
-      alert('Пароль успешно изменен.');
+      const updated = await adminUpdateUser(editUser.id, {
+        username: editUsername.trim(),
+        name: editName.trim(),
+        password: editPassword || undefined
+      });
+      
+      // Update local state
+      setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, username: updated.username, name: updated.name } : u));
+      setEditUser(null);
+      alert('Данные пользователя успешно обновлены.');
     } catch (err: any) {
-      setResetError(err.message || 'Не удалось сбросить пароль.');
+      setEditError(err.message || 'Не удалось обновить пользователя.');
     }
   };
 
@@ -267,46 +301,111 @@ export default function UserManagement() {
         </div>
       )}
 
-      {/* Reset Password Dialog */}
-      {resetUserId !== null && (
+      {/* Edit User Modal with Audit History Accordion */}
+      {editUser !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-neutral-900/50 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-2xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-lg text-neutral-900 dark:text-white">Сброс пароля</h3>
+          <div className="w-full max-w-md bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="font-bold text-lg text-neutral-900 dark:text-white">Редактирование профиля</h3>
               <button 
-                onClick={() => setResetUserId(null)}
+                onClick={() => setEditUser(null)}
                 className="p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-neutral-500"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleResetPassword} className="space-y-4">
-              {resetError && (
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              {editError && (
                 <div className="p-3 rounded-lg border border-red-500/10 bg-red-500/5 text-red-600 dark:text-red-400 text-xs">
-                  {resetError}
+                  {editError}
                 </div>
               )}
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Новый пароль</label>
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">ФИО пользователя</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Иван Петров"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Логин (Имя пользователя)</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ivan_editor"
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Новый пароль (оставьте пустым, если не хотите менять)</label>
                 <input
                   type="password"
-                  required
-                  placeholder="Мин. 6 символов"
-                  value={resetPasswordValue}
-                  onChange={(e) => setResetPasswordValue(e.target.value)}
+                  placeholder="Не менее 6 символов"
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/25 transition-all mt-4"
+                className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/25 transition-all"
               >
-                Сбросить пароль
+                Сохранить изменения
               </button>
             </form>
+
+            {/* Change History Accordion */}
+            <div className="border-t border-neutral-100 dark:border-neutral-900 pt-4">
+              <button
+                type="button"
+                onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+                className="flex items-center justify-between w-full text-xs font-bold text-neutral-400 hover:text-neutral-950 dark:hover:text-white uppercase tracking-wider select-none transition-colors"
+              >
+                <span>История изменений ({history.length})</span>
+                {isHistoryExpanded ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </button>
+
+              {isHistoryExpanded && (
+                <div className="mt-3 max-h-40 overflow-y-auto space-y-2 pr-1">
+                  {isHistoryLoading ? (
+                    <p className="text-[10px] text-neutral-400 py-1 font-light">Загрузка истории...</p>
+                  ) : history.length === 0 ? (
+                    <p className="text-[10px] text-neutral-400 py-1 font-light">История изменений пуста.</p>
+                  ) : (
+                    history.map((log) => (
+                      <div key={log.id} className="p-2 rounded border border-neutral-200/50 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/20 text-[10px] leading-relaxed">
+                        <div className="font-semibold text-neutral-700 dark:text-neutral-300">
+                          {log.field_changed === 'username' && `Смена логина: с "${log.old_value}" на "${log.new_value}"`}
+                          {log.field_changed === 'name' && `Смена ФИО: с "${log.old_value}" на "${log.new_value}"`}
+                          {log.field_changed === 'password' && `Пароль изменен`}
+                        </div>
+                        <div className="text-neutral-400 font-light mt-0.5 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          <span>Админ: {log.changed_by_name || log.changed_by_username || 'Система'}</span>
+                          <span>•</span>
+                          <span>{new Date(log.changed_at).toLocaleString('ru-RU')}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -326,7 +425,7 @@ export default function UserManagement() {
             <tbody className="divide-y divide-neutral-200/50 dark:divide-neutral-800/80 text-xs">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-neutral-400 dark:text-neutral-600">
+                  <td colSpan={4} className="p-8 text-center text-neutral-400 dark:text-neutral-600 select-none">
                     Пользователи не найдены.
                   </td>
                 </tr>
@@ -363,9 +462,9 @@ export default function UserManagement() {
                           </span>
                         ) : (
                           <select
-                            value={u.role}
-                            onChange={(e) => handleChangeRole(u.id, e.target.value as any)}
-                            className="text-xs border border-neutral-200 dark:border-neutral-800 rounded-lg px-2 py-1 bg-neutral-50 dark:bg-neutral-950 text-neutral-700 dark:text-neutral-300 outline-none focus:border-indigo-500"
+                             value={u.role}
+                             onChange={(e) => handleChangeRole(u.id, e.target.value as any)}
+                             className="text-xs border border-neutral-200 dark:border-neutral-800 rounded-lg px-2 py-1 bg-neutral-50 dark:bg-neutral-950 text-neutral-700 dark:text-neutral-300 outline-none focus:border-indigo-500"
                           >
                             <option value="User">User</option>
                             <option value="Editor">Editor</option>
@@ -387,15 +486,11 @@ export default function UserManagement() {
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => {
-                              setResetUserId(u.id);
-                              setResetPasswordValue('');
-                              setResetError(null);
-                            }}
+                            onClick={() => handleOpenEditModal(u)}
                             className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors"
-                            title="Сбросить пароль"
+                            title="Редактировать"
                           >
-                            <Key className="w-4 h-4" />
+                            <Edit3 className="w-4 h-4" />
                           </button>
                           
                           <button

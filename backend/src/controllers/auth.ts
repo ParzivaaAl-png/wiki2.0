@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import * as UserModel from '../models/user';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { query, pool } from '../config/db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_wiki20';
 const REFRESH_SECRET = process.env.REFRESH_SECRET || 'super_secret_refresh_key_wiki20';
@@ -37,6 +38,15 @@ export const register = async (req: Request, res: Response) => {
     
     const { accessToken, refreshToken } = generateTokens(user.id);
     
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
+    const userAgent = req.headers['user-agent'] || '';
+    
+    // Save session in DB
+    await query(
+      'INSERT INTO user_sessions (user_id, refresh_token, ip_address, user_agent) VALUES ($1, $2, $3, $4)',
+      [user.id, refreshToken, ipAddress, userAgent]
+    );
+
     res.cookie('accessToken', accessToken, setCookieOptions(15 * 60 * 1000));
     res.cookie('refreshToken', refreshToken, setCookieOptions(7 * 24 * 60 * 60 * 1000));
 
@@ -70,6 +80,15 @@ export const login = async (req: Request, res: Response) => {
 
     const { accessToken, refreshToken } = generateTokens(user.id);
     
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
+    const userAgent = req.headers['user-agent'] || '';
+    
+    // Save session in DB
+    await query(
+      'INSERT INTO user_sessions (user_id, refresh_token, ip_address, user_agent) VALUES ($1, $2, $3, $4)',
+      [user.id, refreshToken, ipAddress, userAgent]
+    );
+
     res.cookie('accessToken', accessToken, setCookieOptions(15 * 60 * 1000));
     res.cookie('refreshToken', refreshToken, setCookieOptions(7 * 24 * 60 * 60 * 1000));
 
@@ -88,7 +107,15 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
-export const logout = (req: Request, res: Response) => {
+export const logout = async (req: Request, res: Response) => {
+  try {
+    const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+    if (refreshToken) {
+      await query('DELETE FROM user_sessions WHERE refresh_token = $1', [refreshToken]);
+    }
+  } catch (error) {
+    console.error('Logout db cleanup failed:', error);
+  }
   res.clearCookie('accessToken', setCookieOptions(0));
   res.clearCookie('refreshToken', setCookieOptions(0));
   res.json({ message: 'Logged out successfully' });
@@ -102,14 +129,32 @@ export const refresh = async (req: Request, res: Response) => {
     }
 
     const decoded = jwt.verify(refreshToken, REFRESH_SECRET) as any;
+    
+    // Check if session exists in DB
+    const sessionRes = await query('SELECT * FROM user_sessions WHERE refresh_token = $1', [refreshToken]);
+    if (sessionRes.rowCount === 0) {
+      return res.status(401).json({ error: 'Session not found or revoked.' });
+    }
+
     const user = await UserModel.getUserById(decoded.id);
 
     if (!user || user.is_blocked) {
+      // Clean up invalid session
+      await query('DELETE FROM user_sessions WHERE refresh_token = $1', [refreshToken]);
       return res.status(401).json({ error: 'Invalid user session or user is blocked.' });
     }
 
     const tokens = generateTokens(user.id);
     
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
+    const userAgent = req.headers['user-agent'] || '';
+
+    // Update session with new refresh token
+    await query(
+      'UPDATE user_sessions SET refresh_token = $1, last_active_at = CURRENT_TIMESTAMP, ip_address = $2, user_agent = $3 WHERE refresh_token = $4',
+      [tokens.refreshToken, ipAddress, userAgent, refreshToken]
+    );
+
     res.cookie('accessToken', tokens.accessToken, setCookieOptions(15 * 60 * 1000));
     res.cookie('refreshToken', tokens.refreshToken, setCookieOptions(7 * 24 * 60 * 60 * 1000));
 
@@ -225,6 +270,140 @@ export const resetPasswordByAdmin = async (req: AuthenticatedRequest, res: Respo
     if (!success) return res.status(404).json({ error: 'User not found.' });
 
     res.json({ message: 'User password reset successfully.' });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+// SESSIONS AND AUDIT LOGS ADMIN CONTROLLERS
+export const getUserSessions = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const usersRes = await UserModel.getAllUsers();
+    const sessionsRes = await query(
+      'SELECT id, user_id, ip_address, user_agent, created_at, last_active_at FROM user_sessions ORDER BY last_active_at DESC'
+    );
+
+    const sessionsGrouped = sessionsRes.rows;
+
+    const result = usersRes.map(u => ({
+      id: u.id,
+      username: u.username,
+      name: u.name,
+      role: u.role,
+      is_blocked: u.is_blocked,
+      sessions: sessionsGrouped.filter(s => s.user_id === u.id)
+    }));
+
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const deleteUserSession = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await query('DELETE FROM user_sessions WHERE id = $1 RETURNING user_id', [id]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Сессия не найдена.' });
+    }
+    res.json({ message: 'Сессия успешно завершена.' });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const updateUserByAdmin = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { username, name, password } = req.body;
+    const adminId = req.user?.id;
+
+    if (!username || !name) {
+      return res.status(400).json({ error: 'Логин и ФИО обязательны.' });
+    }
+
+    const user = await UserModel.getUserById(Number(id));
+    if (!user) {
+      return res.status(404).json({ error: 'Пользователь не найден.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Check username collision
+      if (username !== user.username) {
+        const existing = await UserModel.getUserByUsername(username);
+        if (existing) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Пользователь с таким логином уже существует.' });
+        }
+        
+        await client.query(
+          'UPDATE users SET username = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          [username, id]
+        );
+        await client.query(
+          'INSERT INTO user_audit_logs (user_id, changed_by, field_changed, old_value, new_value) VALUES ($1, $2, $3, $4, $5)',
+          [id, adminId, 'username', user.username, username]
+        );
+      }
+
+      if (name !== user.name) {
+        await client.query(
+          'UPDATE users SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          [name, id]
+        );
+        await client.query(
+          'INSERT INTO user_audit_logs (user_id, changed_by, field_changed, old_value, new_value) VALUES ($1, $2, $3, $4, $5)',
+          [id, adminId, 'name', user.name, name]
+        );
+      }
+
+      if (password) {
+        if (password.length < 6) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Пароль должен быть не менее 6 символов.' });
+        }
+        const passwordHash = await bcrypt.hash(password, 10);
+        await client.query(
+          'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          [passwordHash, id]
+        );
+        await client.query(
+          'INSERT INTO user_audit_logs (user_id, changed_by, field_changed, old_value, new_value) VALUES ($1, $2, $3, $4, $5)',
+          [id, adminId, 'password', '***', '***']
+        );
+      }
+
+      await client.query('COMMIT');
+      
+      const updatedUser = await UserModel.getUserById(Number(id));
+      res.json(updatedUser);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const getUserHistory = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const history = await query(
+      `SELECT h.id, h.field_changed, h.old_value, h.new_value, h.changed_at, u.username as changed_by_username, u.name as changed_by_name
+       FROM user_audit_logs h 
+       LEFT JOIN users u ON h.changed_by = u.id 
+       WHERE h.user_id = $1 
+       ORDER BY h.changed_at DESC`,
+      [id]
+    );
+    res.json(history.rows);
   } catch (error: any) {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }

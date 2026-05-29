@@ -111,6 +111,40 @@ export function clearApiCache() {
   apiCache.clear();
 }
 
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+const subscribeTokenRefresh = (cb: (token: string) => void) => {
+  refreshSubscribers.push(cb);
+};
+
+const onRefreshed = (token: string) => {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+};
+
+const performTokenRefresh = async (): Promise<string> => {
+  const url = `${getApiUrl()}/auth/refresh`;
+  const response = await fetch(url, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Session expired');
+  }
+
+  const data = await response.json();
+  if (data.accessToken) {
+    setAuthToken(data.accessToken);
+    return data.accessToken;
+  }
+  throw new Error('Session expired');
+};
+
 // Helper to make API calls with cookies included and error handling
 async function apiCall<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = path.startsWith('http') ? path : `${getApiUrl()}${path}`;
@@ -122,7 +156,7 @@ async function apiCall<T>(path: string, options: RequestInit = {}): Promise<T> {
     authHeaders['Authorization'] = `Bearer ${token}`;
   }
   
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     ...options,
     credentials: 'include',
     headers: {
@@ -131,6 +165,39 @@ async function apiCall<T>(path: string, options: RequestInit = {}): Promise<T> {
       ...options.headers,
     },
   });
+
+  // Handle Token Expiration and Refresh Interceptor
+  if (response.status === 401 && !path.includes('/auth/login') && !path.includes('/auth/refresh') && !path.includes('/auth/register')) {
+    if (!isRefreshing) {
+      isRefreshing = true;
+      try {
+        const newAccessToken = await performTokenRefresh();
+        isRefreshing = false;
+        onRefreshed(newAccessToken);
+      } catch (err) {
+        isRefreshing = false;
+        clearAuthToken();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('auth_logout'));
+        }
+        throw new Error('Сессия истекла. Пожалуйста, войдите снова.');
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      subscribeTokenRefresh((newToken) => {
+        // Retry the original request with the new access token
+        const newAuthHeaders = { ...authHeaders, 'Authorization': `Bearer ${newToken}` };
+        apiCall<T>(path, {
+          ...options,
+          headers: {
+            ...options.headers,
+            ...newAuthHeaders,
+          },
+        }).then(resolve).catch(reject);
+      });
+    });
+  }
 
   if (!response.ok) {
     let errorMessage = 'Произошла ошибка при запросе к серверу.';
@@ -343,4 +410,51 @@ export async function adminDeleteUser(userId: number): Promise<{ message: string
     method: 'DELETE',
   });
 }
+
+// User Sessions & Audit Logs API Wrappers
+export interface UserSession {
+  id: number;
+  user_id: number;
+  ip_address: string;
+  user_agent: string;
+  created_at: string;
+  last_active_at: string;
+}
+
+export interface UserWithSessions extends User {
+  sessions: UserSession[];
+}
+
+export interface UserAuditLog {
+  id: number;
+  field_changed: 'username' | 'name' | 'password';
+  old_value: string;
+  new_value: string;
+  changed_at: string;
+  changed_by_username: string | null;
+  changed_by_name: string | null;
+}
+
+export async function fetchUserSessions(): Promise<UserWithSessions[]> {
+  return apiCall<UserWithSessions[]>('/admin/sessions');
+}
+
+export async function deleteUserSession(id: number): Promise<{ message: string }> {
+  return apiCall<{ message: string }>(`/admin/sessions/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function adminUpdateUser(id: number, data: { username: string; name: string; password?: string }): Promise<User> {
+  clearApiCache();
+  return apiCall<User>(`/admin/users/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchUserHistory(userId: number): Promise<UserAuditLog[]> {
+  return apiCall<UserAuditLog[]>(`/admin/users/${userId}/history`);
+}
+
 

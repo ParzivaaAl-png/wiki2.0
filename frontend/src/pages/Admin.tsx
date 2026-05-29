@@ -11,11 +11,13 @@ import {
   TrendingUp,
   FileUp,
   Users,
-  Loader2
+  Loader2,
+  Key
 } from 'lucide-react';
 import { fetchArticles, fetchCategories, deleteArticle, Article, Category, importArticle } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import UserManagement from '../components/user-management';
+import SessionManagement from '../components/session-management';
 
 export default function Admin() {
   const { user } = useAuth();
@@ -25,7 +27,7 @@ export default function Admin() {
   
   const [searchQuery, setSearchQuery] = React.useState('');
   const [categoryFilter, setCategoryFilter] = React.useState('all');
-  const [activeTab, setActiveTab] = React.useState<'articles' | 'users'>('articles');
+  const [activeTab, setActiveTab] = React.useState<'articles' | 'users' | 'sessions'>('articles');
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = React.useState(false);
@@ -186,12 +188,30 @@ export default function Admin() {
             <Users className="w-4 h-4" />
             Пользователи (Админ)
           </button>
+
+          <button
+            onClick={() => setActiveTab('sessions')}
+            className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === 'sessions'
+                ? 'border-indigo-500 text-indigo-500'
+                : 'border-transparent text-neutral-500 hover:text-neutral-950 dark:hover:text-white'
+            }`}
+          >
+            <Key className="w-4 h-4" />
+            Сессии (Админ)
+          </button>
         </div>
       )}
 
-      {activeTab === 'users' && user?.role === 'Admin' ? (
+      {activeTab === 'users' && user?.role === 'Admin' && (
         <UserManagement />
-      ) : (
+      )}
+
+      {activeTab === 'sessions' && user?.role === 'Admin' && (
+        <SessionManagement />
+      )}
+
+      {activeTab === 'articles' && (
         <>
           {/* Stats Widgets */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">

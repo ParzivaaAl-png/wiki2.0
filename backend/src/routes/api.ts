@@ -88,4 +88,10 @@ router.put('/admin/users/:id/block', requireAuth, requireRole(['Admin']), authCo
 router.put('/admin/users/:id/reset-password', requireAuth, requireRole(['Admin']), authController.resetPasswordByAdmin);
 router.delete('/admin/users/:id', requireAuth, requireRole(['Admin']), authController.deleteUserByAdmin);
 
+// Admin Session & Profile Modification Audit Routes
+router.get('/admin/sessions', requireAuth, requireRole(['Admin']), authController.getUserSessions);
+router.delete('/admin/sessions/:id', requireAuth, requireRole(['Admin']), authController.deleteUserSession);
+router.put('/admin/users/:id', requireAuth, requireRole(['Admin']), authController.updateUserByAdmin);
+router.get('/admin/users/:id/history', requireAuth, requireRole(['Admin']), authController.getUserHistory);
+
 export default router;

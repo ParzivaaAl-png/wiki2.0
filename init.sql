@@ -2,6 +2,8 @@
 DROP TABLE IF EXISTS article_tags CASCADE;
 DROP TABLE IF EXISTS articles CASCADE;
 DROP TABLE IF EXISTS categories CASCADE;
+DROP TABLE IF EXISTS user_sessions CASCADE;
+DROP TABLE IF EXISTS user_audit_logs CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 
 -- Create Users Table
@@ -14,6 +16,28 @@ CREATE TABLE users (
     is_blocked BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create User Sessions Table
+CREATE TABLE user_sessions (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    refresh_token VARCHAR(512) NOT NULL UNIQUE,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create User Audit Logs Table
+CREATE TABLE user_audit_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    changed_by INT REFERENCES users(id) ON DELETE SET NULL,
+    field_changed VARCHAR(100) NOT NULL,
+    old_value TEXT,
+    new_value TEXT,
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Seed Default Admin User (username: Sherzad, password: Xwz247Agd)

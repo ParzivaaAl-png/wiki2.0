@@ -58,8 +58,37 @@ export const initializeDatabase = async () => {
         console.error(`init.sql not found at ${initSqlPath}. Skipping database initialization.`);
       }
     } else {
-      console.log('Database tables already exist. Skipping initialization.');
+      console.log('Database tables already exist. Checking additional tables...');
     }
+
+    // Always ensure user_sessions and user_audit_logs exist
+    console.log('Ensuring user_sessions and user_audit_logs tables exist...');
+    const createSessionsTableQuery = `
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        refresh_token VARCHAR(512) NOT NULL UNIQUE,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+    await pool.query(createSessionsTableQuery);
+
+    const createAuditLogsTableQuery = `
+      CREATE TABLE IF NOT EXISTS user_audit_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        changed_by INT REFERENCES users(id) ON DELETE SET NULL,
+        field_changed VARCHAR(100) NOT NULL,
+        old_value TEXT,
+        new_value TEXT,
+        changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+    await pool.query(createAuditLogsTableQuery);
+    console.log('Database tables verified/created successfully.');
   } catch (error) {
     console.error('Failed to initialize database tables:', error);
   }

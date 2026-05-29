@@ -29,6 +29,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     refreshUser();
+
+    const handleAuthLogout = () => {
+      setUser(null);
+      clearAuthToken();
+    };
+
+    window.addEventListener('auth_logout', handleAuthLogout);
+    return () => {
+      window.removeEventListener('auth_logout', handleAuthLogout);
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
