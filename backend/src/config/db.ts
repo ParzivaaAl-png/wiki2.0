@@ -1,5 +1,7 @@
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
@@ -29,4 +31,36 @@ export const checkDatabaseConnection = async (retries = 5, delay = 3000): Promis
     }
   }
   return false;
+};
+
+export const initializeDatabase = async () => {
+  try {
+    // Check if the "articles" table exists
+    const checkTableQuery = `
+      SELECT EXISTS (
+        SELECT FROM pg_tables
+        WHERE schemaname = 'public'
+        AND tablename  = 'articles'
+      );
+    `;
+    const res = await pool.query(checkTableQuery);
+    const tableExists = res.rows[0].exists;
+
+    if (!tableExists) {
+      console.log('Database tables not found. Initializing from init.sql...');
+      const initSqlPath = path.join(__dirname, '../../init.sql');
+      if (fs.existsSync(initSqlPath)) {
+        const sql = fs.readFileSync(initSqlPath, 'utf8');
+        // Execute the entire init.sql
+        await pool.query(sql);
+        console.log('Database initialized successfully from init.sql!');
+      } else {
+        console.error(`init.sql not found at ${initSqlPath}. Skipping database initialization.`);
+      }
+    } else {
+      console.log('Database tables already exist. Skipping initialization.');
+    }
+  } catch (error) {
+    console.error('Failed to initialize database tables:', error);
+  }
 };

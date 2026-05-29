@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import dotenv from 'dotenv';
 import apiRouter from './routes/api';
-import { checkDatabaseConnection } from './config/db';
+import { checkDatabaseConnection, initializeDatabase } from './config/db';
 import { 
   checkMeilisearchConnection, 
   initializeMeilisearch, 
@@ -47,6 +47,9 @@ const startServer = async () => {
     console.error('CRITICAL: PostgreSQL database is unreachable. Exiting.');
     process.exit(1);
   }
+
+  // 1b. Initialize Database Tables if they do not exist
+  await initializeDatabase();
 
   // 2. Verify Meilisearch is running
   const msConnected = await checkMeilisearchConnection();
