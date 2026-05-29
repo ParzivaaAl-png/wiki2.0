@@ -144,7 +144,7 @@ export function SearchModal() {
 
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-[60] flex items-start justify-center pt-4 sm:pt-20 md:pt-32 p-0 sm:p-4">
+          <div className="fixed inset-0 z-[60] flex items-start justify-center pt-0 sm:pt-20 md:pt-32 p-0 sm:p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -160,7 +160,7 @@ export function SearchModal() {
               transition={{ duration: 0.12, ease: 'easeOut' }}
               className="relative w-full h-full sm:h-auto sm:max-w-2xl bg-white dark:bg-neutral-950 sm:rounded-xl border-0 sm:border border-neutral-200 dark:border-neutral-800 shadow-2xl overflow-hidden flex flex-col"
             >
-              <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-200 dark:border-neutral-800 shrink-0">
+              <div className="flex items-center gap-3 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:pt-3 border-b border-neutral-200 dark:border-neutral-800 shrink-0">
                 <Search className="w-5 h-5 text-neutral-400 shrink-0" />
                 <input
                   type="text"
@@ -269,7 +269,7 @@ export function SearchModal() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between px-4 py-2 bg-neutral-50 dark:bg-neutral-900/40 border-t border-neutral-200/80 dark:border-neutral-900 text-[10px] text-neutral-400 select-none shrink-0">
+              <div className="flex items-center justify-between px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:pb-2 bg-neutral-50 dark:bg-neutral-900/40 border-t border-neutral-200/80 dark:border-neutral-900 text-[10px] text-neutral-400 select-none shrink-0">
                 <div className="hidden sm:flex gap-3">
                   <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">↑↓</kbd> Навигация</span>
                   <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">Enter</kbd> Открыть</span>
