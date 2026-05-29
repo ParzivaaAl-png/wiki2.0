@@ -226,7 +226,7 @@ export default function ArticlePage() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-6">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 flex gap-0 lg:gap-6">
       
       {/* Left Sidebar */}
       <aside className="hidden lg:block w-64 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto bg-neutral-50 dark:bg-neutral-900/60">
@@ -275,10 +275,10 @@ export default function ArticlePage() {
       </AnimatePresence>
 
       {/* Content Columns */}
-      <div className="flex-1 min-w-0 py-8 lg:px-4">
-        <div className="flex items-center gap-1.5 text-xs text-neutral-400 dark:text-neutral-500 mb-6 font-medium">
-          <Link to="/" className="hover:text-indigo-500 transition-colors">Главная</Link>
-          <ChevronRight className="w-3 h-3" />
+      <div className="flex-1 min-w-0 py-4 sm:py-8 lg:px-4">
+        <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-neutral-400 dark:text-neutral-500 mb-4 sm:mb-6 font-medium overflow-x-auto whitespace-nowrap">
+          <Link to="/" className="hover:text-indigo-500 transition-colors shrink-0">Главная</Link>
+          <ChevronRight className="w-3 h-3 shrink-0" />
           {article.category_name && (
             <>
               <Link to={`/categories/${article.category_slug}`} className="hover:text-indigo-500 transition-colors">
@@ -287,13 +287,13 @@ export default function ArticlePage() {
               <ChevronRight className="w-3 h-3" />
             </>
           )}
-          <span className="text-neutral-600 dark:text-neutral-400 truncate max-w-[200px]">{article.title}</span>
+          <span className="text-neutral-600 dark:text-neutral-400 truncate max-w-[150px] sm:max-w-[200px]">{article.title}</span>
         </div>
 
         <article className="prose-custom">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 border-b border-neutral-200/50 dark:border-neutral-800/80 pb-6">
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-white mb-3">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center justify-between gap-3 sm:gap-4 mb-6 border-b border-neutral-200/50 dark:border-neutral-800/80 pb-6">
+            <div className="w-full sm:w-auto">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-white mb-3">
                 {article.title}
               </h1>
               
@@ -307,7 +307,7 @@ export default function ArticlePage() {
 
             <Link
               to={`/admin/editor/${article.id}`}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shrink-0 shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shrink-0 shadow-sm"
             >
               <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
               Редактировать

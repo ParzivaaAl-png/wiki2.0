@@ -52,24 +52,24 @@ function Header() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-neutral-200/50 dark:border-neutral-800/50 glass-header shadow-sm transition-all duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
         
         {/* Brand Logo */}
-        <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
+        <Link to="/" className="flex items-center gap-2 shrink-0 group">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/10 group-hover:shadow-indigo-500/20 transition-all duration-300">
             <BookOpen className="w-4.5 h-4.5" />
           </div>
-          <span className="font-outfit text-lg font-bold tracking-tight bg-gradient-to-r from-neutral-900 to-neutral-700 dark:from-white dark:to-neutral-300 bg-clip-text text-transparent group-hover:opacity-95 transition-all">
+          <span className="hidden sm:inline font-outfit text-lg font-bold tracking-tight bg-gradient-to-r from-neutral-900 to-neutral-700 dark:from-white dark:to-neutral-300 bg-clip-text text-transparent group-hover:opacity-95 transition-all">
             Wiki 2.0
           </span>
         </Link>
 
         {/* Navigation Actions */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3">
           {user && <SearchModal />}
           
           {user ? (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-3">
               {user.role !== 'User' && (
                 <Link 
                   to="/admin" 
@@ -79,15 +79,23 @@ function Header() {
                   Админ-панель
                 </Link>
               )}
+              {user.role !== 'User' && (
+                <Link 
+                  to="/admin" 
+                  className="sm:hidden p-2 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors"
+                >
+                  <ShieldAlert className="w-4 h-4" />
+                </Link>
+              )}
               
-              <div className="hidden sm:flex flex-col text-right">
+              <div className="hidden md:flex flex-col text-right">
                 <span className="text-xs font-bold text-neutral-950 dark:text-neutral-100">{user.name}</span>
                 <span className="text-[9px] text-neutral-400 uppercase font-bold tracking-wider">{user.role === 'Admin' ? 'Админ' : user.role === 'Editor' ? 'Редактор' : 'Пользователь'}</span>
               </div>
 
               <button 
                 onClick={() => logout()}
-                className="px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-900/50 text-neutral-500 hover:text-red-500 transition-colors shadow-sm"
+                className="px-2 sm:px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 text-xs sm:text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-900/50 text-neutral-500 hover:text-red-500 transition-colors shadow-sm"
               >
                 Выйти
               </button>
@@ -95,10 +103,10 @@ function Header() {
           ) : (
             <Link 
               to="/login"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-all shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-all shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20"
             >
               <LogIn className="w-4 h-4" />
-              Войти
+              <span className="hidden sm:inline">Войти</span>
             </Link>
           )}
 

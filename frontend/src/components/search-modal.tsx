@@ -133,18 +133,18 @@ export function SearchModal() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 bg-neutral-50 dark:bg-neutral-900/50 text-neutral-500 dark:text-neutral-400 text-sm hover:border-neutral-300 dark:hover:border-neutral-700 hover:text-neutral-800 dark:hover:text-neutral-200 transition-all w-48 md:w-64"
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 bg-neutral-50 dark:bg-neutral-900/50 text-neutral-500 dark:text-neutral-400 text-sm hover:border-neutral-300 dark:hover:border-neutral-700 hover:text-neutral-800 dark:hover:text-neutral-200 transition-all w-10 sm:w-48 md:w-64"
       >
-        <Search className="w-4 h-4" />
-        <span className="flex-1 text-left">Поиск по вики...</span>
-        <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1.5 font-mono text-[10px] font-medium text-neutral-400 opacity-100">
+        <Search className="w-4 h-4 shrink-0" />
+        <span className="hidden sm:block flex-1 text-left">Поиск по вики...</span>
+        <kbd className="hidden md:inline-flex h-5 select-none items-center gap-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1.5 font-mono text-[10px] font-medium text-neutral-400 opacity-100">
           <span>⌘</span>K
         </kbd>
       </button>
 
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 md:pt-32 p-4">
+          <div className="fixed inset-0 z-[60] flex items-start justify-center pt-4 sm:pt-20 md:pt-32 p-0 sm:p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -158,9 +158,9 @@ export function SearchModal() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.97, opacity: 0 }}
               transition={{ duration: 0.12, ease: 'easeOut' }}
-              className="relative w-full max-w-2xl bg-white dark:bg-neutral-950 rounded-xl border border-neutral-200 dark:border-neutral-800 shadow-2xl overflow-hidden"
+              className="relative w-full h-full sm:h-auto sm:max-w-2xl bg-white dark:bg-neutral-950 sm:rounded-xl border-0 sm:border border-neutral-200 dark:border-neutral-800 shadow-2xl overflow-hidden flex flex-col"
             >
-              <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-200 dark:border-neutral-800">
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-200 dark:border-neutral-800 shrink-0">
                 <Search className="w-5 h-5 text-neutral-400 shrink-0" />
                 <input
                   type="text"
@@ -176,13 +176,13 @@ export function SearchModal() {
                 )}
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="p-1 rounded-md text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-900 hover:text-neutral-600 dark:hover:text-neutral-200"
+                  className="p-1.5 rounded-md text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-900 hover:text-neutral-600 dark:hover:text-neutral-200"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="max-h-[60vh] overflow-y-auto p-2">
+              <div className="flex-1 overflow-y-auto p-2 max-h-[calc(100vh-7rem)] sm:max-h-[60vh]">
                 {query.trim().length < 2 && (
                   <div className="py-8 text-center text-neutral-400 text-sm">
                     <Sparkles className="w-6 h-6 mx-auto mb-2 text-neutral-300 dark:text-neutral-700" />
@@ -269,13 +269,13 @@ export function SearchModal() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between px-4 py-2 bg-neutral-50 dark:bg-neutral-900/40 border-t border-neutral-200/80 dark:border-neutral-900 text-[10px] text-neutral-400 select-none">
+              <div className="flex items-center justify-between px-4 py-2 bg-neutral-50 dark:bg-neutral-900/40 border-t border-neutral-200/80 dark:border-neutral-900 text-[10px] text-neutral-400 select-none shrink-0">
                 <div className="hidden sm:flex gap-3">
                   <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">↑↓</kbd> Навигация</span>
                   <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">Enter</kbd> Открыть</span>
                   <span><kbd className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 rounded shadow-sm">Esc</kbd> Закрыть</span>
                 </div>
-                <div className="w-full sm:w-auto text-center sm:text-right">Поиск с автодополнением активен</div>
+                <div className="w-full sm:w-auto text-center sm:text-right text-xs sm:text-[10px]">Поиск с автодополнением</div>
               </div>
             </motion.div>
           </div>

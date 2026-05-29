@@ -86,7 +86,7 @@ export default function Home() {
       </div>
 
       {/* Hero Header */}
-      <section className="max-w-4xl mx-auto px-4 pt-20 pb-12 text-center">
+      <section className="max-w-4xl mx-auto px-3 sm:px-4 pt-10 sm:pt-20 pb-8 sm:pb-12 text-center">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -101,7 +101,7 @@ export default function Home() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.05 }}
-          className="font-outfit text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight mb-6 bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-700 dark:from-white dark:via-neutral-100 dark:to-neutral-400 bg-clip-text text-transparent"
+          className="font-outfit text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-4 sm:mb-6 bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-700 dark:from-white dark:via-neutral-100 dark:to-neutral-400 bg-clip-text text-transparent"
         >
           Документация, <br className="sm:hidden" />
           быстрая и совершенная.
@@ -111,7 +111,7 @@ export default function Home() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
-          className="text-neutral-500 dark:text-neutral-400 text-base sm:text-lg md:text-xl max-w-2xl mx-auto mb-8 font-light leading-relaxed"
+          className="text-neutral-500 dark:text-neutral-400 text-sm sm:text-base md:text-lg lg:text-xl max-w-2xl mx-auto mb-6 sm:mb-8 font-light leading-relaxed"
         >
           Минималистичный справочник с моментальным автозаполнением, исправлением опечаток и красивым форматированием в стиле Notion.
         </motion.p>
@@ -139,7 +139,7 @@ export default function Home() {
       </section>
 
       {/* Categories Bento Grid */}
-      <section className="max-w-5xl mx-auto px-4 py-8">
+      <section className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
         <motion.h2 
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}

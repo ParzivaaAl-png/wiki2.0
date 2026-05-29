@@ -141,3 +141,50 @@
 .prose-custom img {
   @apply rounded-xl border border-neutral-200 dark:border-neutral-800 my-6 shadow-sm max-w-full h-auto;
 }
+
+/* Mobile-specific improvements */
+@media (max-width: 640px) {
+  .prose-custom {
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .prose-custom h1 {
+    @apply text-2xl mt-6 mb-3;
+  }
+
+  .prose-custom h2 {
+    @apply text-xl mt-5 mb-2;
+  }
+
+  .prose-custom h3 {
+    @apply text-lg mt-3 mb-1.5;
+  }
+
+  .prose-custom p {
+    @apply my-2 leading-6 text-sm;
+  }
+
+  .prose-custom pre {
+    @apply text-xs p-3 -mx-3 rounded-none sm:rounded-lg;
+  }
+
+  .prose-custom ul,
+  .prose-custom ol {
+    @apply pl-5 text-sm;
+  }
+
+  .prose-custom table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Safe area for phones with notch */
+@supports (padding: env(safe-area-inset-bottom)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
