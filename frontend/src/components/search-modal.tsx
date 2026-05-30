@@ -4,7 +4,7 @@ import { Search, Sparkles, X, FileText, CornerDownLeft, MapPin, CheckCircle2, XC
 import { AnimatePresence, motion } from 'framer-motion';
 import { searchArticles, SearchResult } from '../lib/api';
 import { createPortal } from 'react-dom';
-import { CITIES, TARIFFS, findCarMatch, getCarStatus } from '../lib/classifier-data';
+import { CITIES, TARIFFS, BRANDS, CAR_DATA, findCarMatch, getCarStatus } from '../lib/classifier-data';
 
 interface SearchBarProps {
   variant?: 'header' | 'hero';
@@ -22,17 +22,34 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
   const [selectedYear, setSelectedYear] = React.useState(2020);
   const [mobileTab, setMobileTab] = React.useState<'results' | 'classifier'>('results');
 
+  const [selectedCar, setSelectedCar] = React.useState<any>(null);
+
   const matchedCar = React.useMemo(() => {
     return findCarMatch(query);
   }, [query]);
 
   React.useEffect(() => {
-    if (matchedCar) {
+    setSelectedCar(matchedCar);
+  }, [matchedCar]);
+
+  const matchedBrand = React.useMemo(() => {
+    const q = query.toLowerCase().trim();
+    if (q.length < 2) return null;
+    return BRANDS.find(b => b.toLowerCase().includes(q) || q.includes(b.toLowerCase())) || null;
+  }, [query]);
+
+  const brandModels = React.useMemo(() => {
+    if (!matchedBrand) return [];
+    return CAR_DATA.filter(c => c.brand.toLowerCase() === matchedBrand.toLowerCase());
+  }, [matchedBrand]);
+
+  React.useEffect(() => {
+    if (selectedCar) {
       setMobileTab('classifier');
     } else {
       setMobileTab('results');
     }
-  }, [matchedCar]);
+  }, [selectedCar]);
 
   const navigate = useNavigate();
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -185,14 +202,54 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
     }
   };
 
+  const renderBrandModelsList = () => {
+    if (brandModels.length === 0) return null;
+    return (
+      <div className="mb-4">
+        <div className="px-3 py-1.5 text-xs font-bold text-neutral-450 dark:text-neutral-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-neutral-100 dark:border-neutral-900/60 pb-1 mb-2">
+          <Car className="w-3.5 h-3.5 text-indigo-500" />
+          Модели {matchedBrand} в классификаторе
+        </div>
+        <ul className="space-y-0.5 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+          {brandModels.map((car) => {
+            const isSelected = selectedCar?.brand === car.brand && selectedCar?.model === car.model;
+            return (
+              <li
+                key={`brand-model-${car.brand}-${car.model}`}
+                onMouseDown={() => {
+                  setSelectedCar(car);
+                  setMobileTab('classifier');
+                }}
+                className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                  isSelected
+                    ? 'bg-indigo-500/10 text-indigo-900 dark:text-indigo-200 font-bold'
+                    : 'hover:bg-neutral-50 dark:hover:bg-neutral-900/50 text-neutral-700 dark:text-neutral-350'
+                }`}
+              >
+                <span className="text-sm">{car.brand} {car.model}</span>
+                {isSelected && (
+                  <span className="text-[9px] text-indigo-650 dark:text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded">
+                    Выбрано
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  };
+
   const renderResultsList = () => {
     return (
       <>
-        {results.length === 0 && !isLoading && (
+        {results.length === 0 && brandModels.length === 0 && !isLoading && (
           <div className="py-6 text-center text-neutral-400 text-sm">
             Ничего не найдено по запросу &quot;<span className="text-neutral-900 dark:text-white font-semibold">{query}</span>&quot;.
           </div>
         )}
+
+        {renderBrandModelsList()}
 
         {matchedArticles.length > 0 && (
           <div className="mb-4">
@@ -270,8 +327,8 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
   };
 
   const renderCarWidgetContent = () => {
-    if (!matchedCar) return null;
-    const statuses = getCarStatus(matchedCar.brand, matchedCar.model, selectedYear, selectedCity.id);
+    if (!selectedCar) return null;
+    const statuses = getCarStatus(selectedCar.brand, selectedCar.model, selectedYear, selectedCity.id);
     
     return (
       <div className="flex flex-col h-full justify-between">
@@ -282,7 +339,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
             </div>
             <div>
               <h4 className="text-xs font-bold text-neutral-900 dark:text-white leading-tight">
-                {matchedCar.brand} {matchedCar.model}
+                {selectedCar.brand} {selectedCar.model}
               </h4>
               <p className="text-[10px] text-neutral-400 mt-0.5">Классификатор Яндекс Про</p>
             </div>
@@ -381,7 +438,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
   };
 
   const renderDropdownContent = () => {
-    if (matchedCar) {
+    if (selectedCar) {
       return (
         <div className="flex divide-x divide-neutral-200 dark:divide-neutral-800 overflow-hidden h-[350px]">
           {/* Left Side: Standard Search Results */}
@@ -455,7 +512,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                 {query.trim().length >= 2 && (
                   <>
                     {/* Tabs on Mobile */}
-                    {matchedCar && (
+                    {selectedCar && (
                       <div className="flex border-b border-neutral-200 dark:border-neutral-800 mb-3 px-1">
                         <button
                           onClick={() => setMobileTab('results')}
@@ -475,22 +532,24 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                               : 'border-transparent text-neutral-400 dark:text-neutral-500'
                           }`}
                         >
-                          Классификатор: {matchedCar.brand}
+                          Классификатор: {selectedCar.brand}
                         </button>
                       </div>
                     )}
 
-                    {mobileTab === 'classifier' && matchedCar ? (
+                    {mobileTab === 'classifier' && selectedCar ? (
                       <div className="p-3 bg-neutral-50 dark:bg-neutral-900/20 border border-neutral-200/50 dark:border-neutral-800 rounded-xl">
                         {renderCarWidgetContent()}
                       </div>
                     ) : (
                       <>
-                        {results.length === 0 && !isLoading && (
+                        {results.length === 0 && brandModels.length === 0 && !isLoading && (
                           <div className="py-8 text-center text-neutral-400 text-sm">
                             Ничего не найдено по запросу &quot;<span className="text-neutral-900 dark:text-white font-semibold">{query}</span>&quot;.
                           </div>
                         )}
+
+                        {renderBrandModelsList()}
 
                         {matchedArticles.length > 0 && (
                           <div className="mb-4">
@@ -622,7 +681,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.99 }}
               transition={{ duration: 0.15 }}
-              className={`absolute top-full left-0 right-0 mt-2 bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[350px] transition-all duration-300 ${matchedCar ? 'md:left-[-50px] md:right-[-50px]' : ''}`}
+              className={`absolute top-full left-0 right-0 mt-2 bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[350px] transition-all duration-300 ${selectedCar ? 'md:left-[-50px] md:right-[-50px]' : ''}`}
             >
               {renderDropdownContent()}
             </motion.div>
@@ -691,7 +750,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
             exit={{ opacity: 0, y: 10, scale: 0.99 }}
             transition={{ duration: 0.15 }}
             className={`absolute top-full right-0 mt-2 bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[350px] transition-all duration-300 ${
-              matchedCar ? 'w-[720px]' : 'w-[420px]'
+              selectedCar ? 'w-[720px]' : 'w-[420px]'
             }`}
           >
             {renderDropdownContent()}
