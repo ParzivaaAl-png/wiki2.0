@@ -4,28 +4,19 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { 
   ChevronRight, 
-  Menu, 
-  X, 
   Tag, 
   Calendar, 
   Edit3, 
-  BookOpen, 
   ChevronDown,
   ArrowLeft
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { fetchArticle, fetchCategories, fetchArticles, Article as ArticleType, Category } from '../lib/api';
+import { fetchArticle, Article as ArticleType } from '../lib/api';
 
 export default function ArticlePage() {
   const { slug } = useParams<{ slug: string }>();
   const location = useLocation();
   const [article, setArticle] = React.useState<ArticleType | null>(null);
-  const [categories, setCategories] = React.useState<Category[]>([]);
-  const [allArticles, setAllArticles] = React.useState<ArticleType[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
-  const [expandedCategories, setExpandedCategories] = React.useState<Record<string, boolean>>({});
 
   // Fetch article data on slug change
   React.useEffect(() => {
@@ -33,19 +24,8 @@ export default function ArticlePage() {
       if (!slug) return;
       setIsLoading(true);
       try {
-        const [artData, catsData, artsList] = await Promise.all([
-          fetchArticle(slug),
-          fetchCategories(),
-          fetchArticles(),
-        ]);
+        const artData = await fetchArticle(slug);
         setArticle(artData);
-        setCategories(catsData);
-        setAllArticles(artsList);
-        
-        // Auto-expand category
-        if (artData.category_slug) {
-          setExpandedCategories(prev => ({ ...prev, [artData.category_slug!]: true }));
-        }
       } catch (err) {
         console.error('Failed to load article:', err);
       } finally {
@@ -93,13 +73,6 @@ export default function ArticlePage() {
     return list;
   }, [article]);
 
-  const toggleCategory = (slugStr: string) => {
-    setExpandedCategories(prev => ({
-      ...prev,
-      [slugStr]: !prev[slugStr]
-    }));
-  };
-
   // Custom heading node hooks to link anchor tags
   const MarkdownComponents = {
     h2: ({ node, children, ...props }: any) => {
@@ -114,22 +87,9 @@ export default function ArticlePage() {
     },
   };
 
-  // Group articles by category
-  const articlesByCategory = React.useMemo(() => {
-    const map: Record<string, ArticleType[]> = {};
-    allArticles.forEach(art => {
-      if (art.category_slug) {
-        if (!map[art.category_slug]) map[art.category_slug] = [];
-        map[art.category_slug].push(art);
-      }
-    });
-    return map;
-  }, [allArticles]);
-
   if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-16 animate-pulse flex gap-6">
-        <div className="hidden lg:block w-64 h-[500px] bg-neutral-200 dark:bg-neutral-800 rounded-xl" />
+      <div className="max-w-4xl mx-auto px-4 py-16 animate-pulse flex gap-8">
         <div className="flex-1 space-y-6">
           <div className="h-4 w-40 bg-neutral-200 dark:bg-neutral-800 rounded" />
           <div className="h-10 w-3/4 bg-neutral-200 dark:bg-neutral-800 rounded" />
@@ -152,130 +112,11 @@ export default function ArticlePage() {
     );
   }
 
-  const sidebarContent = (
-    <div className="flex flex-col h-full bg-neutral-50 dark:bg-neutral-900/60 p-4 border-r border-neutral-200/50 dark:border-neutral-800/50">
-      <div className="flex items-center gap-2 mb-6 px-2 text-indigo-500 font-semibold tracking-tight text-sm uppercase">
-        <BookOpen className="w-4 h-4" />
-        <span>Вики-документация</span>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto space-y-1 pr-1">
-        {categories.map((cat) => {
-          const isExpanded = !!expandedCategories[cat.slug];
-          const catArticles = articlesByCategory[cat.slug] || [];
-          const isCurrentCat = article.category_slug === cat.slug;
-
-          return (
-            <div key={cat.id} className="space-y-0.5">
-              <button
-                onClick={() => toggleCategory(cat.slug)}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm text-left font-medium transition-colors ${
-                  isCurrentCat 
-                    ? 'text-neutral-900 dark:text-white bg-neutral-50 dark:bg-neutral-900/40' 
-                    : 'text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900/20 hover:text-neutral-800 dark:hover:text-neutral-200'
-                }`}
-              >
-                <div className="flex items-center gap-2 truncate">
-                  <span className="text-neutral-400 dark:text-neutral-500 shrink-0">
-                    {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                  </span>
-                  <span className="truncate">{cat.name}</span>
-                </div>
-                <span className="text-[10px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded">
-                  {catArticles.length}
-                </span>
-              </button>
-
-              <AnimatePresence initial={false}>
-                {isExpanded && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.12 }}
-                    className="overflow-hidden pl-5 border-l border-neutral-200 dark:border-neutral-800 ml-4 space-y-0.5"
-                  >
-                    {catArticles.length === 0 ? (
-                      <span className="block px-3 py-1.5 text-xs text-neutral-400 dark:text-neutral-600 italic">Нет статей</span>
-                    ) : (
-                      catArticles.map((art) => {
-                        const isCurrentArticle = article.id === art.id;
-                        return (
-                          <Link
-                            key={art.id}
-                            to={`/articles/${art.slug}`}
-                            className={`block px-3 py-1.5 rounded-lg text-xs transition-colors truncate ${
-                              isCurrentArticle
-                                ? 'bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 font-semibold'
-                                : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
-                            }`}
-                          >
-                            {art.title}
-                          </Link>
-                        );
-                      })
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          );
-        })}
-      </nav>
-    </div>
-  );
-
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 flex gap-0 lg:gap-6">
+    <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-8 flex gap-8">
       
-      {/* Left Sidebar */}
-      <aside className="hidden lg:block w-64 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto bg-neutral-50 dark:bg-neutral-900/60">
-        {sidebarContent}
-      </aside>
-
-      {/* Mobile Trigger */}
-      <div className="lg:hidden fixed bottom-4 right-4 z-40">
-        <button
-          onClick={() => setIsMobileSidebarOpen(true)}
-          className="p-3 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center hover:bg-indigo-700 transition-colors"
-        >
-          <Menu className="w-6 h-6" />
-        </button>
-      </div>
-
-      <AnimatePresence>
-        {isMobileSidebarOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsMobileSidebarOpen(false)}
-              className="fixed inset-0 bg-neutral-950/60 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: 'tween', duration: 0.18 }}
-              className="relative w-80 max-w-[85vw] h-full"
-            >
-              <button
-                onClick={() => setIsMobileSidebarOpen(false)}
-                className="absolute top-4 right-4 p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-neutral-500 z-55"
-              >
-                <X className="w-4 h-4" />
-              </button>
-              <div className="h-full pt-12">
-                {sidebarContent}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
       {/* Content Columns */}
-      <div className="flex-1 min-w-0 py-4 sm:py-8 lg:px-4">
+      <div className="flex-1 min-w-0 py-4 sm:py-8">
         <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-neutral-400 dark:text-neutral-500 mb-4 sm:mb-6 font-medium overflow-x-auto whitespace-nowrap">
           <Link to="/" className="hover:text-indigo-500 transition-colors shrink-0">Главная</Link>
           <ChevronRight className="w-3 h-3 shrink-0" />

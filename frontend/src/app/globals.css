@@ -188,3 +188,24 @@
     padding-right: env(safe-area-inset-right);
   }
 }
+
+/* Custom scrollbar for navigation drawer */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(163, 163, 163, 0.25);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(163, 163, 163, 0.45);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(82, 82, 82, 0.3);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(82, 82, 82, 0.5);
+}
