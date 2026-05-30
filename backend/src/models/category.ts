@@ -14,7 +14,7 @@ export const getAllCategories = async (): Promise<Category[]> => {
   const sql = `
     SELECT c.*, COUNT(a.id)::int as article_count 
     FROM categories c
-    LEFT JOIN articles a ON a.category_id = c.id AND a.published = true
+    LEFT JOIN articles a ON a.category_id = c.id AND a.published = true AND a.slug NOT LIKE 'auto-list-%'
     GROUP BY c.id
     ORDER BY c.position ASC, c.name ASC
   `;
