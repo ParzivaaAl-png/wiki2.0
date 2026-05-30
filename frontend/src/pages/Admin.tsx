@@ -307,20 +307,6 @@ export default function Admin() {
             <Plus className="w-4.5 h-4.5 text-indigo-500" />
             <span>Создать раздел</span>
           </button>
-
-          <button
-            onClick={handleClearCache}
-            disabled={isClearingCache}
-            className="inline-flex items-center gap-1.5 px-4 py-2 border border-rose-500/20 bg-rose-500/[0.02] hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-lg text-sm font-semibold shadow-sm transition-all text-center justify-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Очистить кэш и синхронизировать поиск"
-          >
-            {isClearingCache ? (
-              <Loader2 className="w-4.5 h-4.5 animate-spin" />
-            ) : (
-              <RotateCcw className="w-4.5 h-4.5" />
-            )}
-            <span>{isClearingCache ? 'Очистка...' : 'Очистить кэш'}</span>
-          </button>
         </div>
       </div>
 

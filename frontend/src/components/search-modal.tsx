@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Search, Sparkles, X, FileText, CornerDownLeft, MapPin, CheckCircle2, XCircle, Info, Car, ChevronRight } from 'lucide-react';
+import { Search, Sparkles, X, FileText, CornerDownLeft, MapPin, CheckCircle2, XCircle, Info, Car, ChevronRight, AlertTriangle } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { searchArticles, SearchResult } from '../lib/api';
 import { createPortal } from 'react-dom';
@@ -329,18 +329,29 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
               TARIFFS.map(t => {
                 const res = statuses[t.key];
                 if (!res) return null;
+                const hasWarning = !!res.warning;
                 return (
                   <div key={t.key} className="flex items-center justify-between text-[11px] py-1 border-b border-neutral-100 dark:border-neutral-900/60 last:border-0">
                     <span className="font-medium text-neutral-700 dark:text-neutral-350">{t.name}</span>
                     <span className="flex items-center gap-1">
-                      {res.fits ? (
+                      {hasWarning ? (
                         <>
-                          <CheckCircle2 className="w-3 h-3 text-emerald-505 shrink-0" />
+                          <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+                          <span 
+                            title={res.warning}
+                            className="text-[9px] text-amber-600 dark:text-amber-400 font-semibold bg-amber-500/10 px-1 py-0.5 rounded shrink-0 cursor-help"
+                          >
+                            Внимание
+                          </span>
+                        </>
+                      ) : res.fits ? (
+                        <>
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
                           <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-500/10 px-1 py-0.5 rounded shrink-0">Подходит</span>
                         </>
                       ) : (
                         <>
-                          <XCircle className="w-3 h-3 text-rose-505 shrink-0" />
+                          <XCircle className="w-3 h-3 text-rose-500 shrink-0" />
                           <span className="text-[9px] text-rose-600 dark:text-rose-400 font-semibold bg-rose-500/10 px-1 py-0.5 rounded shrink-0">От {res.minYear} г.</span>
                         </>
                       )}

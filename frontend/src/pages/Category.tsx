@@ -14,7 +14,8 @@ import {
   ChevronDown, 
   ChevronUp, 
   Info, 
-  X
+  X,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchCategory, fetchArticles, Category as CategoryType, Article } from '../lib/api';
@@ -314,13 +315,21 @@ function TariffAccordion({ tariff, selectedCity, isOpen, onToggle }: TariffAccor
                     ) : (
                       filteredCars.map((car, idx) => {
                         const requiredYear = Math.max(1980, car.years[tariff.key] + selectedCity.offset);
+                        const hasWarning = car.warnings?.[tariff.key];
                         return (
                           <tr 
                             key={`${car.brand}-${car.model}-${idx}`}
                             className="hover:bg-neutral-50/50 dark:hover:bg-neutral-900/10 transition-colors"
                           >
                             <td className="px-4 py-2.5 font-medium text-neutral-800 dark:text-neutral-200">
-                              {car.brand} {car.model}
+                              <div className="flex items-center gap-1.5">
+                                <span>{car.brand} {car.model}</span>
+                                {hasWarning && (
+                                  <span title={car.warnings?.[tariff.key]} className="cursor-help text-amber-500 hover:text-amber-600 shrink-0">
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-4 py-2.5 text-right font-semibold text-neutral-600 dark:text-neutral-300">
                               {requiredYear} г.
@@ -539,24 +548,36 @@ function TariffsClassifierView({ category }: { category: CategoryType }) {
                         );
                       }
 
+                      const hasWarning = !!res.warning;
+
                       return (
                         <div 
                           key={t.key} 
                           className={`p-4 rounded-xl border transition-all duration-300 flex flex-col justify-between ${
-                            res.fits 
-                              ? 'border-emerald-500/20 bg-emerald-500/[0.03] dark:bg-emerald-500/[0.02]' 
-                              : 'border-rose-500/20 bg-rose-500/[0.03] dark:bg-rose-500/[0.02]'
+                            hasWarning
+                              ? 'border-amber-500/30 bg-amber-500/[0.03] dark:bg-amber-500/[0.02]'
+                              : res.fits 
+                                ? 'border-emerald-500/20 bg-emerald-500/[0.03] dark:bg-emerald-500/[0.02]' 
+                                : 'border-rose-500/20 bg-rose-500/[0.03] dark:bg-rose-500/[0.02]'
                           }`}
                         >
                           <div>
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-sm text-neutral-900 dark:text-white">{t.name}</span>
-                              {res.fits ? (
-                                <span className="text-[10px] font-semibold text-emerald-650 dark:text-emerald-450 bg-emerald-50/10 px-2 py-0.5 rounded">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-sm text-neutral-900 dark:text-white shrink-0">{t.name}</span>
+                              {hasWarning ? (
+                                <span 
+                                  title={res.warning}
+                                  className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded cursor-help flex items-center gap-1 shrink-0"
+                                >
+                                  <AlertTriangle className="w-3 h-3" />
+                                  Внимание
+                                </span>
+                              ) : res.fits ? (
+                                <span className="text-[10px] font-semibold text-emerald-650 dark:text-emerald-450 bg-emerald-50/10 px-2 py-0.5 rounded shrink-0">
                                   Подходит
                                 </span>
                               ) : (
-                                <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded">
+                                <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded shrink-0">
                                   Не подходит
                                 </span>
                               )}
@@ -565,8 +586,15 @@ function TariffsClassifierView({ category }: { category: CategoryType }) {
                               {t.description}
                             </p>
                           </div>
-                          <div className="mt-4 flex items-center gap-2 text-xs">
-                            {res.fits ? (
+                          <div className="mt-4 flex items-start gap-2 text-xs">
+                            {hasWarning ? (
+                              <>
+                                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                                <span className="text-amber-805 dark:text-amber-400 font-medium leading-tight cursor-help text-[11px]" title={res.warning}>
+                                  {res.warning}
+                                </span>
+                              </>
+                            ) : res.fits ? (
                               <>
                                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                                 <span className="text-neutral-600 dark:text-neutral-300 leading-snug">
