@@ -7,8 +7,7 @@ import { SearchModal } from './components/search-modal';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import { ErrorBoundary } from './components/error-boundary';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookIcon } from './components/book-icon';
-import { NavigationDrawer } from './components/navigation-drawer';
+import { BookSidebar } from './components/book-sidebar';
 
 // Import Pages
 import Home from './pages/Home';
@@ -49,35 +48,23 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
   return <>{children}</>;
 }
 
-interface HeaderProps {
-  isSidebarOpen: boolean;
-  onToggleSidebar: () => void;
-}
-
-function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
+function Header() {
   const { user, logout } = useAuth();
   const location = useLocation();
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-neutral-200/50 dark:border-neutral-800/50 glass-header shadow-sm transition-all duration-300">
+    <header className="sticky top-0 z-40 w-full border-b border-neutral-200/50 dark:border-neutral-800/50 glass-header shadow-sm transition-all duration-350">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
         
-        <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0">
-          {/* Interactive 3D Book Toggle */}
-          {user && (
-            <BookIcon isOpen={isSidebarOpen} onClick={onToggleSidebar} />
-          )}
-
-          {/* Brand Logo */}
-          <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/10 group-hover:shadow-indigo-500/20 transition-all duration-300">
-              <BookOpen className="w-4.5 h-4.5" />
-            </div>
-            <span className="hidden sm:inline font-outfit text-lg font-bold tracking-tight bg-gradient-to-r from-neutral-900 to-neutral-700 dark:from-white dark:to-neutral-300 bg-clip-text text-transparent group-hover:opacity-95 transition-all">
-              Wiki 2.0
-            </span>
-          </Link>
-        </div>
+        {/* Brand Logo */}
+        <Link to="/" className="flex items-center gap-2 shrink-0 group">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/10 group-hover:shadow-indigo-500/20 transition-all duration-300">
+            <BookOpen className="w-4.5 h-4.5" />
+          </div>
+          <span className="hidden sm:inline font-outfit text-lg font-bold tracking-tight bg-gradient-to-r from-neutral-900 to-neutral-700 dark:from-white dark:to-neutral-300 bg-clip-text text-transparent group-hover:opacity-95 transition-all">
+            Wiki 2.0
+          </span>
+        </Link>
  
         {/* Navigation Actions */}
         <div className="flex items-center gap-1.5 sm:gap-3">
@@ -158,14 +145,12 @@ function AppContent() {
   }, [location.pathname]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <Header 
-        isSidebarOpen={isSidebarOpen} 
-        onToggleSidebar={() => setIsSidebarOpen(prev => !prev)} 
-      />
+    <div className={`flex flex-col min-h-screen bg-background text-foreground transition-all duration-300 ${user ? 'pl-[48px]' : ''}`}>
+      <Header />
       {user && (
-        <NavigationDrawer 
+        <BookSidebar 
           isOpen={isSidebarOpen} 
+          onToggle={() => setIsSidebarOpen(prev => !prev)} 
           onClose={() => setIsSidebarOpen(false)} 
         />
       )}
