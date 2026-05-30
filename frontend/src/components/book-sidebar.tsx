@@ -1,10 +1,9 @@
 import * as React from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, ChevronDown, BookOpen, X, FileText, Search, Sparkles, Car } from 'lucide-react';
-import { fetchCategories, fetchArticles, Category, Article } from '../lib/api';
+import { ChevronRight, BookOpen, X, Search, Sparkles } from 'lucide-react';
+import { fetchCategories, Category } from '../lib/api';
 import { CategoryIcon } from './icon';
-import { TARIFFS } from '../lib/classifier-data';
 
 interface BookSidebarProps {
   isOpen: boolean;
@@ -14,36 +13,20 @@ interface BookSidebarProps {
 
 export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
   const location = useLocation();
-  const { slug: activeArticleSlug } = useParams<{ slug: string }>();
   
   const [categories, setCategories] = React.useState<Category[]>([]);
-  const [allArticles, setAllArticles] = React.useState<Article[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [expandedCategories, setExpandedCategories] = React.useState<Record<string, boolean>>({});
 
-  // Fetch navigation data when open
+  // Fetch categories when open
   React.useEffect(() => {
     if (!isOpen) return;
 
     async function loadData() {
       setIsLoading(true);
       try {
-        const [catsData, artsList] = await Promise.all([
-          fetchCategories(),
-          fetchArticles(),
-        ]);
+        const catsData = await fetchCategories();
         setCategories(catsData);
-        setAllArticles(artsList);
-
-        // Auto-expand category that contains the active article
-        const activeArticle = artsList.find(a => a.slug === activeArticleSlug);
-        if (activeArticle?.category_slug) {
-          setExpandedCategories(prev => ({
-            ...prev,
-            [activeArticle.category_slug!]: true
-          }));
-        }
       } catch (err) {
         console.error('Failed to load BookSidebar data:', err);
       } finally {
@@ -52,68 +35,29 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
     }
     
     loadData();
-  }, [isOpen, activeArticleSlug]);
+  }, [isOpen]);
 
-  // Group articles by category
-  const articlesByCategory = React.useMemo(() => {
-    const map: Record<string, Article[]> = {};
-    allArticles.forEach(art => {
-      if (art.category_slug) {
-        if (!map[art.category_slug]) map[art.category_slug] = [];
-        map[art.category_slug].push(art);
-      }
-    });
-    return map;
-  }, [allArticles]);
-
-  // Filter categories and articles based on search query
-  const filteredData = React.useMemo(() => {
-    if (!searchQuery.trim()) {
-      return { categories, articlesByCategory };
-    }
-
+  // Filter categories based on search query
+  const filteredCategories = React.useMemo(() => {
+    if (!searchQuery.trim()) return categories;
     const query = searchQuery.toLowerCase();
-    const filteredArticlesMap: Record<string, Article[]> = {};
-    
-    // Filter articles
-    allArticles.forEach(art => {
-      if (art.title.toLowerCase().includes(query) || (art.summary && art.summary.toLowerCase().includes(query))) {
-        if (art.category_slug) {
-          if (!filteredArticlesMap[art.category_slug]) {
-            filteredArticlesMap[art.category_slug] = [];
-          }
-          filteredArticlesMap[art.category_slug].push(art);
-        }
-      }
-    });
+    return categories.filter(cat =>
+      cat.name.toLowerCase().includes(query) || cat.description.toLowerCase().includes(query)
+    );
+  }, [searchQuery, categories]);
 
-    // Filter categories
-    const filteredCategories = categories.filter(cat => {
-      const hasMatchingArticles = filteredArticlesMap[cat.slug] && filteredArticlesMap[cat.slug].length > 0;
-      const matchesCategoryName = cat.name.toLowerCase().includes(query) || cat.description.toLowerCase().includes(query);
-      
-      if (matchesCategoryName && !filteredArticlesMap[cat.slug]) {
-        filteredArticlesMap[cat.slug] = articlesByCategory[cat.slug] || [];
-      }
+  // Determine active category from URL
+  const activeCategorySlug = React.useMemo(() => {
+    const match = location.pathname.match(/^\/categories\/([^/]+)/);
+    return match ? match[1] : null;
+  }, [location.pathname]);
 
-      return matchesCategoryName || hasMatchingArticles;
-    });
-
-    // Auto-expand all matching categories during search
-    const newExpanded: Record<string, boolean> = {};
-    filteredCategories.forEach(cat => {
-      newExpanded[cat.slug] = true;
-    });
-    setExpandedCategories(prev => ({ ...prev, ...newExpanded }));
-
-    return { categories: filteredCategories, articlesByCategory: filteredArticlesMap };
-  }, [searchQuery, categories, allArticles, articlesByCategory]);
-
-  const toggleCategory = (catSlug: string) => {
-    setExpandedCategories(prev => ({
-      ...prev,
-      [catSlug]: !prev[catSlug]
-    }));
+  const getArticlePlural = (count: number) => {
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'статья';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'статьи';
+    return 'статей';
   };
 
   // Close on ESC key
@@ -144,12 +88,12 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
     hidden: { opacity: 0 },
     visible: { 
       opacity: 1,
-      transition: { staggerChildren: 0.04 }
+      transition: { staggerChildren: 0.06 }
     }
   };
 
   const itemVariants = {
-    hidden: { opacity: 0, x: -10 },
+    hidden: { opacity: 0, x: -12 },
     visible: { 
       opacity: 1, 
       x: 0,
@@ -243,7 +187,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
                 <input
                   type="text"
-                  placeholder="Быстрый поиск статей..."
+                  placeholder="Поиск разделов..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-4 py-2 text-xs bg-neutral-100/40 dark:bg-neutral-900/40 border border-neutral-200/60 dark:border-neutral-850 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder-neutral-400 dark:placeholder-neutral-500 text-neutral-850 dark:text-neutral-100"
@@ -251,18 +195,15 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
               </div>
             </div>
 
-            {/* Scrollable Document List */}
+            {/* Category List — synced with admin panel data */}
             <div className="flex-1 overflow-y-auto px-4 py-3 pl-6 custom-scrollbar">
               {isLoading ? (
                 <div className="flex flex-col gap-3 py-2 animate-pulse">
-                  {[1, 2, 3, 4].map(n => (
-                    <div key={n} className="space-y-2">
-                      <div className="h-6 w-3/4 bg-neutral-200 dark:bg-neutral-800 rounded-lg" />
-                      <div className="h-4 w-1/2 bg-neutral-100 dark:bg-neutral-900 rounded-md ml-4" />
-                    </div>
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <div key={n} className="h-14 bg-neutral-200 dark:bg-neutral-800 rounded-xl" />
                   ))}
                 </div>
-              ) : filteredData.categories.length === 0 ? (
+              ) : filteredCategories.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Sparkles className="w-8 h-8 text-neutral-300 dark:text-neutral-700 mb-3 animate-pulse" />
                   <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">Ничего не найдено</p>
@@ -273,104 +214,57 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                   variants={listContainerVariants}
                   initial="hidden"
                   animate={isOpen ? "visible" : "hidden"}
-                  className="space-y-2.5"
+                  className="space-y-1.5"
                 >
-                  {filteredData.categories.map((cat) => {
-                    const isExpanded = !!expandedCategories[cat.slug];
-                    const catArticles = filteredData.articlesByCategory[cat.slug] || [];
-                    const isTariffs = cat.slug === 'tariffs';
-                    // For tariffs category, show TARIFFS count; for others, use article_count from API (matching Home page)
-                    const displayCount = isTariffs ? TARIFFS.length : (cat.article_count ?? catArticles.length);
-                    const hasItems = isTariffs ? TARIFFS.length > 0 : catArticles.length > 0;
-                    
+                  {filteredCategories.map((cat) => {
+                    const isActive = activeCategorySlug === cat.slug;
+                    const articleCount = cat.article_count || 0;
+
                     return (
-                      <motion.div 
-                        key={cat.id} 
-                        variants={itemVariants}
-                        className="space-y-1"
-                      >
-                        {/* Category Row */}
-                        <button
-                          onClick={() => toggleCategory(cat.slug)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-left font-semibold transition-all ${
-                            isExpanded 
-                              ? 'text-neutral-950 dark:text-white bg-neutral-100/50 dark:bg-neutral-900/35 border border-neutral-200/20 dark:border-neutral-850/30' 
-                              : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50/50 dark:hover:bg-neutral-900/10 hover:text-neutral-950 dark:hover:text-white'
+                      <motion.div key={cat.id} variants={itemVariants}>
+                        <Link
+                          to={`/categories/${cat.slug}`}
+                          onClick={onClose}
+                          className={`group relative flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition-all ${
+                            isActive
+                              ? 'bg-indigo-500/10 dark:bg-indigo-500/10 border border-indigo-500/20 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-semibold shadow-sm'
+                              : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50/60 dark:hover:bg-neutral-900/30 hover:text-neutral-950 dark:hover:text-white border border-transparent'
                           }`}
                         >
-                          <div className="flex items-center gap-2.5 truncate">
-                            <div className="w-5.5 h-5.5 rounded-lg flex items-center justify-center bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 dark:text-indigo-400 shrink-0">
-                              <CategoryIcon name={cat.icon} className="w-3.5 h-3.5" />
-                            </div>
-                            <span className="truncate">{cat.name}</span>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 shrink-0 ml-1">
-                            <span className="text-[9px] text-neutral-400 dark:text-neutral-500 font-bold bg-neutral-100 dark:bg-neutral-900/60 px-1.5 py-0.5 rounded-md border border-neutral-200/30 dark:border-neutral-800/30">
-                              {displayCount}
-                            </span>
-                            <span className="text-neutral-400 dark:text-neutral-500">
-                              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                            </span>
-                          </div>
-                        </button>
+                          {/* Active indicator */}
+                          <span className={`absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-500 rounded-r-md transition-all ${
+                            isActive ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-50 group-hover:opacity-60 group-hover:scale-y-100'
+                          }`} />
 
-                        {/* Category Items */}
-                        <AnimatePresence initial={false}>
-                          {isExpanded && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.2, ease: 'easeInOut' }}
-                              className="overflow-hidden pl-4 border-l border-neutral-200/50 dark:border-neutral-850 ml-5.5 space-y-0.5"
-                            >
-                              {!hasItems ? (
-                                <span className="block px-3 py-2 text-[10px] text-neutral-400 dark:text-neutral-600 italic">
-                                  Нет статей
-                                </span>
-                              ) : isTariffs ? (
-                                /* Show tariff names linking to the classifier page */
-                                TARIFFS.map((tariff) => (
-                                  <Link
-                                    key={tariff.key}
-                                    to={`/categories/tariffs`}
-                                    onClick={onClose}
-                                    className="group relative flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20"
-                                  >
-                                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 bg-indigo-500 rounded-r-md transition-all opacity-0 scale-y-50 group-hover:opacity-100 group-hover:scale-y-100" />
-                                    <Car className="w-3.5 h-3.5 opacity-50 group-hover:opacity-90 group-hover:text-indigo-500 transition-colors shrink-0" />
-                                    <span className="truncate group-hover:translate-x-0.5 transition-transform">{tariff.name}</span>
-                                  </Link>
-                                ))
-                              ) : (
-                                catArticles.map((art) => {
-                                  const isActive = activeArticleSlug === art.slug;
-                                  return (
-                                    <Link
-                                      key={art.id}
-                                      to={`/articles/${art.slug}`}
-                                      onClick={onClose}
-                                      className={`group relative flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${
-                                        isActive
-                                          ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold'
-                                          : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20'
-                                      }`}
-                                    >
-                                      {/* Indicator line */}
-                                      <span className={`absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 bg-indigo-500 rounded-r-md transition-all ${
-                                        isActive ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-50 group-hover:opacity-100 group-hover:scale-y-100'
-                                      }`} />
+                          {/* Category Icon */}
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                            isActive
+                              ? 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400'
+                              : 'bg-neutral-100 dark:bg-neutral-900/60 text-neutral-500 dark:text-neutral-400 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/40 group-hover:text-indigo-500'
+                          }`}>
+                            <CategoryIcon name={cat.icon} className="w-4 h-4" />
+                          </div>
 
-                                      <FileText className="w-3.5 h-3.5 opacity-50 group-hover:opacity-90 group-hover:text-indigo-500 transition-colors shrink-0" />
-                                      <span className="truncate group-hover:translate-x-0.5 transition-transform">{art.title}</span>
-                                    </Link>
-                                  );
-                                })
-                              )}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
+                          {/* Category Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-xs truncate">{cat.name}</div>
+                            <div className="text-[10px] text-neutral-400 dark:text-neutral-500 mt-0.5 truncate">{cat.description}</div>
+                          </div>
+
+                          {/* Article Count + Arrow */}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${
+                              isActive
+                                ? 'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border-indigo-200/50 dark:border-indigo-800/30'
+                                : 'bg-neutral-100 dark:bg-neutral-900/60 text-neutral-400 dark:text-neutral-500 border-neutral-200/30 dark:border-neutral-800/30'
+                            }`}>
+                              {articleCount} {getArticlePlural(articleCount)}
+                            </span>
+                            <ChevronRight className={`w-3.5 h-3.5 transition-transform ${
+                              isActive ? 'text-indigo-500' : 'text-neutral-300 dark:text-neutral-600 group-hover:text-neutral-500 group-hover:translate-x-0.5'
+                            }`} />
+                          </div>
+                        </Link>
                       </motion.div>
                     );
                   })}
