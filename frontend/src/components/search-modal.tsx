@@ -440,7 +440,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
   const renderDropdownContent = () => {
     if (selectedCar) {
       return (
-        <div className="flex divide-x divide-neutral-200 dark:divide-neutral-800 overflow-hidden h-[350px]">
+        <div className="flex divide-x divide-neutral-200 dark:divide-neutral-800 overflow-hidden h-auto max-h-[350px]">
           {/* Left Side: Standard Search Results */}
           <div className="flex-1 overflow-y-auto p-2 scrollbar-thin">
             {renderResultsList()}
@@ -681,7 +681,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.99 }}
               transition={{ duration: 0.15 }}
-              className={`absolute top-full left-0 right-0 mt-2 bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[350px] transition-all duration-300 ${selectedCar ? 'md:left-[-50px] md:right-[-50px]' : ''}`}
+              className={`absolute top-full left-0 right-0 mt-2 bg-white dark:bg-neutral-950 border-2 border-indigo-500 dark:border-indigo-500 rounded-xl shadow-[0_15px_40px_rgba(99,102,241,0.15)] z-50 overflow-hidden flex flex-col max-h-[350px] transition-all duration-300 ${selectedCar ? 'md:left-[-50px] md:right-[-50px]' : ''}`}
             >
               {renderDropdownContent()}
             </motion.div>
@@ -749,7 +749,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.99 }}
             transition={{ duration: 0.15 }}
-            className={`absolute top-full right-0 mt-2 bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[350px] transition-all duration-300 ${
+            className={`absolute top-full right-0 mt-2 bg-white dark:bg-neutral-950 border-2 border-indigo-500 dark:border-indigo-500 rounded-xl shadow-[0_15px_40px_rgba(99,102,241,0.15)] z-50 overflow-hidden flex flex-col max-h-[350px] transition-all duration-300 ${
               selectedCar ? 'w-[720px]' : 'w-[420px]'
             }`}
           >
