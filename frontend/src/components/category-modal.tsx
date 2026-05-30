@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { X, Layout, Server, Cpu, Search, Book, Layers, Settings, Users, Key, HelpCircle, Database, Terminal, FileText, Folder, Plus } from 'lucide-react';
+import { X, Layout, Server, Cpu, Search, Book, Layers, Settings, Users, Key, HelpCircle, Database, Terminal, FileText, Folder, Plus, Check } from 'lucide-react';
 import { createCategory, updateCategory, Category } from '../lib/api';
 
 // Available icons to select from, with their Lucide references
@@ -18,6 +18,14 @@ const AVAILABLE_ICONS = [
   { name: 'terminal', label: 'Terminal (Консоль)', Icon: Terminal },
   { name: 'file-text', label: 'File Text (Документ)', Icon: FileText },
   { name: 'folder', label: 'Folder (Папка)', Icon: Folder },
+];const PRESETS_COLORS = [
+  { name: 'Indigo', value: '#6366f1' },
+  { name: 'Purple', value: '#8b5cf6' },
+  { name: 'Violet', value: '#7c3aed' },
+  { name: 'Emerald', value: '#10b981' },
+  { name: 'Rose', value: '#f43f5e' },
+  { name: 'Amber', value: '#f59e0b' },
+  { name: 'Cyan', value: '#06b6d4' },
 ];
 
 interface CategoryModalProps {
@@ -34,6 +42,7 @@ export default function CategoryModal({ category, onClose, onSuccess }: Category
   const [description, setDescription] = React.useState('');
   const [icon, setIcon] = React.useState('layout');
   const [position, setPosition] = React.useState(0);
+  const [color, setColor] = React.useState('#6366f1');
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -45,12 +54,14 @@ export default function CategoryModal({ category, onClose, onSuccess }: Category
       setDescription(category.description || '');
       setIcon(category.icon || 'layout');
       setPosition(category.position || 0);
+      setColor(category.color || '#6366f1');
     } else {
       setName('');
       setSlug('');
       setDescription('');
       setIcon('layout');
       setPosition(0);
+      setColor('#6366f1');
     }
   }, [category]);
 
@@ -94,6 +105,8 @@ export default function CategoryModal({ category, onClose, onSuccess }: Category
       description: description.trim(),
       icon,
       position: Number(position),
+      color,
+      is_visible: category ? (category.is_visible !== undefined ? category.is_visible : true) : true,
     };
 
     try {
@@ -203,10 +216,41 @@ export default function CategoryModal({ category, onClose, onSuccess }: Category
             </div>
           </div>
 
+          <div>
+            <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Цветовой акцент</label>
+            <div className="flex flex-wrap gap-1.5 items-center h-9">
+              {PRESETS_COLORS.map((preset) => {
+                const isSelected = color === preset.value;
+                return (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => setColor(preset.value)}
+                    className="w-5.5 h-5.5 rounded-full border flex items-center justify-center transition-all cursor-pointer hover:scale-110"
+                    style={{ 
+                      backgroundColor: preset.value, 
+                      borderColor: isSelected ? '#ffffff' : 'transparent', 
+                      boxShadow: isSelected ? '0 0 4px rgba(0,0,0,0.5)' : 'none' 
+                    }}
+                  >
+                    {isSelected && <Check className="w-3 h-3 text-white" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Icon Preview */}
           <div className="flex items-center gap-3 p-3 bg-neutral-50 dark:bg-neutral-900/40 rounded-lg border border-neutral-200/50 dark:border-neutral-850">
             <span className="text-[10px] uppercase font-bold text-neutral-400">Превью иконки:</span>
-            <div className="w-8 h-8 rounded bg-indigo-500/10 text-indigo-500 flex items-center justify-center border border-indigo-500/20">
+            <div 
+              className="w-8 h-8 rounded-lg flex items-center justify-center border transition-all"
+              style={{
+                backgroundColor: `${color}10`,
+                borderColor: `${color}30`,
+                color: color
+              }}
+            >
               {(() => {
                 const selected = AVAILABLE_ICONS.find(i => i.name === icon);
                 if (selected) {

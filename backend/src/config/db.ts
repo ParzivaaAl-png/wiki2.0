@@ -92,8 +92,12 @@ export const initializeDatabase = async () => {
     // Ensure articles table has position column for sorting
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS position INT DEFAULT 0');
 
+    // Ensure categories table has is_visible and color columns
+    await pool.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_visible BOOLEAN DEFAULT true');
+    await pool.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS color VARCHAR(50) DEFAULT \'#6366f1\'');
+
     // Create database indexes for performance speedup
-    console.log('Creating database indexes for query performance...');
+    console.log('Creating database indexes for performance speedup...');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_category_id ON articles(category_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_author_id ON articles(author_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_published_position ON articles(published, position)');

@@ -52,6 +52,8 @@ export interface Category {
   icon: string;
   description: string;
   position: number;
+  is_visible?: boolean;
+  color?: string;
   article_count?: number;
 }
 
@@ -239,15 +241,16 @@ async function apiCallWithCache<T>(path: string, options: RequestInit = {}): Pro
   return data;
 }
 
-export async function fetchCategories(): Promise<Category[]> {
-  return apiCallWithCache<Category[]>('/categories', { cache: 'no-store' });
+export async function fetchCategories(options: { all?: boolean } = {}): Promise<Category[]> {
+  const query = options.all ? '?all=true' : '';
+  return apiCallWithCache<Category[]>(`/categories${query}`, { cache: 'no-store' });
 }
 
 export async function fetchCategory(slugOrId: string | number): Promise<Category> {
   return apiCallWithCache<Category>(`/categories/${slugOrId}`, { cache: 'no-store' });
 }
 
-export async function createCategory(data: Omit<Category, 'id' | 'article_count'>): Promise<Category> {
+export async function createCategory(data: Omit<Category, 'id' | 'article_count'> & { content?: string }): Promise<Category> {
   clearApiCache();
   return apiCall<Category>('/categories', {
     method: 'POST',
@@ -263,6 +266,14 @@ export async function updateCategory(
   return apiCall<Category>(`/categories/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
+  });
+}
+
+export async function reorderCategories(orders: { id: number; position: number }[]): Promise<void> {
+  clearApiCache();
+  return apiCall<void>('/categories/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ orders }),
   });
 }
 

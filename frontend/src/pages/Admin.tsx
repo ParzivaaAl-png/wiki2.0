@@ -43,7 +43,7 @@ export default function Admin() {
   
   const [searchQuery, setSearchQuery] = React.useState('');
   const [categoryFilter, setCategoryFilter] = React.useState('all');
-  const [activeTab, setActiveTab] = React.useState<'articles' | 'users' | 'sessions'>('articles');
+  const [activeTab, setActiveTab] = React.useState<'articles' | 'archive' | 'users' | 'sessions'>('articles');
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = React.useState(false);
@@ -74,7 +74,7 @@ export default function Admin() {
     try {
       const [arts, cats] = await Promise.all([
         fetchArticles({ all: true }), // fetches all including drafts
-        fetchCategories(),
+        fetchCategories({ all: true }),
       ]);
       setArticles(arts.filter(art => !art.slug.startsWith('auto-list-')));
       setCategories(cats);
@@ -123,17 +123,56 @@ export default function Admin() {
     }
   };
 
-  const handleDeleteCategory = async (id: number, name: string) => {
-    if (!window.confirm(`Вы уверены, что хотите удалить раздел "${name}"? Все статьи этого раздела останутся без категории.`)) return;
+  const handleArchiveCategory = async (cat: Category) => {
+    if (!window.confirm(`Вы уверены, что хотите скрыть раздел "${cat.name}"? Раздел пропадет с экрана навигации, но его можно будет восстановить из архива.`)) return;
 
     try {
-      await deleteCategory(id);
-      setCategories(prev => prev.filter(c => c.id !== id));
+      await updateCategory(cat.id, {
+        name: cat.name,
+        slug: cat.slug,
+        icon: cat.icon || 'layout',
+        description: cat.description || '',
+        position: cat.position || 0,
+        is_visible: false,
+        color: cat.color || '#6366f1',
+      });
       await loadAdminData();
-      alert('Раздел успешно удален.');
-    } catch (err) {
+      alert('Раздел успешно скрыт и перенесен в архив.');
+    } catch (err: any) {
       console.error(err);
-      alert('Не удалось удалить раздел.');
+      alert('Не удалось скрыть раздел: ' + err.message);
+    }
+  };
+
+  const handleRestoreCategory = async (cat: Category) => {
+    try {
+      await updateCategory(cat.id, {
+        name: cat.name,
+        slug: cat.slug,
+        icon: cat.icon || 'layout',
+        description: cat.description || '',
+        position: cat.position || 0,
+        is_visible: true,
+        color: cat.color || '#6366f1',
+      });
+      await loadAdminData();
+      alert('Раздел успешно восстановлен.');
+    } catch (err: any) {
+      console.error(err);
+      alert('Не удалось восстановить раздел: ' + err.message);
+    }
+  };
+
+  const handleDeleteForever = async (cat: Category) => {
+    if (!window.confirm(`Вы уверены, что хотите НАВСЕГДА удалить раздел "${cat.name}" из базы данных? Это действие необратимо. Все статьи этого раздела останутся без категории.`)) return;
+
+    try {
+      await deleteCategory(cat.id);
+      await loadAdminData();
+      alert('Раздел окончательно удален.');
+    } catch (err: any) {
+      console.error(err);
+      alert('Не удалось окончательно удалить раздел: ' + err.message);
     }
   };
 
@@ -145,9 +184,10 @@ export default function Admin() {
     }));
   };
 
-  // Filtered categories computed
+  // Filtered active categories computed
   const filteredCategories = React.useMemo(() => {
     return categories.filter(cat => {
+      if (cat.is_visible === false) return false;
       if (categoryFilter !== 'all' && cat.slug !== categoryFilter) return false;
       
       if (searchQuery.trim()) {
@@ -163,6 +203,15 @@ export default function Admin() {
       return true;
     });
   }, [categories, articles, searchQuery, categoryFilter]);
+
+  const filteredArchivedCategories = React.useMemo(() => {
+    const archived = categories.filter(cat => cat.is_visible === false);
+    if (!searchQuery.trim()) return archived;
+    const q = searchQuery.toLowerCase();
+    return archived.filter(cat => 
+      cat.name.toLowerCase().includes(q) || (cat.description || '').toLowerCase().includes(q)
+    );
+  }, [categories, searchQuery]);
 
   // Filtered articles that are uncategorized
   const uncategorizedArticles = React.useMemo(() => {
@@ -310,12 +359,12 @@ export default function Admin() {
         </div>
       </div>
 
-      {/* Tabs Switcher for Admin role */}
-      {user?.role === 'Admin' && (
-        <div className="flex border-b border-neutral-200 dark:border-neutral-800 mb-8 gap-6">
+      {/* Tabs Switcher for Admin & Editor roles */}
+      {(user?.role === 'Admin' || user?.role === 'Editor') && (
+        <div className="flex border-b border-neutral-200 dark:border-neutral-800 mb-8 gap-6 overflow-x-auto scrollbar-none">
           <button
             onClick={() => setActiveTab('articles')}
-            className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+            className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
               activeTab === 'articles'
                 ? 'border-indigo-500 text-indigo-500'
                 : 'border-transparent text-neutral-500 hover:text-neutral-950 dark:hover:text-white'
@@ -324,30 +373,46 @@ export default function Admin() {
             <Layers className="w-4 h-4" />
             Статьи и Категории
           </button>
-          
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === 'users'
-                ? 'border-indigo-500 text-indigo-500'
-                : 'border-transparent text-neutral-500 hover:text-neutral-950 dark:hover:text-white'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            Пользователи (Админ)
-          </button>
 
           <button
-            onClick={() => setActiveTab('sessions')}
-            className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === 'sessions'
+            onClick={() => setActiveTab('archive')}
+            className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
+              activeTab === 'archive'
                 ? 'border-indigo-500 text-indigo-500'
                 : 'border-transparent text-neutral-500 hover:text-neutral-950 dark:hover:text-white'
             }`}
           >
-            <Key className="w-4 h-4" />
-            Сессии (Админ)
+            <Trash2 className="w-4 h-4 text-neutral-400" />
+            Архив разделов
           </button>
+          
+          {user?.role === 'Admin' && (
+            <>
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
+                  activeTab === 'users'
+                    ? 'border-indigo-500 text-indigo-500'
+                    : 'border-transparent text-neutral-500 hover:text-neutral-950 dark:hover:text-white'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                Пользователи (Админ)
+              </button>
+
+              <button
+                onClick={() => setActiveTab('sessions')}
+                className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
+                  activeTab === 'sessions'
+                    ? 'border-indigo-500 text-indigo-500'
+                    : 'border-transparent text-neutral-500 hover:text-neutral-950 dark:hover:text-white'
+                }`}
+              >
+                <Key className="w-4 h-4" />
+                Сессии (Админ)
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -357,6 +422,101 @@ export default function Admin() {
 
       {activeTab === 'sessions' && user?.role === 'Admin' && (
         <SessionManagement />
+      )}
+
+      {activeTab === 'archive' && (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 rounded-xl shadow-premium dark:shadow-premium-dark">
+            <div>
+              <h3 className="font-outfit text-sm font-bold uppercase tracking-wider text-neutral-450 dark:text-neutral-500">
+                Архив разделов базы знаний
+              </h3>
+              <p className="text-xs text-neutral-400 mt-1 font-light">
+                Здесь находятся разделы, которые были скрыты из навигации. Вы можете восстановить их в любой момент.
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-2 border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-1.5 bg-neutral-50 dark:bg-neutral-900/30 w-full md:max-w-xs shrink-0">
+              <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="Поиск в архиве..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-transparent text-xs text-neutral-950 dark:text-neutral-100 outline-none w-full placeholder-neutral-400"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredArchivedCategories.length === 0 ? (
+              <div className="col-span-full border border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl p-12 text-center text-xs text-neutral-400">
+                Архив пуст или ничего не найдено по вашему запросу.
+              </div>
+            ) : (
+              filteredArchivedCategories.map((cat) => {
+                const borderAccentColor = cat.color || '#6366f1';
+                return (
+                  <div
+                    key={cat.id}
+                    className="p-5 rounded-xl border border-neutral-200/60 dark:border-neutral-800 bg-white dark:bg-neutral-950 flex flex-col justify-between min-h-[160px] shadow-sm relative group hover:border-indigo-500/20 transition-all duration-300"
+                  >
+                    <div>
+                      <div 
+                        className="w-9 h-9 rounded-lg flex items-center justify-center mb-4 border"
+                        style={{ 
+                          backgroundColor: `${borderAccentColor}10`,
+                          borderColor: `${borderAccentColor}20`,
+                          color: borderAccentColor
+                        }}
+                      >
+                        <CategoryIcon name={cat.icon} className="w-4.5 h-4.5" />
+                      </div>
+                      <h4 className="font-outfit text-sm font-bold text-neutral-900 dark:text-white mb-1.5 truncate">
+                        {cat.name}
+                      </h4>
+                      <p className="text-neutral-500 dark:text-neutral-400 text-xs line-clamp-2 leading-relaxed font-light mb-4">
+                        {cat.description || 'Описание отсутствует.'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-neutral-100 dark:border-neutral-900 pt-3 mt-auto gap-2">
+                      <span className="text-[10px] font-mono text-neutral-400">
+                        /{cat.slug}
+                      </span>
+                      
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => handleRestoreCategory(cat)}
+                          className="px-2.5 py-1 text-[10px] font-bold text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-md transition-colors cursor-pointer"
+                          title="Восстановить раздел"
+                        >
+                          Восстановить
+                        </button>
+                        <button
+                          onClick={() => { setSelectedCategoryForEdit(cat); setIsCategoryModalOpen(true); }}
+                          className="px-2 py-1 text-[10px] font-bold text-indigo-600 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-md transition-colors cursor-pointer"
+                          title="Редактировать раздел"
+                        >
+                          Правка
+                        </button>
+                        {user?.role === 'Admin' && (
+                          <button
+                            onClick={() => handleDeleteForever(cat)}
+                            className="px-2 py-1 text-[10px] font-bold text-red-600 bg-red-500/10 hover:bg-red-500/20 rounded-md transition-colors cursor-pointer"
+                            title="Удалить навсегда из базы данных"
+                          >
+                            Удалить
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
       )}
 
       {activeTab === 'articles' && (
@@ -413,7 +573,7 @@ export default function Admin() {
                   className="text-xs border border-neutral-200 dark:border-neutral-800 rounded-lg px-2.5 py-1.5 bg-neutral-50 dark:bg-neutral-950 text-neutral-700 dark:text-neutral-300 outline-none focus:border-indigo-500"
                 >
                   <option value="all">Все разделы</option>
-                  {categories.map(cat => (
+                  {categories.filter(cat => cat.is_visible !== false).map(cat => (
                     <option key={cat.id} value={cat.slug}>{cat.name}</option>
                   ))}
                 </select>
@@ -508,9 +668,9 @@ export default function Admin() {
                                 <Edit3 className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                                onClick={() => handleArchiveCategory(cat)}
                                 className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-white dark:hover:bg-neutral-900 transition-colors cursor-pointer"
-                                title="Удалить раздел"
+                                title="Архивировать раздел"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>

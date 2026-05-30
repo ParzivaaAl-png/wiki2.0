@@ -73,8 +73,9 @@ router.delete('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), ar
 router.get('/categories', categoriesController.getCategories);
 router.get('/categories/:idOrSlug', categoriesController.getCategory);
 router.post('/categories', requireAuth, requireRole(['Admin', 'Editor']), categoriesController.createCategory);
+router.post('/categories/reorder', requireAuth, requireRole(['Admin', 'Editor']), categoriesController.reorderCategories);
 router.put('/categories/:id', requireAuth, requireRole(['Admin', 'Editor']), categoriesController.updateCategory);
-router.delete('/categories/:id', requireAuth, requireRole(['Admin', 'Editor']), categoriesController.deleteCategory);
+router.delete('/categories/:id', requireAuth, requireRole(['Admin']), categoriesController.deleteCategory);
 
 // Image/File upload & import route
 router.post('/upload', requireAuth, requireRole(['Admin', 'Editor']), upload.single('image'), articlesController.uploadImage);

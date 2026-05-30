@@ -1,33 +1,42 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Sparkles, Clock, ChevronRight, BookOpen } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { fetchCategories, fetchArticles, Category, Article } from '../lib/api';
+import { Search, Sparkles, Clock, ChevronRight, BookOpen, Edit3, Check, Plus } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { fetchCategories, fetchArticles, updateCategory, reorderCategories, Category, Article } from '../lib/api';
 import { CategoryIcon } from '../components/icon';
 import { SearchModal } from '../components/search-modal';
+import { useAuth } from '../lib/auth-context';
+import AddSectionModal from '../components/add-section-modal';
 
 export default function Home() {
+  const { user } = useAuth();
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [recentArticles, setRecentArticles] = React.useState<Article[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
-  React.useEffect(() => {
-    async function loadData() {
-      try {
-        const [cats, arts] = await Promise.all([
-          fetchCategories(),
-          fetchArticles(),
-        ]);
-        setCategories(cats);
-        setRecentArticles(arts.slice(0, 3));
-      } catch (error) {
-        console.error('Home data load failed:', error);
-      } finally {
-        setIsLoading(false);
-      }
+  // Edit Mode States
+  const [isEditMode, setIsEditMode] = React.useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
+  const [draggedId, setDraggedId] = React.useState<number | null>(null);
+
+  const loadData = React.useCallback(async () => {
+    try {
+      const [cats, arts] = await Promise.all([
+        fetchCategories(),
+        fetchArticles(),
+      ]);
+      setCategories(cats);
+      setRecentArticles(arts.slice(0, 3));
+    } catch (error) {
+      console.error('Home data load failed:', error);
+    } finally {
+      setIsLoading(false);
     }
-    loadData();
   }, []);
+
+  React.useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const getArticlePlural = (count: number) => {
     const mod10 = count % 10;
@@ -37,12 +46,81 @@ export default function Home() {
     return 'статей';
   };
 
+  // Drag and Drop Handlers for Categories
+  const handleDragStart = (e: React.DragEvent, id: number) => {
+    if (!isEditMode) return;
+    setDraggedId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: number) => {
+    if (!isEditMode) return;
+    e.preventDefault();
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetId: number) => {
+    if (!isEditMode || draggedId === null || draggedId === targetId) return;
+
+    const draggedIdx = categories.findIndex(c => c.id === draggedId);
+    const targetIdx = categories.findIndex(c => c.id === targetId);
+
+    if (draggedIdx !== -1 && targetIdx !== -1) {
+      const updated = [...categories];
+      const [draggedItem] = updated.splice(draggedIdx, 1);
+      updated.splice(targetIdx, 0, draggedItem);
+
+      // Re-assign positions sequentially
+      const reordered = updated.map((cat, index) => ({
+        ...cat,
+        position: index + 1
+      }));
+
+      setCategories(reordered);
+
+      try {
+        const payload = reordered.map(c => ({ id: c.id, position: c.position }));
+        await reorderCategories(payload);
+      } catch (err) {
+        console.error('Failed to save category order:', err);
+      }
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedId(null);
+  };
+
+  // Archive / Soft Delete Category (sets is_visible = false)
+  const handleArchiveCategory = async (e: React.MouseEvent, cat: Category) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const confirmed = window.confirm(`Вы уверены, что хотите скрыть раздел "${cat.name}"? Раздел пропадет с экрана навигации, но его можно будет восстановить из архива в админ-панели.`);
+    if (!confirmed) return;
+
+    try {
+      await updateCategory(cat.id, {
+        name: cat.name,
+        slug: cat.slug,
+        icon: cat.icon || 'layout',
+        description: cat.description || '',
+        position: cat.position || 0,
+        is_visible: false,
+        color: cat.color || '#6366f1',
+      });
+      await loadData();
+    } catch (err) {
+      console.error('Failed to archive category:', err);
+      alert('Ошибка при скрытии раздела.');
+    }
+  };
 
   const containerVariants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
-      transition: { staggerChildren: 0.1 },
+      transition: { staggerChildren: 0.08 },
     },
   };
 
@@ -68,6 +146,8 @@ export default function Home() {
       </div>
     );
   }
+
+  const canEdit = user && (user.role === 'Admin' || user.role === 'Editor');
 
   return (
     <div className="relative min-h-screen pb-20 overflow-hidden">
@@ -122,14 +202,39 @@ export default function Home() {
 
       {/* Categories Bento Grid */}
       <section className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
-        <motion.h2 
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          className="font-outfit text-sm font-semibold tracking-wider text-neutral-400 uppercase mb-6 px-1"
-        >
-          Разделы документации
-        </motion.h2>
+        <div className="flex items-center justify-between mb-6 px-1">
+          <motion.h2 
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="font-outfit text-sm font-bold tracking-wider text-neutral-400 uppercase select-none"
+          >
+            Разделы документации
+          </motion.h2>
+
+          {/* Edit Mode Toggle Button */}
+          {canEdit && (
+            <button
+              onClick={() => setIsEditMode(prev => !prev)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-sm ${
+                isEditMode
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-450 hover:bg-emerald-500/20'
+                  : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20'
+              }`}
+            >
+              {isEditMode ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Готово</span>
+                </>
+              ) : (
+                <>
+                  <span>✏️ Редактировать</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
 
         <motion.div
           variants={containerVariants}
@@ -137,43 +242,97 @@ export default function Home() {
           animate="show"
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
         >
-          {categories.map((cat) => (
-            <motion.div
-              key={cat.id}
-              variants={itemVariants}
-              whileHover={{ y: -3, scale: 1.01 }}
-              className="group relative flex flex-col justify-between p-5 rounded-xl border border-neutral-200/60 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark hover:border-indigo-500/20 dark:hover:border-indigo-500/20 hover:shadow-glow dark:hover:shadow-glow transition-all duration-300"
-            >
-              <div>
-                <div className="w-10 h-10 rounded-lg bg-neutral-100 dark:bg-neutral-900 flex items-center justify-center text-neutral-600 dark:text-neutral-300 mb-4 border border-neutral-200/50 dark:border-neutral-800/50 group-hover:bg-indigo-500/10 group-hover:text-indigo-500 transition-colors">
-                  <CategoryIcon name={cat.icon} className="w-5 h-5" />
-                </div>
-                <h3 className="font-outfit text-base font-bold text-neutral-900 dark:text-neutral-100 mb-2">
-                  {cat.name}
-                </h3>
-                <p className="text-neutral-500 dark:text-neutral-400 text-xs line-clamp-2 leading-relaxed">
-                  {cat.description}
-                </p>
-              </div>
+          {categories.map((cat) => {
+            const isBeingDragged = cat.id === draggedId;
+            const borderAccentColor = cat.color || '#6366f1';
+            
+            return (
+              <motion.div
+                key={cat.id}
+                variants={itemVariants}
+                whileHover={!isEditMode ? { y: -3, scale: 1.01 } : undefined}
+                draggable={isEditMode}
+                onDragStart={(e) => handleDragStart(e as any, cat.id)}
+                onDragOver={(e) => handleDragOver(e, cat.id)}
+                onDrop={(e) => handleDrop(e, cat.id)}
+                onDragEnd={handleDragEnd}
+                onClick={(e) => isEditMode && e.preventDefault()}
+                style={{ 
+                  borderColor: isEditMode ? borderAccentColor : undefined,
+                  boxShadow: isEditMode ? `0 0 10px ${borderAccentColor}18` : undefined
+                }}
+                className={`group relative flex flex-col justify-between p-5 rounded-xl border bg-white dark:bg-neutral-950 transition-all duration-300 ${
+                  isEditMode 
+                    ? 'border-2 cursor-grab active:cursor-grabbing hover:scale-[1.01]' 
+                    : 'border-neutral-200/60 dark:border-neutral-800 hover:border-indigo-500/20 dark:hover:border-indigo-500/20 hover:shadow-glow dark:hover:shadow-glow'
+                } ${isBeingDragged ? 'opacity-40 border-dashed scale-95' : ''} shadow-premium dark:shadow-premium-dark`}
+              >
+                {/* iPhone-like red deletion button */}
+                {isEditMode && (
+                  <button
+                    onClick={(e) => handleArchiveCategory(e, cat)}
+                    className="absolute -top-1.5 -right-1.5 w-5.5 h-5.5 rounded-full bg-red-500 hover:bg-red-650 text-white flex items-center justify-center cursor-pointer shadow-md hover:scale-110 active:scale-95 transition-all z-20 border border-white dark:border-neutral-950"
+                    title="Скрыть раздел"
+                  >
+                    <span className="w-2.5 h-[2px] bg-white rounded-full" />
+                  </button>
+                )}
 
-              <div className="mt-6 flex items-center justify-between">
-                <span className="text-[11px] font-medium text-neutral-400 dark:text-neutral-500 uppercase tracking-wider bg-neutral-100 dark:bg-neutral-900/60 px-2 py-0.5 rounded">
-                  {cat.article_count || 0} {getArticlePlural(cat.article_count || 0)}
-                </span>
-                <Link
-                  to={`/categories/${cat.slug}`}
-                  className="text-xs font-semibold text-indigo-500 dark:text-indigo-400 flex items-center gap-1 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all"
-                >
-                  Перейти <ChevronRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
+                <div>
+                  <div 
+                    className="w-10 h-10 rounded-lg flex items-center justify-center mb-4 border transition-colors duration-300"
+                    style={{ 
+                      backgroundColor: `${borderAccentColor}10`,
+                      borderColor: `${borderAccentColor}25`,
+                      color: borderAccentColor
+                    }}
+                  >
+                    <CategoryIcon name={cat.icon} className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-outfit text-base font-bold text-neutral-900 dark:text-neutral-100 mb-2">
+                    {cat.name}
+                  </h3>
+                  <p className="text-neutral-500 dark:text-neutral-400 text-xs line-clamp-2 leading-relaxed font-light">
+                    {cat.description}
+                  </p>
+                </div>
+
+                <div className="mt-6 flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-neutral-400 dark:text-neutral-500 uppercase tracking-wider bg-neutral-100 dark:bg-neutral-900/60 px-2 py-0.5 rounded">
+                    {cat.article_count || 0} {getArticlePlural(cat.article_count || 0)}
+                  </span>
+                  
+                  {!isEditMode && (
+                    <Link
+                      to={`/categories/${cat.slug}`}
+                      className="text-xs font-semibold text-indigo-500 dark:text-indigo-400 flex items-center gap-1 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all"
+                    >
+                      Перейти <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+
+          {/* Dotted Plus Slot for adding new section (Edit Mode only) */}
+          {isEditMode && (
+            <motion.div
+              whileHover={{ scale: 1.01, y: -2 }}
+              onClick={() => setIsAddModalOpen(true)}
+              className="group cursor-pointer flex flex-col items-center justify-center p-5 rounded-xl border-2 border-dashed border-indigo-500/40 bg-indigo-500/[0.01] hover:bg-indigo-500/[0.04] hover:border-indigo-500/80 transition-all duration-300 min-h-[160px] shadow-sm select-none"
+            >
+              <Plus className="w-8 h-8 text-indigo-500/60 group-hover:text-indigo-500 transition-colors animate-pulse" />
+              <span className="text-[11px] font-bold text-indigo-500/65 group-hover:text-indigo-500 uppercase tracking-wider mt-2">
+                Добавить раздел
+              </span>
             </motion.div>
-          ))}
+          )}
         </motion.div>
       </section>
 
       {/* Recent Articles */}
-      {recentArticles.length > 0 && (
+      {recentArticles.length > 0 && !isEditMode && (
         <section className="max-w-3xl mx-auto px-4 py-12">
           <div className="flex items-center gap-2 mb-6 border-b border-neutral-200/50 dark:border-neutral-800 pb-3">
             <Clock className="w-4 h-4 text-neutral-400" />
@@ -220,6 +379,13 @@ export default function Home() {
         </section>
       )}
 
+      {/* Add Section Wizard Modal */}
+      {isAddModalOpen && (
+        <AddSectionModal 
+          onClose={() => setIsAddModalOpen(false)}
+          onSuccess={loadData}
+        />
+      )}
     </div>
   );
 }

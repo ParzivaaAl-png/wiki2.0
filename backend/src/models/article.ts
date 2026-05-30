@@ -38,6 +38,7 @@ export const getAllArticles = async (options: {
 
   if (options.publishedOnly !== false) {
     whereClauses.push(`a.published = true`);
+    whereClauses.push(`(c.id IS NULL OR c.is_visible = true)`);
   }
 
   if (options.categorySlug) {
