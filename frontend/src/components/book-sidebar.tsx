@@ -399,7 +399,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                           {isEditMode && (
                             <button
                               onClick={(e) => handleArchiveCategory(e, cat)}
-                              className="w-5 h-5 rounded-full bg-red-505 hover:bg-red-600 text-white flex items-center justify-center cursor-pointer shrink-0 shadow-sm border border-white dark:border-neutral-900 active:scale-90 transition-transform z-10"
+                              className="w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center cursor-pointer shrink-0 shadow-sm border border-white dark:border-neutral-900 active:scale-90 transition-transform z-10"
                               title="Скрыть раздел"
                             >
                               <span className="w-2 h-[2px] bg-white rounded-full" />

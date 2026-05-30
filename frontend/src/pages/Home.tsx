@@ -271,7 +271,7 @@ export default function Home() {
                 {isEditMode && (
                   <button
                     onClick={(e) => handleArchiveCategory(e, cat)}
-                    className="absolute -top-1.5 -right-1.5 w-5.5 h-5.5 rounded-full bg-red-500 hover:bg-red-650 text-white flex items-center justify-center cursor-pointer shadow-md hover:scale-110 active:scale-95 transition-all z-20 border border-white dark:border-neutral-950"
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center cursor-pointer shadow-md hover:scale-110 active:scale-95 transition-all z-20 border border-white dark:border-neutral-950"
                     title="Скрыть раздел"
                   >
                     <span className="w-2.5 h-[2px] bg-white rounded-full" />
