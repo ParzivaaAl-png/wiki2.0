@@ -1,9 +1,10 @@
 import * as React from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, ChevronDown, BookOpen, X, FileText, Search, Sparkles } from 'lucide-react';
+import { ChevronRight, ChevronDown, BookOpen, X, FileText, Search, Sparkles, Car } from 'lucide-react';
 import { fetchCategories, fetchArticles, Category, Article } from '../lib/api';
 import { CategoryIcon } from './icon';
+import { TARIFFS } from '../lib/classifier-data';
 
 interface BookSidebarProps {
   isOpen: boolean;
@@ -277,7 +278,10 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                   {filteredData.categories.map((cat) => {
                     const isExpanded = !!expandedCategories[cat.slug];
                     const catArticles = filteredData.articlesByCategory[cat.slug] || [];
-                    const hasArticles = catArticles.length > 0;
+                    const isTariffs = cat.slug === 'tariffs';
+                    // For tariffs category, show TARIFFS count; for others, use article_count from API (matching Home page)
+                    const displayCount = isTariffs ? TARIFFS.length : (cat.article_count ?? catArticles.length);
+                    const hasItems = isTariffs ? TARIFFS.length > 0 : catArticles.length > 0;
                     
                     return (
                       <motion.div 
@@ -303,7 +307,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                           
                           <div className="flex items-center gap-2 shrink-0 ml-1">
                             <span className="text-[9px] text-neutral-400 dark:text-neutral-500 font-bold bg-neutral-100 dark:bg-neutral-900/60 px-1.5 py-0.5 rounded-md border border-neutral-200/30 dark:border-neutral-800/30">
-                              {catArticles.length}
+                              {displayCount}
                             </span>
                             <span className="text-neutral-400 dark:text-neutral-500">
                               {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
@@ -311,7 +315,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                           </div>
                         </button>
 
-                        {/* Article Items */}
+                        {/* Category Items */}
                         <AnimatePresence initial={false}>
                           {isExpanded && (
                             <motion.div
@@ -321,10 +325,24 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                               transition={{ duration: 0.2, ease: 'easeInOut' }}
                               className="overflow-hidden pl-4 border-l border-neutral-200/50 dark:border-neutral-850 ml-5.5 space-y-0.5"
                             >
-                              {!hasArticles ? (
+                              {!hasItems ? (
                                 <span className="block px-3 py-2 text-[10px] text-neutral-400 dark:text-neutral-600 italic">
                                   Нет статей
                                 </span>
+                              ) : isTariffs ? (
+                                /* Show tariff names linking to the classifier page */
+                                TARIFFS.map((tariff) => (
+                                  <Link
+                                    key={tariff.key}
+                                    to={`/categories/tariffs`}
+                                    onClick={onClose}
+                                    className="group relative flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20"
+                                  >
+                                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 bg-indigo-500 rounded-r-md transition-all opacity-0 scale-y-50 group-hover:opacity-100 group-hover:scale-y-100" />
+                                    <Car className="w-3.5 h-3.5 opacity-50 group-hover:opacity-90 group-hover:text-indigo-500 transition-colors shrink-0" />
+                                    <span className="truncate group-hover:translate-x-0.5 transition-transform">{tariff.name}</span>
+                                  </Link>
+                                ))
                               ) : (
                                 catArticles.map((art) => {
                                   const isActive = activeArticleSlug === art.slug;
