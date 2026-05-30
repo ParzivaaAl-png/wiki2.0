@@ -180,14 +180,6 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                 <BookOpen className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
                 <span className="font-outfit font-bold text-neutral-800 dark:text-neutral-200">Навигация</span>
               </div>
-              
-              <button
-                onClick={onClose}
-                className="p-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 bg-white/50 dark:bg-neutral-900/50 text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all shadow-sm cursor-pointer"
-                aria-label="Close sidebar"
-              >
-                <X className="w-4 h-4" />
-              </button>
             </div>
 
             {/* Quick Search */}
