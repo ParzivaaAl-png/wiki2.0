@@ -52,13 +52,7 @@ export function BookSidebar({ isOpen, onClose }: BookSidebarProps) {
     return match ? match[1] : null;
   }, [location.pathname]);
 
-  const getArticlePlural = (count: number) => {
-    const mod10 = count % 10;
-    const mod100 = count % 100;
-    if (mod10 === 1 && mod100 !== 11) return 'статья';
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'статьи';
-    return 'статей';
-  };
+
 
   // Close on ESC key
   React.useEffect(() => {
@@ -216,13 +210,6 @@ export function BookSidebar({ isOpen, onClose }: BookSidebarProps) {
 
                           {/* Article Count + Arrow */}
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${
-                              isActive
-                                ? 'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border-indigo-200/50 dark:border-indigo-800/30'
-                                : 'bg-white/60 dark:bg-neutral-950/60 text-neutral-400 dark:text-neutral-500 border-neutral-200/30 dark:border-neutral-800/30'
-                            }`}>
-                              {articleCount} {getArticlePlural(articleCount)}
-                            </span>
                             <ChevronRight className={`w-3.5 h-3.5 transition-transform ${
                               isActive ? 'text-indigo-500' : 'text-neutral-300 dark:text-neutral-600 group-hover:text-neutral-500 group-hover:translate-x-0.5'
                             }`} />
