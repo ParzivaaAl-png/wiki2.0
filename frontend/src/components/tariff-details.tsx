@@ -101,11 +101,13 @@ export default function TariffDetails({ tariffKey }: TariffDetailsProps) {
     return { keys: sortedKeys, groups };
   }, [citySearchQuery]);
 
-  if (!tariff) {
+  if (!tariff || !selectedCity.tariffs.includes(tariffKey)) {
     return (
       <div className="py-12 text-center">
-        <h3 className="text-base font-bold text-red-500">Тариф не найден</h3>
-        <Link to="/articles/auto-list" className="text-xs text-indigo-500 hover:underline mt-2 inline-block">
+        <h3 className="text-base font-bold text-red-500">
+          Тариф «{tariff?.name || tariffKey}» не доступен в г. {selectedCity.name}
+        </h3>
+        <Link to={`/articles/auto-list?city=${selectedCity.id}`} className="text-xs text-indigo-500 hover:underline mt-2 inline-block">
           Вернуться к классификатору
         </Link>
       </div>

@@ -342,7 +342,7 @@ export default function TariffsClassifier() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {TARIFFS.map(t => {
+                  {TARIFFS.filter(t => selectedCity.tariffs.includes(t.key)).map(t => {
                     const res = checkResults[t.key];
                     if (!res) {
                       return (
@@ -445,7 +445,7 @@ export default function TariffsClassifier() {
           </p>
         </div>
 
-        {TARIFFS.map(tariff => (
+        {TARIFFS.filter(t => selectedCity.tariffs.includes(t.key)).map(tariff => (
           <TariffAccordion 
             key={tariff.key}
             tariff={tariff}

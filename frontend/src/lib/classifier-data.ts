@@ -2,6 +2,7 @@ export interface City {
   id: string;
   name: string;
   offset: number; // Offset applied to base years (Astana: +1 stricter, Semey: -2 lenient, etc.)
+  tariffs: string[]; // Active tariff keys in this city
 }
 
 export interface Tariff {
@@ -18,26 +19,26 @@ export interface CarRequirement {
 }
 
 export const CITIES: City[] = [
-  { id: 'almaty', name: 'Алматы', offset: 0 },
-  { id: 'astana', name: 'Астана', offset: 1 },
-  { id: 'shymkent', name: 'Шымкент', offset: -1 },
-  { id: 'karaganda', name: 'Караганда', offset: -1 },
-  { id: 'aktobe', name: 'Актобе', offset: -1 },
-  { id: 'taraz', name: 'Тараз', offset: -2 },
-  { id: 'pavlodar', name: 'Павлодар', offset: -1 },
-  { id: 'ust-kamenogorsk', name: 'Усть-Каменогорск', offset: -1 },
-  { id: 'semey', name: 'Семей', offset: -2 },
-  { id: 'uralsk', name: 'Уральск', offset: -2 },
-  { id: 'kostanay', name: 'Костанай', offset: -1 },
-  { id: 'kyzylorda', name: 'Кызылорда', offset: -2 },
-  { id: 'atyrau', name: 'Атырау', offset: 0 },
-  { id: 'aktau', name: 'Актау', offset: -1 },
-  { id: 'temirtau', name: 'Темиртау', offset: -2 },
-  { id: 'turkestan', name: 'Туркестан', offset: -3 },
-  { id: 'kokshetau', name: 'Кокшетау', offset: -2 },
-  { id: 'taldykorgan', name: 'Талдыкорган', offset: -2 },
-  { id: 'rudny', name: 'Рудный', offset: -3 },
-  { id: 'ekibastuz', name: 'Экибастуз', offset: -3 },
+  { id: 'almaty', name: 'Алматы', offset: 0, tariffs: ['econom', 'intercity', 'comfort', 'comfort_plus', 'business', 'electro', 'ultima'] },
+  { id: 'astana', name: 'Астана', offset: 1, tariffs: ['econom', 'intercity', 'comfort', 'comfort_plus', 'business', 'electro', 'ultima'] },
+  { id: 'shymkent', name: 'Шымкент', offset: -1, tariffs: ['econom', 'intercity', 'comfort', 'comfort_plus', 'business'] },
+  { id: 'karaganda', name: 'Караганда', offset: -1, tariffs: ['econom', 'intercity', 'comfort', 'comfort_plus', 'business'] },
+  { id: 'aktobe', name: 'Актобе', offset: -1, tariffs: ['econom', 'intercity', 'comfort', 'comfort_plus'] },
+  { id: 'taraz', name: 'Тараз', offset: -2, tariffs: ['econom', 'intercity', 'comfort'] },
+  { id: 'pavlodar', name: 'Павлодар', offset: -1, tariffs: ['econom', 'intercity', 'comfort', 'comfort_plus'] },
+  { id: 'ust-kamenogorsk', name: 'Усть-Каменогорск', offset: -1, tariffs: ['econom', 'intercity', 'comfort', 'comfort_plus'] },
+  { id: 'semey', name: 'Семей', offset: -2, tariffs: ['econom', 'intercity', 'comfort'] },
+  { id: 'uralsk', name: 'Уральск', offset: -2, tariffs: ['econom', 'intercity', 'comfort', 'comfort_plus'] },
+  { id: 'kostanay', name: 'Костанай', offset: -1, tariffs: ['econom', 'intercity', 'comfort', 'comfort_plus'] },
+  { id: 'kyzylorda', name: 'Кызылорда', offset: -2, tariffs: ['econom', 'intercity', 'comfort'] },
+  { id: 'atyrau', name: 'Атырау', offset: 0, tariffs: ['econom', 'intercity', 'comfort', 'comfort_plus', 'business'] },
+  { id: 'aktau', name: 'Актау', offset: -1, tariffs: ['econom', 'intercity', 'comfort', 'comfort_plus'] },
+  { id: 'temirtau', name: 'Темиртау', offset: -2, tariffs: ['econom', 'intercity', 'comfort'] },
+  { id: 'turkestan', name: 'Туркестан', offset: -3, tariffs: ['econom', 'intercity', 'comfort'] },
+  { id: 'kokshetau', name: 'Кокшетау', offset: -2, tariffs: ['econom', 'intercity', 'comfort'] },
+  { id: 'taldykorgan', name: 'Талдыкорган', offset: -2, tariffs: ['econom', 'intercity', 'comfort'] },
+  { id: 'rudny', name: 'Рудный', offset: -3, tariffs: ['econom', 'intercity', 'comfort'] },
+  { id: 'ekibastuz', name: 'Экибастуз', offset: -3, tariffs: ['econom', 'intercity', 'comfort'] },
 ];
 
 export const TARIFFS: Tariff[] = [

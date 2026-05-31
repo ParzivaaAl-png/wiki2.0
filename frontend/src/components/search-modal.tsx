@@ -383,7 +383,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                 Этот автомобиль не поддерживается тарифами в г. {selectedCity.name}
               </div>
             ) : (
-              TARIFFS.map(t => {
+              TARIFFS.filter(t => selectedCity.tariffs.includes(t.key)).map(t => {
                 const res = statuses[t.key];
                 if (!res) return null;
                 const hasWarning = !!res.warning;
