@@ -19,7 +19,9 @@ import {
   CAR_DATA, 
   getCarStatus, 
   BRANDS,
-  City
+  City,
+  getSavedCityId,
+  saveCityId
 } from '../lib/classifier-data';
 
 interface TariffAccordionProps {
@@ -151,7 +153,7 @@ function TariffAccordion({ tariff, selectedCity, isOpen, onToggle }: TariffAccor
 }
 
 export default function TariffsClassifier() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   
   // Read URL params for pre-filling from search modal
   const paramBrand = searchParams.get('brand') || '';
@@ -159,7 +161,17 @@ export default function TariffsClassifier() {
   const paramYear = searchParams.get('year');
   const paramCity = searchParams.get('city');
   
-  const initialCity = (paramCity && CITIES.find(c => c.id === paramCity)) || CITIES[0];
+  const initialCity = React.useMemo(() => {
+    if (paramCity) {
+      const city = CITIES.find(c => c.id === paramCity);
+      if (city) {
+        saveCityId(city.id); // sync to localStorage
+        return city;
+      }
+    }
+    const savedId = getSavedCityId();
+    return CITIES.find(c => c.id === savedId) || CITIES[0];
+  }, [paramCity]);
   
   const [selectedCity, setSelectedCity] = React.useState<City>(initialCity);
   const [selectedBrand, setSelectedBrand] = React.useState(paramBrand);
@@ -170,6 +182,24 @@ export default function TariffsClassifier() {
   
   // Accordion states: we can track which index/key is open
   const [openAccordion, setOpenAccordion] = React.useState<string | null>(TARIFFS[0].key);
+
+  // Sync state to URL if query param is not set
+  React.useEffect(() => {
+    if (!searchParams.has('city')) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set('city', initialCity.id);
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, initialCity.id, setSearchParams]);
+
+  // Sync state to local storage and URL when city is selected
+  const handleCitySelect = (city: City) => {
+    setSelectedCity(city);
+    saveCityId(city.id);
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('city', city.id);
+    setSearchParams(newParams, { replace: true });
+  };
 
   const availableModels = React.useMemo(() => {
     if (!selectedBrand) return [];
@@ -492,7 +522,7 @@ export default function TariffsClassifier() {
                             <button
                               key={city.id}
                               onClick={() => {
-                                setSelectedCity(city);
+                                handleCitySelect(city);
                                 setIsCityDrawerOpen(false);
                                 setCitySearchQuery('');
                               }}

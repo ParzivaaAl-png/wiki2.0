@@ -1626,3 +1626,19 @@ export function findCarMatch(queryText: string) {
 
   return null;
 }
+
+export function getSavedCityId(): string {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('yandex-pro-selected-city');
+    if (saved && CITIES.some(c => c.id === saved)) {
+      return saved;
+    }
+  }
+  return CITIES[0].id;
+}
+
+export function saveCityId(cityId: string) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('yandex-pro-selected-city', cityId);
+  }
+}

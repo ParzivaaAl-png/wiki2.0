@@ -12,6 +12,20 @@ import {
 } from 'lucide-react';
 import { fetchArticle, Article as ArticleType } from '../lib/api';
 import TariffsClassifier from '../components/tariffs-classifier';
+import TariffDetails from '../components/tariff-details';
+
+const getTariffKeyFromSlug = (slug: string): string | null => {
+  switch (slug) {
+    case 'auto-list-эконом': return 'econom';
+    case 'auto-list-межгород': return 'intercity';
+    case 'auto-list-комфорт': return 'comfort';
+    case 'auto-list-комфорт-plus': return 'comfort_plus';
+    case 'auto-list-электро': return 'electro';
+    case 'auto-list-бизнес': return 'business';
+    case 'auto-list-ultima-тариф-premier': return 'ultima';
+    default: return null;
+  }
+};
 
 export default function ArticlePage() {
   const { slug } = useParams<{ slug: string }>();
@@ -187,16 +201,23 @@ export default function ArticlePage() {
             </div>
           )}
 
-          {article.slug === 'auto-list' ? (
-            <TariffsClassifier />
-          ) : (
-            <ReactMarkdown 
-              remarkPlugins={[remarkGfm]} 
-              components={MarkdownComponents}
-            >
-              {article.content}
-            </ReactMarkdown>
-          )}
+          {(() => {
+            if (article.slug === 'auto-list') {
+              return <TariffsClassifier />;
+            }
+            const tariffKey = getTariffKeyFromSlug(article.slug);
+            if (tariffKey) {
+              return <TariffDetails tariffKey={tariffKey} />;
+            }
+            return (
+              <ReactMarkdown 
+                remarkPlugins={[remarkGfm]} 
+                components={MarkdownComponents}
+              >
+                {article.content}
+              </ReactMarkdown>
+            );
+          })()}
         </article>
       </div>
 
