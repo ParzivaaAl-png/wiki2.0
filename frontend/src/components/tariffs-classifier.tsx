@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   MapPin, 
   Sliders, 
@@ -150,10 +151,20 @@ function TariffAccordion({ tariff, selectedCity, isOpen, onToggle }: TariffAccor
 }
 
 export default function TariffsClassifier() {
-  const [selectedCity, setSelectedCity] = React.useState<City>(CITIES[0]); // defaults to Almaty
-  const [selectedBrand, setSelectedBrand] = React.useState('');
-  const [selectedModel, setSelectedModel] = React.useState('');
-  const [selectedYear, setSelectedYear] = React.useState<number | ''>('');
+  const [searchParams] = useSearchParams();
+  
+  // Read URL params for pre-filling from search modal
+  const paramBrand = searchParams.get('brand') || '';
+  const paramModel = searchParams.get('model') || '';
+  const paramYear = searchParams.get('year');
+  const paramCity = searchParams.get('city');
+  
+  const initialCity = (paramCity && CITIES.find(c => c.id === paramCity)) || CITIES[0];
+  
+  const [selectedCity, setSelectedCity] = React.useState<City>(initialCity);
+  const [selectedBrand, setSelectedBrand] = React.useState(paramBrand);
+  const [selectedModel, setSelectedModel] = React.useState(paramModel);
+  const [selectedYear, setSelectedYear] = React.useState<number | ''>(paramYear ? Number(paramYear) : '');
   const [isCityDrawerOpen, setIsCityDrawerOpen] = React.useState(false);
   const [citySearchQuery, setCitySearchQuery] = React.useState('');
   

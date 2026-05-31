@@ -422,7 +422,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
 
         <div className="pt-2 border-t border-neutral-200 dark:border-neutral-800 shrink-0">
           <Link 
-            to="/categories/tariffs"
+            to={`/articles/auto-list?brand=${encodeURIComponent(selectedCar?.brand || '')}&model=${encodeURIComponent(selectedCar?.model || '')}&year=${selectedYear}&city=${selectedCity.id}`}
             onClick={() => {
               setIsOpen(false);
               setIsFocused(false);
