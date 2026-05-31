@@ -11,6 +11,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { fetchArticle, Article as ArticleType } from '../lib/api';
+import TariffsClassifier from '../components/tariffs-classifier';
 
 export default function ArticlePage() {
   const { slug } = useParams<{ slug: string }>();
@@ -186,12 +187,16 @@ export default function ArticlePage() {
             </div>
           )}
 
-          <ReactMarkdown 
-            remarkPlugins={[remarkGfm]} 
-            components={MarkdownComponents}
-          >
-            {article.content}
-          </ReactMarkdown>
+          {article.slug === 'auto-list' ? (
+            <TariffsClassifier />
+          ) : (
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm]} 
+              components={MarkdownComponents}
+            >
+              {article.content}
+            </ReactMarkdown>
+          )}
         </article>
       </div>
 

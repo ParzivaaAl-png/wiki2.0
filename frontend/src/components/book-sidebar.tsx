@@ -68,7 +68,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
 
   // Filter articles based on search query
   const filteredArticles = React.useMemo(() => {
-    let result = articles;
+    let result = articles.filter(art => !art.slug.startsWith('auto-list-'));
     
     // For regular users, only show visible and published articles
     if (!canEdit) {

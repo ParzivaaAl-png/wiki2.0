@@ -38,9 +38,8 @@ export default function Home() {
   const loadData = React.useCallback(async () => {
     try {
       const isStaff = user && (user.role === 'Admin' || user.role === 'Editor');
-      // Fetch all articles (including hidden/archived if Editor/Admin)
       const arts = await fetchArticles({ all: isStaff ? true : false });
-      setAllArticles(arts);
+      setAllArticles(arts.filter(art => !art.slug.startsWith('auto-list-')));
 
       if (user) {
         const favs = await fetchFavoriteArticles();
