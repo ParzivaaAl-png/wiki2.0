@@ -89,7 +89,7 @@ const startServer = async () => {
       slug: art.slug,
       content: art.content,
       summary: art.summary,
-      categoryName: art.category_slug || '',
+      categoryName: '',
       tags: art.tags,
       published: art.published,
       createdAt: art.created_at instanceof Date ? art.created_at.toISOString() : new Date(art.created_at).toISOString(),

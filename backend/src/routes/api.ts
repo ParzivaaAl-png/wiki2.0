@@ -5,7 +5,6 @@ import fs from 'fs';
 import rateLimit from 'express-rate-limit';
 
 import * as articlesController from '../controllers/articles';
-import * as categoriesController from '../controllers/categories';
 import * as authController from '../controllers/auth';
 import { requireAuth, requireRole } from '../middleware/auth';
 
@@ -72,13 +71,7 @@ router.put('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), artic
 router.delete('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.deleteArticle);
 router.post('/articles/reorder', requireAuth, requireRole(['Admin', 'Editor']), articlesController.reorderArticles);
 
-// Category routes (Read-only for public, writes protected)
-router.get('/categories', categoriesController.getCategories);
-router.get('/categories/:idOrSlug', categoriesController.getCategory);
-router.post('/categories', requireAuth, requireRole(['Admin', 'Editor']), categoriesController.createCategory);
-router.post('/categories/reorder', requireAuth, requireRole(['Admin', 'Editor']), categoriesController.reorderCategories);
-router.put('/categories/:id', requireAuth, requireRole(['Admin', 'Editor']), categoriesController.updateCategory);
-router.delete('/categories/:id', requireAuth, requireRole(['Admin']), categoriesController.deleteCategory);
+
 
 // Image/File upload & import route
 router.post('/upload', requireAuth, requireRole(['Admin', 'Editor']), upload.single('image'), articlesController.uploadImage);

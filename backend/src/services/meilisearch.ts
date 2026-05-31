@@ -202,7 +202,7 @@ export const syncIfNeeded = async () => {
           slug: art.slug,
           content: art.content,
           summary: art.summary,
-          categoryName: art.category_slug || '',
+          categoryName: '',
           tags: art.tags,
           published: art.published,
           createdAt: art.created_at instanceof Date ? art.created_at.toISOString() : new Date(art.created_at).toISOString(),
@@ -223,21 +223,21 @@ export const triggerFullSync = async () => {
   try {
     console.log('Starting full re-sync of all articles to Meilisearch...');
     const dbArticles = await ArticleModel.getAllArticles({ publishedOnly: false });
-    
+
     const docs: ArticleDocument[] = dbArticles.map((art) => ({
       id: art.id,
       title: art.title,
       slug: art.slug,
       content: art.content,
       summary: art.summary,
-      categoryName: art.category_slug || '',
+      categoryName: '',
       tags: art.tags,
       published: art.published,
       createdAt: art.created_at instanceof Date ? art.created_at.toISOString() : new Date(art.created_at).toISOString(),
     }));
 
     await msClient.index(INDEX_NAME).deleteAllDocuments();
-    
+
     if (docs.length > 0) {
       await bulkSyncArticles(docs);
     }
@@ -255,7 +255,7 @@ const extractHighlights = (formattedContent: string, maxFragments = 3): string[]
   if (!formattedContent) return [];
 
   const markTagOpen = '<mark class="bg-indigo-500/20 text-indigo-200 px-1 rounded font-semibold">';
-  
+
   // Split content by block-level elements or paragraph tags
   const blocks = formattedContent.split(/(?:<\/p>|<\/div>|<br\s*\/?>|<\/li>|<\/h[1-6]>)/gi);
   const matchedSnippets: string[] = [];
