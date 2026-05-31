@@ -408,3 +408,68 @@ export const getUserHistory = async (req: AuthenticatedRequest, res: Response) =
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 };
+
+export const getFavoriteArticles = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    const userId = req.user.id;
+    
+    const favsRes = await query(
+      `SELECT a.*, u.name as author_name,
+              COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+       FROM user_favorite_articles fa
+       JOIN articles a ON fa.article_id = a.id
+       LEFT JOIN users u ON a.author_id = u.id
+       LEFT JOIN article_tags t ON a.id = t.article_id
+       WHERE fa.user_id = $1 AND a.is_visible = true
+       GROUP BY a.id, fa.position, u.name
+       ORDER BY fa.position ASC`,
+      [userId]
+    );
+    res.json(favsRes.rows);
+  } catch (error: any) {
+    console.error('Error fetching favorites:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const setFavoriteArticles = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    const userId = req.user.id;
+    const { articleIds } = req.body; // array of numbers
+    
+    if (!articleIds || !Array.isArray(articleIds)) {
+      return res.status(400).json({ error: 'articleIds array is required.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Delete existing favorites
+      await client.query('DELETE FROM user_favorite_articles WHERE user_id = $1', [userId]);
+      
+      // Insert new favorites
+      if (articleIds.length > 0) {
+        for (let i = 0; i < articleIds.length; i++) {
+          await client.query(
+            'INSERT INTO user_favorite_articles (user_id, article_id, position) VALUES ($1, $2, $3)',
+            [userId, Number(articleIds[i]), i]
+          );
+        }
+      }
+      
+      await client.query('COMMIT');
+      res.json({ message: 'Favorites updated successfully' });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (error: any) {
+    console.error('Error setting favorites:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};

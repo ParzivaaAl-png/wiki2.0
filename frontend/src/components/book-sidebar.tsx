@@ -1,11 +1,9 @@
 import * as React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, BookOpen, X, Search, Sparkles, Home, ShieldAlert, Plus, Edit2, Check } from 'lucide-react';
-import { fetchCategories, updateCategory, reorderCategories, Category } from '../lib/api';
-import { CategoryIcon } from './icon';
+import { ChevronRight, BookOpen, X, Search, Sparkles, Home, ShieldAlert, Plus, Check, FileText, EyeOff } from 'lucide-react';
+import { fetchArticles, updateArticle, reorderArticles, Article } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
-import AddSectionModal from './add-section-modal';
 
 interface BookSidebarProps {
   isOpen: boolean;
@@ -31,27 +29,30 @@ const line3Variants = {
 
 export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   
-  const [categories, setCategories] = React.useState<Category[]>([]);
+  const [articles, setArticles] = React.useState<Article[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
 
   // Edit Mode States
   const [isEditMode, setIsEditMode] = React.useState(false);
-  const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
   const [draggedId, setDraggedId] = React.useState<number | null>(null);
+
+  const canEdit = !!(user && (user.role === 'Admin' || user.role === 'Editor'));
 
   const loadData = React.useCallback(async () => {
     try {
-      const catsData = await fetchCategories();
-      setCategories(catsData);
+      // Editors and Admins see drafts and hidden articles in sidebar when they edit
+      const artsData = await fetchArticles({ all: canEdit });
+      setArticles(artsData);
     } catch (err) {
       console.error('Failed to load BookSidebar data:', err);
     }
-  }, []);
+  }, [canEdit]);
 
-  // Fetch categories when open
+  // Fetch articles when open
   React.useEffect(() => {
     if (!isOpen) return;
     setIsLoading(true);
@@ -62,22 +63,28 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
   React.useEffect(() => {
     if (!isOpen) {
       setIsEditMode(false);
-      setIsAddModalOpen(false);
     }
   }, [isOpen]);
 
-  // Filter categories based on search query
-  const filteredCategories = React.useMemo(() => {
-    if (!searchQuery.trim()) return categories;
-    const query = searchQuery.toLowerCase();
-    return categories.filter(cat =>
-      cat.name.toLowerCase().includes(query) || (cat.description || '').toLowerCase().includes(query)
-    );
-  }, [searchQuery, categories]);
+  // Filter articles based on search query
+  const filteredArticles = React.useMemo(() => {
+    let result = articles;
+    
+    // For regular users, only show visible and published articles
+    if (!canEdit) {
+      result = result.filter(art => art.is_visible !== false && art.published);
+    }
 
-  // Determine active category from URL
-  const activeCategorySlug = React.useMemo(() => {
-    const match = location.pathname.match(/^\/categories\/([^/]+)/);
+    if (!searchQuery.trim()) return result;
+    const query = searchQuery.toLowerCase();
+    return result.filter(art =>
+      art.title.toLowerCase().includes(query) || (art.summary || '').toLowerCase().includes(query)
+    );
+  }, [searchQuery, articles, canEdit]);
+
+  // Determine active article from URL
+  const activeArticleSlug = React.useMemo(() => {
+    const match = location.pathname.match(/^\/articles\/([^/]+)/);
     return match ? match[1] : null;
   }, [location.pathname]);
 
@@ -120,26 +127,26 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
   const handleDrop = async (e: React.DragEvent, targetId: number) => {
     if (!isEditMode || draggedId === null || draggedId === targetId) return;
 
-    const draggedIdx = categories.findIndex(c => c.id === draggedId);
-    const targetIdx = categories.findIndex(c => c.id === targetId);
+    const draggedIdx = articles.findIndex(a => a.id === draggedId);
+    const targetIdx = articles.findIndex(a => a.id === targetId);
 
     if (draggedIdx !== -1 && targetIdx !== -1) {
-      const updated = [...categories];
+      const updated = [...articles];
       const [draggedItem] = updated.splice(draggedIdx, 1);
       updated.splice(targetIdx, 0, draggedItem);
 
-      const reordered = updated.map((cat, index) => ({
-        ...cat,
+      const reordered = updated.map((art, index) => ({
+        ...art,
         position: index + 1
       }));
 
-      setCategories(reordered);
+      setArticles(reordered);
 
       try {
-        const payload = reordered.map(c => ({ id: c.id, position: c.position }));
-        await reorderCategories(payload);
+        const payload = reordered.map(a => ({ id: a.id, position: a.position }));
+        await reorderArticles(payload);
       } catch (err) {
-        console.error('Failed to save category order in sidebar:', err);
+        console.error('Failed to save article order in sidebar:', err);
       }
     }
   };
@@ -148,27 +155,29 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
     setDraggedId(null);
   };
 
-  // Archive / Soft Delete Category
-  const handleArchiveCategory = async (e: React.MouseEvent, cat: Category) => {
+  // Archive / Soft Delete Article (sets is_visible = false)
+  const handleArchiveArticle = async (e: React.MouseEvent, art: Article) => {
     e.preventDefault();
     e.stopPropagation();
 
-    const confirmed = window.confirm(`Вы уверены, что хотите скрыть раздел "${cat.name}"? Раздел пропадет из навигации, но его можно будет восстановить из архива в админ-панели.`);
+    const confirmed = window.confirm(`Вы уверены, что хотите скрыть статью "${art.title}"? Статья будет перемещена в архив.`);
     if (!confirmed) return;
 
     try {
-      await updateCategory(cat.id, {
-        name: cat.name,
-        slug: cat.slug,
-        icon: cat.icon || 'layout',
-        description: cat.description || '',
-        position: cat.position || 0,
-        is_visible: false,
-        color: cat.color || '#6366f1',
+      await updateArticle(art.id, {
+        title: art.title,
+        slug: art.slug,
+        content: art.content,
+        summary: art.summary || '',
+        category_id: null,
+        published: art.published,
+        tags: art.tags || [],
+        position: art.position || 0,
+        is_visible: false
       });
       await loadData();
     } catch (err) {
-      console.error('Failed to archive category from sidebar:', err);
+      console.error('Failed to archive article from sidebar:', err);
     }
   };
 
@@ -177,7 +186,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
     hidden: { opacity: 0 },
     visible: { 
       opacity: 1,
-      transition: { staggerChildren: 0.04 }
+      transition: { staggerChildren: 0.03 }
     }
   };
 
@@ -189,8 +198,6 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
       transition: { type: 'spring', stiffness: 150, damping: 18 }
     }
   };
-
-  const canEdit = user && (user.role === 'Admin' || user.role === 'Editor');
 
   return (
     <>
@@ -283,7 +290,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
                 <input
                   type="text"
-                  placeholder="Поиск разделов..."
+                  placeholder="Поиск статей..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   disabled={isEditMode}
@@ -326,22 +333,22 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
               </>
             )}
 
-            {/* Category List */}
+            {/* Articles List */}
             <div className="flex-1 overflow-y-auto px-4 py-3 pl-6 custom-scrollbar">
               <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-450 dark:text-neutral-500 px-3 mb-2 select-none">
-                {isEditMode ? 'Режим редактирования' : 'Разделы базы знаний'}
+                {isEditMode ? 'Режим редактирования' : 'Статьи базы знаний'}
               </div>
               
               {isLoading ? (
                 <div className="flex flex-col gap-3 py-2 animate-pulse">
-                  {[1, 2, 3, 4, 5].map(n => (
-                    <div key={n} className="h-14 bg-neutral-200 dark:bg-neutral-800/60 rounded-xl" />
+                  {[1, 2, 3, 4, 5, 6].map(n => (
+                    <div key={n} className="h-10 bg-neutral-200 dark:bg-neutral-800/60 rounded-xl" />
                   ))}
                 </div>
-              ) : filteredCategories.length === 0 ? (
+              ) : filteredArticles.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Sparkles className="w-8 h-8 text-neutral-300 dark:text-neutral-700 mb-3 animate-pulse" />
-                  <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">Ничего не найдено</p>
+                  <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">Статей не найдено</p>
                 </div>
               ) : (
                 <motion.nav 
@@ -350,24 +357,25 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                   animate="visible"
                   className="space-y-1.5"
                 >
-                  {filteredCategories.map((cat) => {
-                    const isActive = activeCategorySlug === cat.slug;
-                    const isBeingDragged = cat.id === draggedId;
-                    const borderAccentColor = cat.color || '#6366f1';
-
+                  {filteredArticles.map((art) => {
+                    const isActive = activeArticleSlug === art.slug;
+                    const isBeingDragged = art.id === draggedId;
+                    const isHidden = art.is_visible === false;
+                    const isDraft = !art.published;
+                    
                     return (
                       <motion.div 
-                        key={cat.id} 
+                        key={art.id} 
                         variants={itemVariants}
                         draggable={isEditMode}
-                        onDragStart={(e) => handleDragStart(e as any, cat.id)}
-                        onDragOver={(e) => handleDragOver(e, cat.id)}
-                        onDrop={(e) => handleDrop(e, cat.id)}
+                        onDragStart={(e) => handleDragStart(e as any, art.id)}
+                        onDragOver={(e) => handleDragOver(e, art.id)}
+                        onDrop={(e) => handleDrop(e, art.id)}
                         onDragEnd={handleDragEnd}
                         className={isBeingDragged ? 'opacity-40 scale-95 border-dashed' : ''}
                       >
                         <Link
-                          to={isEditMode ? '#' : `/categories/${cat.slug}`}
+                          to={isEditMode ? '#' : `/articles/${art.slug}`}
                           onClick={(e) => {
                             if (isEditMode) {
                               e.preventDefault();
@@ -376,17 +384,13 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                               onClose();
                             }
                           }}
-                          style={{
-                            borderColor: isEditMode ? borderAccentColor : undefined,
-                            boxShadow: isEditMode ? `0 0 8px ${borderAccentColor}15` : undefined
-                          }}
-                          className={`group relative flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition-all border ${
+                          className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all border ${
                             isEditMode
-                              ? 'border-2 cursor-grab active:cursor-grabbing hover:scale-[1.01]'
+                              ? 'border-neutral-300 dark:border-neutral-800 hover:border-indigo-500/40 bg-white/40 dark:bg-neutral-900/40 cursor-grab active:cursor-grabbing hover:scale-[1.01]'
                               : isActive
                                 ? 'bg-indigo-500/10 dark:bg-indigo-500/10 border-indigo-500/20 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-semibold shadow-sm'
                                 : 'text-neutral-700 dark:text-neutral-300 hover:bg-white/50 dark:hover:bg-neutral-950/30 hover:text-neutral-950 dark:hover:text-white border-transparent hover:translate-x-0.5 hover:scale-[1.01]'
-                          }`}
+                          } ${isHidden || isDraft ? 'opacity-60' : ''}`}
                         >
                           {/* Active indicator */}
                           {!isEditMode && (
@@ -398,30 +402,33 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                           {/* iPhone-like red deletion button on left of icon */}
                           {isEditMode && (
                             <button
-                              onClick={(e) => handleArchiveCategory(e, cat)}
-                              className="w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center cursor-pointer shrink-0 shadow-sm border border-white dark:border-neutral-900 active:scale-90 transition-transform z-10"
-                              title="Скрыть раздел"
+                              onClick={(e) => handleArchiveArticle(e, art)}
+                              className="w-5 h-5 rounded-full bg-red-500 hover:bg-red-650 text-white flex items-center justify-center cursor-pointer shrink-0 shadow-sm border border-white dark:border-neutral-900 active:scale-90 transition-transform z-10"
+                              title="Скрыть статью"
                             >
                               <span className="w-2 h-[2px] bg-white rounded-full" />
                             </button>
                           )}
 
-                          {/* Category Icon */}
-                          <div 
-                            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors border"
-                            style={{
-                              backgroundColor: `${borderAccentColor}10`,
-                              borderColor: `${borderAccentColor}20`,
-                              color: borderAccentColor
-                            }}
-                          >
-                            <CategoryIcon name={cat.icon} className="w-4 h-4" />
+                          {/* Article File Icon */}
+                          <div className="w-7 h-7 rounded-lg bg-neutral-200/50 dark:bg-neutral-800/50 text-neutral-500 dark:text-neutral-450 flex items-center justify-center shrink-0 border border-neutral-200/30 dark:border-neutral-800/30">
+                            {isHidden ? (
+                              <EyeOff className="w-3.5 h-3.5 text-neutral-400" />
+                            ) : (
+                              <FileText className="w-3.5 h-3.5" />
+                            )}
                           </div>
 
-                          {/* Category Info */}
+                          {/* Article Title */}
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-xs truncate">{cat.name}</div>
-                            <div className="text-[10px] text-neutral-450 dark:text-neutral-550 mt-0.5 truncate">{cat.description}</div>
+                            <div className="font-semibold text-xs truncate flex items-center gap-1.5">
+                              <span>{art.title}</span>
+                              {isDraft && (
+                                <span className="text-[8px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1 rounded scale-90">
+                                  Черновик
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {!isEditMode && (
@@ -434,16 +441,19 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                     );
                   })}
                   
-                  {/* Dashed Plus Slot for adding new section in Sidebar (Edit Mode only) */}
+                  {/* Dashed Plus Slot for adding new Article in Sidebar (Edit Mode only) */}
                   {isEditMode && (
                     <motion.div
                       whileHover={{ scale: 1.01, x: 2 }}
-                      onClick={() => setIsAddModalOpen(true)}
-                      className="group cursor-pointer flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-indigo-500/40 bg-indigo-500/[0.01] hover:bg-indigo-500/[0.04] hover:border-indigo-500/80 transition-all select-none"
+                      onClick={() => {
+                        onClose();
+                        navigate('/admin/editor/new');
+                      }}
+                      className="group cursor-pointer flex items-center justify-center gap-2 p-2.5 rounded-xl border-2 border-dashed border-indigo-500/40 bg-indigo-500/[0.01] hover:bg-indigo-500/[0.04] hover:border-indigo-500/80 transition-all select-none"
                     >
                       <Plus className="w-4 h-4 text-indigo-500/65 group-hover:text-indigo-500 transition-colors animate-pulse" />
                       <span className="text-[11px] font-bold text-indigo-500/65 group-hover:text-indigo-500 uppercase tracking-wider">
-                        Добавить раздел
+                        Добавить статью
                       </span>
                     </motion.div>
                   )}
@@ -458,14 +468,6 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Add Section Wizard Modal */}
-      {isAddModalOpen && (
-        <AddSectionModal 
-          onClose={() => setIsAddModalOpen(false)}
-          onSuccess={loadData}
-        />
-      )}
     </>
   );
 }

@@ -7,12 +7,12 @@ import { AuthenticatedRequest } from '../middleware/auth';
 
 export const getArticles = async (req: Request, res: Response) => {
   try {
-    const { category, tag, all } = req.query;
+    const { tag, all } = req.query;
     
     const articles = await ArticleModel.getAllArticles({
       publishedOnly: all === 'true' ? false : true,
-      categorySlug: category as string,
       tag: tag as string,
+      all: all === 'true',
     });
     
     res.json(articles);
@@ -51,7 +51,7 @@ export const getArticle = async (req: Request, res: Response) => {
 
 export const createArticle = async (req: Request, res: Response) => {
   try {
-    const { title, slug, content, summary, category_id, published, tags, position } = req.body;
+    const { title, slug, content, summary, published, tags, position, is_visible } = req.body;
     
     if (!title || !slug || !content) {
       return res.status(400).json({ error: 'Title, slug, and content are required fields.' });
@@ -62,21 +62,22 @@ export const createArticle = async (req: Request, res: Response) => {
       slug,
       content,
       summary: summary || '',
-      category_id: category_id ? Number(category_id) : null,
+      category_id: null,
       published: published === undefined ? true : !!published,
+      is_visible: is_visible === undefined ? true : !!is_visible,
       tags: tags || [],
       position: position !== undefined ? Number(position) : 0,
     });
 
     // Auto-index to Meilisearch
-    if (article.published) {
+    if (article.published && article.is_visible) {
       const doc: msService.ArticleDocument = {
         id: article.id,
         title: article.title,
         slug: article.slug,
         content: article.content,
         summary: article.summary,
-        categoryName: article.category_slug || '',
+        categoryName: '',
         tags: article.tags,
         published: article.published,
         createdAt: article.created_at.toISOString(),
@@ -97,7 +98,7 @@ export const createArticle = async (req: Request, res: Response) => {
 export const updateArticle = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, slug, content, summary, category_id, published, tags, position } = req.body;
+    const { title, slug, content, summary, published, tags, position, is_visible } = req.body;
 
     if (!title || !slug || !content) {
       return res.status(400).json({ error: 'Title, slug, and content are required.' });
@@ -108,8 +109,9 @@ export const updateArticle = async (req: Request, res: Response) => {
       slug,
       content,
       summary: summary || '',
-      category_id: category_id ? Number(category_id) : null,
+      category_id: null,
       published: published === undefined ? true : !!published,
+      is_visible: is_visible === undefined ? true : !!is_visible,
       tags: tags || [],
       position: position !== undefined ? Number(position) : 0,
     });
@@ -118,15 +120,15 @@ export const updateArticle = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Article not found' });
     }
 
-    // Auto-index or delete from Meilisearch depending on published status
-    if (article.published) {
+    // Auto-index or delete from Meilisearch depending on published and visible status
+    if (article.published && article.is_visible) {
       const doc: msService.ArticleDocument = {
         id: article.id,
         title: article.title,
         slug: article.slug,
         content: article.content,
         summary: article.summary,
-        categoryName: article.category_slug || '',
+        categoryName: '',
         tags: article.tags,
         published: article.published,
         createdAt: article.created_at.toISOString(),
@@ -135,9 +137,9 @@ export const updateArticle = async (req: Request, res: Response) => {
         console.error('Failed to update Meilisearch index for article:', err)
       );
     } else {
-      // If unpublished, make sure it is removed from index
+      // If unpublished or hidden, make sure it is removed from index
       msService.deleteArticle(article.id).catch(err =>
-        console.error('Failed to remove unpublished article from Meilisearch:', err)
+        console.error('Failed to remove article from Meilisearch:', err)
       );
     }
 
@@ -294,5 +296,23 @@ export const reindexAndClearCache = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error clearing cache/syncing Meilisearch:', error);
     res.status(500).json({ error: 'Failed to reindex', details: error.message });
+  }
+};
+
+export const reorderArticles = async (req: Request, res: Response) => {
+  try {
+    const { orders } = req.body; // array of { id: number, position: number }
+    if (!orders || !Array.isArray(orders)) {
+      return res.status(400).json({ error: 'Orders array is required.' });
+    }
+
+    for (const item of orders) {
+      await ArticleModel.updateArticlePosition(Number(item.id), Number(item.position));
+    }
+
+    res.json({ message: 'Articles reordered successfully' });
+  } catch (error: any) {
+    console.error('Error reordering articles:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 };

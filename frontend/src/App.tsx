@@ -12,7 +12,6 @@ import { BookSidebar } from './components/book-sidebar';
 // Import Pages
 import Home from './pages/Home';
 import ArticlePage from './pages/Article';
-import CategoryPage from './pages/Category';
 import AdminPage from './pages/Admin';
 import EditorPage from './pages/Editor';
 import LoginPage from './pages/Login';
@@ -188,16 +187,7 @@ function AppContent() {
                 </ProtectedRoute>
               } 
             />
-            <Route 
-              path="/categories/:slug" 
-              element={
-                <ProtectedRoute>
-                  <AnimatedPage>
-                    <CategoryPage />
-                  </AnimatedPage>
-                </ProtectedRoute>
-              } 
-            />
+
             
             {/* Protected Admin/Editor Routes */}
             <Route 

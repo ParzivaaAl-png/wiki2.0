@@ -15,21 +15,18 @@ import {
   FileText,
   ChevronDown
 } from 'lucide-react';
-import { Article, Category } from '../lib/api';
-import { CategoryIcon } from './icon';
+import { Article } from '../lib/api';
 
 interface PreviewModalProps {
   article?: Article | null;
-  category?: Category | null;
-  categories: Category[];
+  category?: any;
+  categories?: any[];
   articles: Article[];
   onClose: () => void;
 }
 
 export default function PreviewModal({ 
   article, 
-  category, 
-  categories, 
   articles, 
   onClose 
 }: PreviewModalProps) {
@@ -39,21 +36,11 @@ export default function PreviewModal({
   const mockUrl = React.useMemo(() => {
     const base = 'https://wiki2-frontend.vercel.app';
     if (article) return `${base}/articles/${article.slug}`;
-    if (category) return `${base}/categories/${category.slug}`;
     return base;
-  }, [article, category]);
+  }, [article]);
 
   // Group articles by category for article sidebar preview
-  const articlesByCategory = React.useMemo(() => {
-    const map: Record<string, Article[]> = {};
-    articles.forEach(art => {
-      if (art.category_slug) {
-        if (!map[art.category_slug]) map[art.category_slug] = [];
-        map[art.category_slug].push(art);
-      }
-    });
-    return map;
-  }, [articles]);
+
 
   // Parse headings for table of contents in preview
   const headings = React.useMemo(() => {
@@ -75,10 +62,7 @@ export default function PreviewModal({
     return list;
   }, [article]);
 
-  const categoryArticles = React.useMemo(() => {
-    if (!category) return [];
-    return articles.filter(art => art.category_id === category.id && art.published);
-  }, [category, articles]);
+
 
   const MarkdownComponents = {
     h2: ({ children, ...props }: any) => {
@@ -215,28 +199,19 @@ export default function PreviewModal({
                         <span>Вики-документация</span>
                       </div>
                       
-                      <nav className="space-y-1.5 text-xs">
-                        {categories.map(cat => {
-                          const isCurrentCat = article.category_id === cat.id;
-                          const catArticles = articlesByCategory[cat.slug] || [];
+                      <nav className="space-y-1 text-xs max-h-[350px] overflow-y-auto pr-1">
+                        {articles.filter(art => art.is_visible !== false && art.published).map(art => {
+                          const isCurrent = article?.id === art.id;
                           return (
-                            <div key={cat.id} className="space-y-1">
-                              <div className={`flex items-center justify-between p-1.5 rounded font-medium ${isCurrentCat ? 'text-indigo-500 font-bold bg-indigo-500/5' : 'text-neutral-500'}`}>
-                                <div className="flex items-center gap-1 text-[11px] truncate">
-                                  <CategoryIcon name={cat.icon} className="w-3.5 h-3.5 opacity-60" />
-                                  <span className="truncate">{cat.name}</span>
-                                </div>
-                                <span className="text-[9px] bg-neutral-100 dark:bg-neutral-900 text-neutral-400 px-1 py-0.2 rounded">{catArticles.length}</span>
-                              </div>
-                              {isCurrentCat && (
-                                <div className="pl-4 border-l border-neutral-100 dark:border-neutral-900 ml-3 space-y-1">
-                                  {catArticles.map(art => (
-                                    <div key={art.id} className={`p-1 rounded text-[10px] truncate ${art.id === article.id ? 'text-indigo-500 font-semibold bg-indigo-500/5' : 'text-neutral-400'}`}>
-                                      {art.title}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                            <div
+                              key={art.id}
+                              className={`p-1.5 rounded text-[10px] truncate ${
+                                isCurrent
+                                  ? 'text-indigo-500 font-bold bg-indigo-500/5'
+                                  : 'text-neutral-500'
+                              }`}
+                            >
+                              {art.title}
                             </div>
                           );
                         })}
@@ -251,12 +226,6 @@ export default function PreviewModal({
                     <div className="flex items-center gap-1 text-[10px] text-neutral-400 mb-4 select-none overflow-x-auto whitespace-nowrap">
                       <span>Главная</span>
                       <ChevronRight className="w-2.5 h-2.5 shrink-0" />
-                      {article.category_name && (
-                        <>
-                          <span className="truncate max-w-[80px]">{article.category_name}</span>
-                          <ChevronRight className="w-2.5 h-2.5 shrink-0" />
-                        </>
-                      )}
                       <span className="text-neutral-600 dark:text-neutral-300 truncate max-w-[120px] font-semibold">{article.title}</span>
                     </div>
 
@@ -334,64 +303,7 @@ export default function PreviewModal({
                 </div>
               )}
 
-              {category && (
-                <div className="max-w-3xl mx-auto px-4 py-8">
-                  {/* Category Header Card */}
-                  <div className="flex items-start gap-4 p-5 rounded-xl border border-neutral-250 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-md mb-8">
-                    <div className="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-500 flex items-center justify-center border border-indigo-500/20 shrink-0">
-                      <CategoryIcon name={category.icon} className="w-5.5 h-5.5" />
-                    </div>
-                    <div>
-                      <h1 className="font-outfit text-xl font-extrabold text-neutral-950 dark:text-white leading-tight">
-                        {category.name}
-                      </h1>
-                      <p className="text-neutral-500 dark:text-neutral-400 text-xs mt-1 font-light leading-relaxed">
-                        {category.description}
-                      </p>
-                      <span className="inline-block mt-3 text-[9px] font-semibold text-neutral-400 uppercase tracking-wider bg-neutral-100 dark:bg-neutral-900 px-2 py-0.5 rounded">
-                        {categoryArticles.length} статей
-                      </span>
-                    </div>
-                  </div>
 
-                  {/* Category Articles Mock List */}
-                  {categoryArticles.length === 0 ? (
-                    <div className="text-center py-10 border border-dashed border-neutral-200 dark:border-neutral-850 rounded-xl">
-                      <FileText className="w-8 h-8 text-neutral-300 dark:text-neutral-700 mx-auto mb-2" />
-                      <h3 className="text-xs font-bold text-neutral-700 dark:text-neutral-300">Статей пока нет</h3>
-                      <p className="text-[10px] text-neutral-400 mt-0.5">В этой категории пока нет опубликованных документов.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {categoryArticles.map((art) => (
-                        <div key={art.id} className="p-4 rounded-xl border border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950 shadow-sm">
-                          <div className="flex items-center gap-2 mb-1.5 text-[10px] text-neutral-400">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              {new Date(art.updated_at).toLocaleDateString()}
-                            </span>
-                          </div>
-                          <div className="font-outfit text-sm font-bold text-neutral-900 dark:text-white">
-                            {art.title}
-                          </div>
-                          <p className="text-neutral-500 dark:text-neutral-400 text-xs mt-1.5 line-clamp-2 font-light leading-relaxed">
-                            {art.summary}
-                          </p>
-                          {art.tags && art.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-3">
-                              {art.tags.map(t => (
-                                <span key={t} className="text-[9px] px-1.5 py-0.2 rounded border border-neutral-200/50 dark:border-neutral-800 bg-neutral-50 text-neutral-400">
-                                  {t}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Mock Page Footer */}

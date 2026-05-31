@@ -120,14 +120,6 @@ export default function ArticlePage() {
         <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-neutral-400 dark:text-neutral-500 mb-4 sm:mb-6 font-medium overflow-x-auto whitespace-nowrap">
           <Link to="/" className="hover:text-indigo-500 transition-colors shrink-0">Главная</Link>
           <ChevronRight className="w-3 h-3 shrink-0" />
-          {article.category_name && (
-            <>
-              <Link to={`/categories/${article.category_slug}`} className="hover:text-indigo-500 transition-colors">
-                {article.category_name}
-              </Link>
-              <ChevronRight className="w-3 h-3" />
-            </>
-          )}
           <span className="text-neutral-600 dark:text-neutral-400 truncate max-w-[150px] sm:max-w-[200px]">{article.title}</span>
         </div>
 

@@ -89,12 +89,20 @@ export const initializeDatabase = async () => {
     `;
     await pool.query(createAuditLogsTableQuery);
     
-    // Ensure articles table has position column for sorting
+    // Ensure articles table has position and is_visible columns for sorting/archiving
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS position INT DEFAULT 0');
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS is_visible BOOLEAN DEFAULT true');
 
-    // Ensure categories table has is_visible and color columns
-    await pool.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_visible BOOLEAN DEFAULT true');
-    await pool.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS color VARCHAR(50) DEFAULT \'#6366f1\'');
+    // Create user_favorite_articles table for personal quick access
+    const createFavsTableQuery = `
+      CREATE TABLE IF NOT EXISTS user_favorite_articles (
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        article_id INT REFERENCES articles(id) ON DELETE CASCADE,
+        position INT DEFAULT 0,
+        PRIMARY KEY (user_id, article_id)
+      );
+    `;
+    await pool.query(createFavsTableQuery);
 
     // Create database indexes for performance speedup
     console.log('Creating database indexes for performance speedup...');

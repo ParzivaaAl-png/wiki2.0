@@ -74,9 +74,10 @@ export interface Article {
   content: string;
   summary: string;
   category_id: number | null;
-  category_name?: string;
-  category_slug?: string;
+  author_id?: number | null;
+  author_name?: string;
   published: boolean;
+  is_visible?: boolean;
   views: number;
   position: number;
   created_at: string;
@@ -340,6 +341,26 @@ export async function deleteArticle(id: number): Promise<void> {
   clearApiCache();
   return apiCall<void>(`/articles/${id}`, {
     method: 'DELETE',
+  });
+}
+
+export async function fetchFavoriteArticles(): Promise<Article[]> {
+  return apiCall<Article[]>('/users/me/favorites', { cache: 'no-store' });
+}
+
+export async function saveFavoriteArticles(articleIds: number[]): Promise<void> {
+  clearApiCache();
+  return apiCall<void>('/users/me/favorites', {
+    method: 'POST',
+    body: JSON.stringify({ articleIds }),
+  });
+}
+
+export async function reorderArticles(orders: { id: number; position: number }[]): Promise<void> {
+  clearApiCache();
+  return apiCall<void>('/articles/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ orders }),
   });
 }
 

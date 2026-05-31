@@ -8,9 +8,9 @@ export interface Article {
   summary: string;
   category_id: number | null;
   author_id: number | null;
-  category_name?: string;
-  category_slug?: string;
+  author_name?: string;
   published: boolean;
+  is_visible: boolean;
   views: number;
   position: number;
   created_at: Date;
@@ -20,44 +20,41 @@ export interface Article {
 
 export const getAllArticles = async (options: {
   publishedOnly?: boolean;
-  categorySlug?: string;
   tag?: string;
+  all?: boolean; // If true, include archived (is_visible=false)
 } = {}): Promise<Article[]> => {
   const params: any[] = [];
   let paramIndex = 1;
 
   let sql = `
-    SELECT a.*, c.name as category_name, c.slug as category_slug,
+    SELECT a.*, u.name as author_name,
            COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
     FROM articles a
-    LEFT JOIN categories c ON a.category_id = c.id
+    LEFT JOIN users u ON a.author_id = u.id
     LEFT JOIN article_tags t ON a.id = t.article_id
   `;
 
   const whereClauses: string[] = [];
 
+  if (!options.all) {
+    whereClauses.push(`a.is_visible = true`);
+  }
+
   if (options.publishedOnly !== false) {
     whereClauses.push(`a.published = true`);
-    whereClauses.push(`(c.id IS NULL OR c.is_visible = true)`);
   }
 
-  if (options.categorySlug) {
-    whereClauses.push(`c.slug = $${paramIndex++}`);
-    params.push(options.categorySlug);
-  }
-
-  sql += ` GROUP BY a.id, c.name, c.slug`;
+  sql += ` GROUP BY a.id, u.name`;
 
   if (whereClauses.length > 0) {
-    // We need to inject WHERE before GROUP BY in SQL, so let's adjust the query construct
     sql = `
-      SELECT a.*, c.name as category_name, c.slug as category_slug,
+      SELECT a.*, u.name as author_name,
              COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
       FROM articles a
-      LEFT JOIN categories c ON a.category_id = c.id
+      LEFT JOIN users u ON a.author_id = u.id
       LEFT JOIN article_tags t ON a.id = t.article_id
       WHERE ${whereClauses.join(' AND ')}
-      GROUP BY a.id, c.name, c.slug
+      GROUP BY a.id, u.name
       ORDER BY a.position ASC, a.created_at DESC
     `;
   } else {
@@ -65,7 +62,6 @@ export const getAllArticles = async (options: {
   }
 
   const res = await query(sql, params);
-  
   let articles = res.rows as Article[];
   
   if (options.tag) {
@@ -77,13 +73,13 @@ export const getAllArticles = async (options: {
 
 export const getArticleById = async (id: number): Promise<Article | null> => {
   const sql = `
-    SELECT a.*, c.name as category_name, c.slug as category_slug,
+    SELECT a.*, u.name as author_name,
            COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
     FROM articles a
-    LEFT JOIN categories c ON a.category_id = c.id
+    LEFT JOIN users u ON a.author_id = u.id
     LEFT JOIN article_tags t ON a.id = t.article_id
     WHERE a.id = $1
-    GROUP BY a.id, c.name, c.slug
+    GROUP BY a.id, u.name
   `;
   const res = await query(sql, [id]);
   return res.rows.length ? res.rows[0] : null;
@@ -91,13 +87,13 @@ export const getArticleById = async (id: number): Promise<Article | null> => {
 
 export const getArticleBySlug = async (slug: string): Promise<Article | null> => {
   const sql = `
-    SELECT a.*, c.name as category_name, c.slug as category_slug,
+    SELECT a.*, u.name as author_name,
            COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
     FROM articles a
-    LEFT JOIN categories c ON a.category_id = c.id
+    LEFT JOIN users u ON a.author_id = u.id
     LEFT JOIN article_tags t ON a.id = t.article_id
     WHERE a.slug = $1
-    GROUP BY a.id, c.name, c.slug
+    GROUP BY a.id, u.name
   `;
   const res = await query(sql, [slug]);
   return res.rows.length ? res.rows[0] : null;
@@ -111,6 +107,7 @@ export const createArticle = async (data: {
   category_id: number | null;
   author_id?: number | null;
   published: boolean;
+  is_visible?: boolean;
   tags: string[];
   position?: number;
 }): Promise<Article> => {
@@ -120,8 +117,8 @@ export const createArticle = async (data: {
     
     // Insert Article
     const artSql = `
-      INSERT INTO articles (title, slug, content, summary, category_id, author_id, published, position)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO articles (title, slug, content, summary, category_id, author_id, published, position, is_visible)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
     `;
     const artRes = await client.query(artSql, [
@@ -133,6 +130,7 @@ export const createArticle = async (data: {
       data.author_id || null,
       data.published,
       data.position || 0,
+      data.is_visible !== undefined ? data.is_visible : true,
     ]);
     const article = artRes.rows[0];
 
@@ -167,6 +165,7 @@ export const updateArticle = async (
     summary: string;
     category_id: number | null;
     published: boolean;
+    is_visible?: boolean;
     tags: string[];
     position?: number;
   }
@@ -178,8 +177,8 @@ export const updateArticle = async (
     // Update Article
     const artSql = `
       UPDATE articles
-      SET title = $1, slug = $2, content = $3, summary = $4, category_id = $5, published = $6, position = $7, updated_at = NOW()
-      WHERE id = $8
+      SET title = $1, slug = $2, content = $3, summary = $4, category_id = $5, published = $6, position = $7, is_visible = $8, updated_at = NOW()
+      WHERE id = $9
       RETURNING *
     `;
     const artRes = await client.query(artSql, [
@@ -190,6 +189,7 @@ export const updateArticle = async (
       data.category_id,
       data.published,
       data.position || 0,
+      data.is_visible !== undefined ? data.is_visible : true,
       id,
     ]);
 
@@ -231,4 +231,8 @@ export const deleteArticle = async (id: number): Promise<boolean> => {
 
 export const incrementArticleViews = async (id: number): Promise<void> => {
   await query('UPDATE articles SET views = views + 1 WHERE id = $1', [id]);
+};
+
+export const updateArticlePosition = async (id: number, position: number): Promise<void> => {
+  await query('UPDATE articles SET position = $1 WHERE id = $2', [position, id]);
 };

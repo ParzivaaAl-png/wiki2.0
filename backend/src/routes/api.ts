@@ -57,6 +57,8 @@ router.post('/auth/login', authLimiter, authController.login);
 router.post('/auth/logout', authController.logout);
 router.post('/auth/refresh', authController.refresh);
 router.get('/auth/me', requireAuth, authController.getMe);
+router.get('/users/me/favorites', requireAuth, authController.getFavoriteArticles);
+router.post('/users/me/favorites', requireAuth, authController.setFavoriteArticles);
 
 // Search routes (public — no auth required; results already filtered by published=true)
 router.get('/search', articlesController.searchArticles);
@@ -68,6 +70,7 @@ router.get('/articles/:slugOrId', articlesController.getArticle);
 router.post('/articles', requireAuth, requireRole(['Admin', 'Editor']), articlesController.createArticle);
 router.put('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.updateArticle);
 router.delete('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.deleteArticle);
+router.post('/articles/reorder', requireAuth, requireRole(['Admin', 'Editor']), articlesController.reorderArticles);
 
 // Category routes (Read-only for public, writes protected)
 router.get('/categories', categoriesController.getCategories);

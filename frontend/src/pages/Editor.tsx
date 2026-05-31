@@ -7,7 +7,7 @@ import {
   X,
   Sparkles
 } from 'lucide-react';
-import { fetchArticle, fetchCategories, createArticle, updateArticle, Category } from '../lib/api';
+import { fetchArticle, createArticle, updateArticle } from '../lib/api';
 import WYSIWYGEditor from '../components/wysiwyg-editor';
 
 export default function Editor() {
@@ -15,7 +15,6 @@ export default function Editor() {
   const isEditMode = !!id;
   const navigate = useNavigate();
 
-  const [categories, setCategories] = React.useState<Category[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
   // Form states
@@ -23,7 +22,6 @@ export default function Editor() {
   const [slug, setSlug] = React.useState('');
   const [summary, setSummary] = React.useState('');
   const [content, setContent] = React.useState('');
-  const [categoryId, setCategoryId] = React.useState<number | null>(null);
   const [published, setPublished] = React.useState(true);
   const [tags, setTags] = React.useState<string[]>([]);
   const [newTag, setNewTag] = React.useState('');
@@ -36,25 +34,15 @@ export default function Editor() {
     async function loadEditorData() {
       setIsLoading(true);
       try {
-        const cats = await fetchCategories();
-        setCategories(cats);
-
         if (isEditMode && id) {
           const article = await fetchArticle(id);
           setTitle(article.title);
           setSlug(article.slug);
           setSummary(article.summary || '');
           setContent(article.content);
-          setCategoryId(article.category_id);
           setPublished(article.published);
           setTags(article.tags || []);
           setPosition(article.position || 0);
-        } else {
-          const queryParams = new URLSearchParams(window.location.search);
-          const queryCatId = queryParams.get('category_id');
-          if (queryCatId) {
-            setCategoryId(Number(queryCatId));
-          }
         }
       } catch (err) {
         console.error('Failed to load editor data:', err);
@@ -111,7 +99,7 @@ export default function Editor() {
       slug,
       summary,
       content,
-      category_id: categoryId,
+      category_id: null,
       published,
       tags,
       position,
@@ -190,19 +178,7 @@ export default function Editor() {
               />
             </div>
 
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Раздел</label>
-              <select
-                value={categoryId || ''}
-                onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
-              >
-                <option value="">Выберите раздел...</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-            </div>
+
 
             <div>
               <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Порядковый номер (Позиция)</label>
