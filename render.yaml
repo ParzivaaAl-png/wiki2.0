@@ -2,6 +2,7 @@ services:
   # 1. Meilisearch Web Service (Docker container)
   - type: web
     name: wiki-search
+    region: frankfurt
     env: docker
     dockerfilePath: meilisearch/Dockerfile
     dockerContext: meilisearch
@@ -22,6 +23,7 @@ services:
   # 2. Express Backend Web Service
   - type: web
     name: wiki-backend
+    region: frankfurt
     env: docker
     dockerfilePath: backend/Dockerfile
     dockerContext: backend
@@ -46,6 +48,7 @@ services:
 
 databases:
   - name: wiki-db
+    region: frankfurt
     databaseName: wiki_db
     user: wiki_user
     plan: free
