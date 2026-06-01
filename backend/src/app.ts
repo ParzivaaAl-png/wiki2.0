@@ -101,7 +101,11 @@ const startServer = async () => {
     console.error('Failed to sync PostgreSQL data with Meilisearch:', err);
   }
 
-  // 5. Start listening
+  // 5. Start background sync scheduler daemon
+  const { startScheduler } = require('./services/sourceSync');
+  startScheduler();
+
+  // 6. Start listening
   app.listen(PORT, () => {
     console.log(`Backend server is running on http://localhost:${PORT}`);
   });

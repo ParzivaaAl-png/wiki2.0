@@ -63,6 +63,9 @@ router.post('/users/me/favorites', requireAuth, authController.setFavoriteArticl
 router.get('/search', articlesController.searchArticles);
 router.get('/search/suggest', articlesController.suggestArticles);
 
+// Classifier routes (public)
+router.get('/classifier/data', articlesController.getClassifierData);
+
 // Article routes (Read-only for public, writes protected)
 router.get('/articles', articlesController.getArticles);
 router.get('/articles/:slugOrId', articlesController.getArticle);
@@ -70,6 +73,14 @@ router.post('/articles', requireAuth, requireRole(['Admin', 'Editor']), articles
 router.put('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.updateArticle);
 router.delete('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.deleteArticle);
 router.post('/articles/reorder', requireAuth, requireRole(['Admin', 'Editor']), articlesController.reorderArticles);
+
+// Sync operations routes
+router.post('/articles/:id/sync', requireAuth, requireRole(['Admin', 'Editor']), articlesController.syncArticle);
+router.get('/articles/:id/sync-history', requireAuth, requireRole(['Admin', 'Editor']), articlesController.getArticleSyncHistory);
+
+// System notifications routes
+router.get('/notifications', requireAuth, articlesController.getNotifications);
+router.post('/notifications/read', requireAuth, articlesController.markNotificationsRead);
 
 
 

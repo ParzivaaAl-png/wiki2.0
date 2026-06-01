@@ -17,26 +17,26 @@ import {
   CITIES, 
   TARIFFS, 
   CAR_DATA, 
-  getCarStatus, 
-  BRANDS,
   City,
   getSavedCityId,
   saveCityId
 } from '../lib/classifier-data';
+import { fetchClassifierData } from '../lib/api';
 
 interface TariffAccordionProps {
   tariff: typeof TARIFFS[0];
   selectedCity: City;
   isOpen: boolean;
   onToggle: () => void;
+  carData: typeof CAR_DATA;
 }
 
-function TariffAccordion({ tariff, selectedCity, isOpen, onToggle }: TariffAccordionProps) {
+function TariffAccordion({ tariff, selectedCity, isOpen, onToggle, carData }: TariffAccordionProps) {
   const [search, setSearch] = React.useState('');
 
   const allowedCars = React.useMemo(() => {
-    return CAR_DATA.filter(car => car.years[tariff.key] !== undefined);
-  }, [tariff.key]);
+    return carData.filter(car => car.years[tariff.key] !== undefined);
+  }, [carData, tariff.key]);
 
   const filteredCars = React.useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -154,6 +154,19 @@ function TariffAccordion({ tariff, selectedCity, isOpen, onToggle }: TariffAccor
 
 export default function TariffsClassifier() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [carData, setCarData] = React.useState<typeof CAR_DATA>(CAR_DATA);
+
+  React.useEffect(() => {
+    fetchClassifierData()
+      .then(data => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          setCarData(data);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load classifier data, using static fallback:', err);
+      });
+  }, []);
   
   // Read URL params for pre-filling from search modal
   const paramBrand = searchParams.get('brand') || '';
@@ -219,10 +232,14 @@ export default function TariffsClassifier() {
     setSearchParams(newParams, { replace: true });
   };
 
+  const dynamicBrands = React.useMemo(() => {
+    return Array.from(new Set(carData.map(c => c.brand))).sort();
+  }, [carData]);
+
   const availableModels = React.useMemo(() => {
     if (!selectedBrand) return [];
-    return CAR_DATA.filter(c => c.brand === selectedBrand).map(c => c.model).sort();
-  }, [selectedBrand]);
+    return carData.filter(c => c.brand === selectedBrand).map(c => c.model).sort();
+  }, [selectedBrand, carData]);
 
   const years = React.useMemo(() => {
     return Array.from({ length: 2027 - 1980 }, (_, i) => 2026 - i);
@@ -249,10 +266,34 @@ export default function TariffsClassifier() {
     return { keys: sortedKeys, groups };
   }, [citySearchQuery]);
 
+  const getCarStatusDynamic = React.useCallback((brand: string, modelName: string, year: number, cityId: string) => {
+    const city = CITIES.find(c => c.id === cityId) || CITIES[0];
+    const car = carData.find(
+      c => c.brand.toLowerCase() === brand.toLowerCase() && 
+           c.model.toLowerCase() === modelName.toLowerCase()
+    );
+
+    if (!car) return null;
+
+    const results: Record<string, { fits: boolean; minYear: number; warning?: string }> = {};
+
+    Object.entries(car.years).forEach(([tariffKey, baseMinYear]) => {
+      // Dynamically apply city offset, ensuring min limit
+      const requiredYear = Math.max(1980, baseMinYear + city.offset);
+      results[tariffKey] = {
+        fits: year >= requiredYear,
+        minYear: requiredYear,
+        warning: car.warnings?.[tariffKey]
+      };
+    });
+
+    return results;
+  }, [carData]);
+
   const checkResults = React.useMemo(() => {
     if (!selectedBrand || !selectedModel || !selectedYear) return null;
-    return getCarStatus(selectedBrand, selectedModel, Number(selectedYear), selectedCity.id);
-  }, [selectedBrand, selectedModel, selectedYear, selectedCity]);
+    return getCarStatusDynamic(selectedBrand, selectedModel, Number(selectedYear), selectedCity.id);
+  }, [selectedBrand, selectedModel, selectedYear, selectedCity, getCarStatusDynamic]);
 
   return (
     <div className="space-y-8 mt-6">
@@ -294,7 +335,7 @@ export default function TariffsClassifier() {
               className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 dark:focus:border-indigo-500 text-neutral-900 dark:text-white transition-colors"
             >
               <option value="">Выберите марку</option>
-              {BRANDS.map(b => (
+              {dynamicBrands.map(b => (
                 <option key={b} value={b}>{b}</option>
               ))}
             </select>
@@ -470,6 +511,7 @@ export default function TariffsClassifier() {
             selectedCity={selectedCity}
             isOpen={openAccordion === tariff.key}
             onToggle={() => setOpenAccordion(openAccordion === tariff.key ? null : tariff.key)}
+            carData={carData}
           />
         ))}
       </div>

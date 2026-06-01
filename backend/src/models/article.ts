@@ -16,6 +16,11 @@ export interface Article {
   created_at: Date;
   updated_at: Date;
   tags: string[];
+  source_url?: string | null;
+  sync_interval?: string;
+  last_sync_at?: Date | null;
+  next_sync_at?: Date | null;
+  structured_data?: any | null;
 }
 
 export const getAllArticles = async (options: {
@@ -110,6 +115,9 @@ export const createArticle = async (data: {
   is_visible?: boolean;
   tags: string[];
   position?: number;
+  source_url?: string | null;
+  sync_interval?: string;
+  structured_data?: any | null;
 }): Promise<Article> => {
   const client = await pool.connect();
   try {
@@ -117,8 +125,8 @@ export const createArticle = async (data: {
     
     // Insert Article
     const artSql = `
-      INSERT INTO articles (title, slug, content, summary, category_id, author_id, published, position, is_visible)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO articles (title, slug, content, summary, category_id, author_id, published, position, is_visible, source_url, sync_interval, structured_data)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `;
     const artRes = await client.query(artSql, [
@@ -131,6 +139,9 @@ export const createArticle = async (data: {
       data.published,
       data.position || 0,
       data.is_visible !== undefined ? data.is_visible : true,
+      data.source_url || null,
+      data.sync_interval || 'manual',
+      data.structured_data ? JSON.stringify(data.structured_data) : null,
     ]);
     const article = artRes.rows[0];
 
@@ -168,6 +179,9 @@ export const updateArticle = async (
     is_visible?: boolean;
     tags: string[];
     position?: number;
+    source_url?: string | null;
+    sync_interval?: string;
+    structured_data?: any | null;
   }
 ): Promise<Article | null> => {
   const client = await pool.connect();
@@ -177,8 +191,8 @@ export const updateArticle = async (
     // Update Article
     const artSql = `
       UPDATE articles
-      SET title = $1, slug = $2, content = $3, summary = $4, category_id = $5, published = $6, position = $7, is_visible = $8, updated_at = NOW()
-      WHERE id = $9
+      SET title = $1, slug = $2, content = $3, summary = $4, category_id = $5, published = $6, position = $7, is_visible = $8, source_url = $9, sync_interval = $10, structured_data = $11, updated_at = NOW()
+      WHERE id = $12
       RETURNING *
     `;
     const artRes = await client.query(artSql, [
@@ -190,6 +204,9 @@ export const updateArticle = async (
       data.published,
       data.position || 0,
       data.is_visible !== undefined ? data.is_visible : true,
+      data.source_url || null,
+      data.sync_interval || 'manual',
+      data.structured_data ? JSON.stringify(data.structured_data) : null,
       id,
     ]);
 

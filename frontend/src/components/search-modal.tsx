@@ -2,9 +2,9 @@ import * as React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Search, Sparkles, X, FileText, CornerDownLeft, MapPin, CheckCircle2, XCircle, Info, Car, ChevronRight, AlertTriangle } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { searchArticles, SearchResult } from '../lib/api';
+import { searchArticles, SearchResult, fetchClassifierData } from '../lib/api';
 import { createPortal } from 'react-dom';
-import { CITIES, TARIFFS, BRANDS, CAR_DATA, findCarMatch, getCarStatus } from '../lib/classifier-data';
+import { CITIES, TARIFFS, CAR_DATA } from '../lib/classifier-data';
 
 interface SearchBarProps {
   variant?: 'header' | 'hero';
@@ -17,6 +17,19 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
   const [results, setResults] = React.useState<SearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [carData, setCarData] = React.useState<typeof CAR_DATA>(CAR_DATA);
+
+  React.useEffect(() => {
+    fetchClassifierData()
+      .then(data => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          setCarData(data);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load classifier data in SearchModal, using static fallback:', err);
+      });
+  }, []);
 
   const [selectedCity, setSelectedCity] = React.useState(CITIES[0]);
   const [selectedYear, setSelectedYear] = React.useState(2020);
@@ -24,9 +37,65 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
 
   const [selectedCar, setSelectedCar] = React.useState<any>(null);
 
+  const dynamicBrands = React.useMemo(() => {
+    return Array.from(new Set(carData.map(c => c.brand))).sort();
+  }, [carData]);
+
+  const getCarStatusDynamic = React.useCallback((brand: string, modelName: string, year: number, cityId: string) => {
+    const city = CITIES.find(c => c.id === cityId) || CITIES[0];
+    const car = carData.find(
+      c => c.brand.toLowerCase() === brand.toLowerCase() && 
+           c.model.toLowerCase() === modelName.toLowerCase()
+    );
+
+    if (!car) return null;
+
+    const results: Record<string, { fits: boolean; minYear: number; warning?: string }> = {};
+
+    Object.entries(car.years).forEach(([tariffKey, baseMinYear]) => {
+      const requiredYear = Math.max(1980, baseMinYear + city.offset);
+      results[tariffKey] = {
+        fits: year >= requiredYear,
+        minYear: requiredYear,
+        warning: car.warnings?.[tariffKey]
+      };
+    });
+
+    return results;
+  }, [carData]);
+
   const matchedCar = React.useMemo(() => {
-    return findCarMatch(query);
-  }, [query]);
+    const q = query.toLowerCase().trim();
+    if (q.length < 2) return null;
+    const words = q.split(/\s+/);
+
+    for (const car of carData) {
+      const brand = car.brand.toLowerCase();
+      const modelName = car.model.toLowerCase();
+      const fullName = `${brand} ${modelName}`;
+
+      if (q === brand || q === modelName || q === fullName || fullName.includes(q)) {
+        return car;
+      }
+
+      if (words.length >= 2) {
+        const hasBrand = words.some(w => brand.includes(w) || w.includes(brand));
+        const hasModel = words.some(w => modelName.includes(w) || w.includes(modelName));
+        if (hasBrand && hasModel) {
+          return car;
+        }
+      }
+    }
+
+    for (const car of carData) {
+      const brand = car.brand.toLowerCase();
+      if (q === brand || brand.includes(q)) {
+        return car;
+      }
+    }
+
+    return null;
+  }, [query, carData]);
 
   React.useEffect(() => {
     setSelectedCar(matchedCar);
@@ -35,13 +104,13 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
   const matchedBrand = React.useMemo(() => {
     const q = query.toLowerCase().trim();
     if (q.length < 2) return null;
-    return BRANDS.find(b => b.toLowerCase().includes(q) || q.includes(b.toLowerCase())) || null;
-  }, [query]);
+    return dynamicBrands.find(b => b.toLowerCase().includes(q) || q.includes(b.toLowerCase())) || null;
+  }, [query, dynamicBrands]);
 
   const brandModels = React.useMemo(() => {
     if (!matchedBrand) return [];
-    return CAR_DATA.filter(c => c.brand.toLowerCase() === matchedBrand.toLowerCase());
-  }, [matchedBrand]);
+    return carData.filter(c => c.brand.toLowerCase() === matchedBrand.toLowerCase());
+  }, [matchedBrand, carData]);
 
   React.useEffect(() => {
     if (selectedCar) {
@@ -328,7 +397,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
 
   const renderCarWidgetContent = () => {
     if (!selectedCar) return null;
-    const statuses = getCarStatus(selectedCar.brand, selectedCar.model, selectedYear, selectedCity.id);
+    const statuses = getCarStatusDynamic(selectedCar.brand, selectedCar.model, selectedYear, selectedCity.id);
     
     return (
       <div className="flex flex-col h-full justify-between">

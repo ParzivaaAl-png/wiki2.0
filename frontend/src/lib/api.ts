@@ -85,6 +85,11 @@ export interface Article {
   tags: string[];
   highlights?: string[];
   score?: number;
+  source_url?: string | null;
+  sync_interval?: string;
+  last_sync_at?: string | null;
+  next_sync_at?: string | null;
+  structured_data?: any | null;
 }
 
 export interface SearchResult {
@@ -519,6 +524,60 @@ export async function fetchUserHistory(userId: number): Promise<UserAuditLog[]> 
 export async function clearServerCache(): Promise<{ message: string }> {
   clearApiCache();
   return apiCall<{ message: string }>('/admin/clear-cache', {
+    method: 'POST',
+  });
+}
+
+// Yandex Classifier Sync & Notifications API
+export interface ArticleSyncLog {
+  id: number;
+  article_id: number;
+  synced_at: string;
+  source_url: string;
+  status: 'success' | 'failed';
+  changes_count: number;
+  changes_summary: {
+    added: string[];
+    removed: string[];
+    updated: string[];
+  };
+  error_message: string | null;
+  backup_content: string | null;
+}
+
+export interface Notification {
+  id: number;
+  user_id: number | null;
+  role: string | null;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  is_read: boolean;
+  created_at: string;
+}
+
+export async function syncArticleNow(id: number, force = false): Promise<{ message: string }> {
+  clearApiCache();
+  return apiCall<{ message: string }>(`/articles/${id}/sync`, {
+    method: 'POST',
+    body: JSON.stringify({ force }),
+  });
+}
+
+export async function fetchArticleSyncHistory(id: number): Promise<ArticleSyncLog[]> {
+  return apiCall<ArticleSyncLog[]>(`/articles/${id}/sync-history`);
+}
+
+export async function fetchClassifierData(): Promise<any> {
+  return apiCall<any>('/classifier/data');
+}
+
+export async function fetchNotifications(): Promise<Notification[]> {
+  return apiCall<Notification[]>('/notifications');
+}
+
+export async function markNotificationsAsRead(): Promise<{ message: string }> {
+  return apiCall<{ message: string }>('/notifications/read', {
     method: 'POST',
   });
 }

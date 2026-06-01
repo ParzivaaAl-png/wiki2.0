@@ -4,6 +4,7 @@ import * as ArticleModel from '../models/article';
 import * as msService from '../services/meilisearch';
 import { parseDocument } from '../services/parser';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { query } from '../config/db';
 
 export const getArticles = async (req: Request, res: Response) => {
   try {
@@ -51,7 +52,7 @@ export const getArticle = async (req: Request, res: Response) => {
 
 export const createArticle = async (req: Request, res: Response) => {
   try {
-    const { title, slug, content, summary, published, tags, position, is_visible } = req.body;
+    const { title, slug, content, summary, published, tags, position, is_visible, source_url, sync_interval } = req.body;
     
     if (!title || !slug || !content) {
       return res.status(400).json({ error: 'Title, slug, and content are required fields.' });
@@ -67,6 +68,8 @@ export const createArticle = async (req: Request, res: Response) => {
       is_visible: is_visible === undefined ? true : !!is_visible,
       tags: tags || [],
       position: position !== undefined ? Number(position) : 0,
+      source_url: source_url || null,
+      sync_interval: sync_interval || 'manual',
     });
 
     // Auto-index to Meilisearch
@@ -98,7 +101,7 @@ export const createArticle = async (req: Request, res: Response) => {
 export const updateArticle = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, slug, content, summary, published, tags, position, is_visible } = req.body;
+    const { title, slug, content, summary, published, tags, position, is_visible, source_url, sync_interval } = req.body;
 
     if (!title || !slug || !content) {
       return res.status(400).json({ error: 'Title, slug, and content are required.' });
@@ -114,6 +117,8 @@ export const updateArticle = async (req: Request, res: Response) => {
       is_visible: is_visible === undefined ? true : !!is_visible,
       tags: tags || [],
       position: position !== undefined ? Number(position) : 0,
+      source_url: source_url || null,
+      sync_interval: sync_interval || 'manual',
     });
 
     if (!article) {
@@ -313,6 +318,87 @@ export const reorderArticles = async (req: Request, res: Response) => {
     res.json({ message: 'Articles reordered successfully' });
   } catch (error: any) {
     console.error('Error reordering articles:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const syncArticle = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { force } = req.body;
+    
+    // Lazy load the sync service to avoid circular dependency
+    const { syncArticle: runSync } = require('../services/sourceSync');
+    await runSync(Number(id), { force: !!force });
+    
+    res.json({ message: 'Синхронизация завершена успешно!' });
+  } catch (error: any) {
+    console.error('Manual sync failed:', error);
+    res.status(500).json({ error: 'Синхронизация завершилась ошибкой', details: error.message });
+  }
+};
+
+export const getArticleSyncHistory = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const historyRes = await query(
+      'SELECT * FROM article_sync_history WHERE article_id = $1 ORDER BY synced_at DESC LIMIT 50',
+      [Number(id)]
+    );
+    res.json(historyRes.rows);
+  } catch (error: any) {
+    console.error('Failed to get sync history:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const getClassifierData = async (req: Request, res: Response) => {
+  try {
+    const mainRes = await query(
+      "SELECT structured_data FROM articles WHERE slug = 'auto-list'"
+    );
+    if (mainRes.rows.length > 0 && mainRes.rows[0].structured_data) {
+      return res.json(mainRes.rows[0].structured_data);
+    }
+    res.json(null);
+  } catch (error: any) {
+    console.error('Failed to fetch classifier data:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const getNotifications = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userRole = req.user ? req.user.role : '';
+    const userId = req.user ? req.user.id : null;
+    
+    const sql = `
+      SELECT * FROM notifications 
+      WHERE (role = $1 OR user_id = $2 OR (role IS NULL AND user_id IS NULL))
+      ORDER BY created_at DESC LIMIT 30
+    `;
+    const notifRes = await query(sql, [userRole, userId]);
+    res.json(notifRes.rows);
+  } catch (error: any) {
+    console.error('Failed to get notifications:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const markNotificationsRead = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userRole = req.user ? req.user.role : '';
+    const userId = req.user ? req.user.id : null;
+    
+    const sql = `
+      UPDATE notifications 
+      SET is_read = true 
+      WHERE (role = $1 OR user_id = $2 OR (role IS NULL AND user_id IS NULL))
+    `;
+    await query(sql, [userRole, userId]);
+    res.json({ message: 'Уведомления помечены как прочитанные' });
+  } catch (error: any) {
+    console.error('Failed to mark notifications read:', error);
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 };

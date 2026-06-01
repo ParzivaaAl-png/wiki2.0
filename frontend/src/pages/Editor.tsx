@@ -26,6 +26,8 @@ export default function Editor() {
   const [tags, setTags] = React.useState<string[]>([]);
   const [newTag, setNewTag] = React.useState('');
   const [position, setPosition] = React.useState<number>(0);
+  const [sourceUrl, setSourceUrl] = React.useState('');
+  const [syncInterval, setSyncInterval] = React.useState('manual');
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -43,6 +45,8 @@ export default function Editor() {
           setPublished(article.published);
           setTags(article.tags || []);
           setPosition(article.position || 0);
+          setSourceUrl(article.source_url || '');
+          setSyncInterval(article.sync_interval || 'manual');
         }
       } catch (err) {
         console.error('Failed to load editor data:', err);
@@ -103,6 +107,8 @@ export default function Editor() {
       published,
       tags,
       position,
+      source_url: sourceUrl || null,
+      sync_interval: syncInterval,
     };
 
     try {
@@ -178,7 +184,30 @@ export default function Editor() {
               />
             </div>
 
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Источник данных (Source URL)</label>
+              <input
+                type="text"
+                value={sourceUrl}
+                onChange={(e) => setSourceUrl(e.target.value)}
+                placeholder="Например, ссылка на классификатор Яндекса"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
+              />
+            </div>
 
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Интервал авто-синхронизации</label>
+              <select
+                value={syncInterval}
+                onChange={(e) => setSyncInterval(e.target.value)}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
+              >
+                <option value="manual">Вручную (Manual)</option>
+                <option value="6h">Каждые 6 часов</option>
+                <option value="12h">Каждые 12 часов</option>
+                <option value="24h">Каждые 24 часа</option>
+              </select>
+            </div>
 
             <div>
               <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Порядковый номер (Позиция)</label>

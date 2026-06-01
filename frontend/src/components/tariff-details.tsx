@@ -17,6 +17,7 @@ import {
   getSavedCityId,
   saveCityId
 } from '../lib/classifier-data';
+import { fetchClassifierData } from '../lib/api';
 
 interface TariffDetailsProps {
   tariffKey: string;
@@ -24,9 +25,22 @@ interface TariffDetailsProps {
 
 export default function TariffDetails({ tariffKey }: TariffDetailsProps) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [carData, setCarData] = React.useState<typeof CAR_DATA>(CAR_DATA);
   const [search, setSearch] = React.useState('');
   const [isCityDrawerOpen, setIsCityDrawerOpen] = React.useState(false);
   const [citySearchQuery, setCitySearchQuery] = React.useState('');
+
+  React.useEffect(() => {
+    fetchClassifierData()
+      .then(data => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          setCarData(data);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load classifier data in TariffDetails, using static fallback:', err);
+      });
+  }, []);
 
   const tariff = React.useMemo(() => {
     return TARIFFS.find(t => t.key === tariffKey);
@@ -72,8 +86,8 @@ export default function TariffDetails({ tariffKey }: TariffDetailsProps) {
   };
 
   const allowedCars = React.useMemo(() => {
-    return CAR_DATA.filter(car => car.years[tariffKey] !== undefined);
-  }, [tariffKey]);
+    return carData.filter(car => car.years[tariffKey] !== undefined);
+  }, [carData, tariffKey]);
 
   const filteredCars = React.useMemo(() => {
     const q = search.toLowerCase().trim();

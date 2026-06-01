@@ -112,6 +112,45 @@ export const initializeDatabase = async () => {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_categories_position ON categories(position)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id)');
     
+    // Auto-sync & Classifier integration migrations
+    console.log('Ensuring auto-sync columns and tables exist...');
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS source_url TEXT DEFAULT NULL');
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS sync_interval VARCHAR(50) DEFAULT \'manual\'');
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMP DEFAULT NULL');
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS next_sync_at TIMESTAMP DEFAULT NULL');
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS structured_data JSONB DEFAULT NULL');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS article_sync_history (
+        id SERIAL PRIMARY KEY,
+        article_id INT REFERENCES articles(id) ON DELETE CASCADE,
+        synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        source_url TEXT NOT NULL,
+        status VARCHAR(50) NOT NULL,
+        changes_count INT DEFAULT 0,
+        changes_summary JSONB DEFAULT '{}',
+        error_message TEXT,
+        backup_content TEXT
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        role VARCHAR(50),
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        type VARCHAR(50) DEFAULT 'info',
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_article_sync_history_article_id ON article_sync_history(article_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_notifications_role ON notifications(role)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)');
+
     console.log('Database tables and indexes verified/created successfully.');
   } catch (error) {
     console.error('Failed to initialize database tables:', error);
