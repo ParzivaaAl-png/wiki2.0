@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Sparkles, Clock, ChevronRight, BookOpen, Check, Plus, Star, X, EyeOff } from 'lucide-react';
+import { Search, Sparkles, Clock, ChevronRight, ChevronLeft, BookOpen, Check, Plus, Star, X, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   fetchArticles, 
@@ -172,7 +172,7 @@ export default function Home() {
   };
 
   // Remove Article from Personal Favorites
-  const handleRemoveFromFavorites = async (e: React.MouseEvent, artId: number) => {
+  const handleRemoveFromFavorites = async (e: React.MouseEvent | React.TouchEvent, artId: number) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -183,6 +183,44 @@ export default function Home() {
       await saveFavoriteArticles(updated.map(a => a.id));
     } catch (err) {
       console.error('Failed to remove article from favorites:', err);
+    }
+  };
+
+  const handleMoveFavorite = async (direction: 'left' | 'right', artId: number) => {
+    const idx = favoriteArticles.findIndex(a => a.id === artId);
+    if (idx === -1) return;
+    const targetIdx = direction === 'left' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= favoriteArticles.length) return;
+
+    const updated = [...favoriteArticles];
+    const [item] = updated.splice(idx, 1);
+    updated.splice(targetIdx, 0, item);
+    setFavoriteArticles(updated);
+
+    try {
+      await saveFavoriteArticles(updated.map(a => a.id));
+    } catch (err) {
+      console.error('Failed to save personalized favorites order:', err);
+    }
+  };
+
+  const handleMoveGlobal = async (direction: 'left' | 'right', artId: number) => {
+    const idx = allArticles.findIndex(a => a.id === artId);
+    if (idx === -1) return;
+    const targetIdx = direction === 'left' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= allArticles.length) return;
+
+    const updated = [...allArticles];
+    const [item] = updated.splice(idx, 1);
+    updated.splice(targetIdx, 0, item);
+
+    const reordered = updated.map((art, index) => ({ ...art, position: index + 1 }));
+    setAllArticles(reordered);
+
+    try {
+      await reorderArticles(reordered.map(a => ({ id: a.id, position: a.position })));
+    } catch (err) {
+      console.error('Failed to save global articles order:', err);
     }
   };
 
@@ -207,7 +245,7 @@ export default function Home() {
   };
 
   // Global Soft Delete / Archive Article (Editor / Admin only)
-  const handleArchiveArticle = async (e: React.MouseEvent, art: Article) => {
+  const handleArchiveArticle = async (e: React.MouseEvent | React.TouchEvent, art: Article) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -485,6 +523,10 @@ export default function Home() {
                 {isConfigureMode && (
                   <button
                     onClick={(e) => handleRemoveFromFavorites(e, art.id)}
+                    onTouchStart={(e) => {
+                      e.stopPropagation();
+                      handleRemoveFromFavorites(e, art.id);
+                    }}
                     className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-650 text-white flex items-center justify-center cursor-pointer shadow-md hover:scale-110 active:scale-95 transition-all z-20 border border-white dark:border-neutral-950"
                     title="Убрать из быстрого доступа"
                   >
@@ -496,6 +538,10 @@ export default function Home() {
                 {isEditMode && (
                   <button
                     onClick={(e) => handleArchiveArticle(e, art)}
+                    onTouchStart={(e) => {
+                      e.stopPropagation();
+                      handleArchiveArticle(e, art);
+                    }}
                     className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-650 text-white flex items-center justify-center cursor-pointer shadow-md hover:scale-110 active:scale-95 transition-all z-20 border border-white dark:border-neutral-950"
                     title="Скрыть статью в архив"
                   >
@@ -538,6 +584,62 @@ export default function Home() {
                     )}
                   </div>
                   
+                  {(isEditMode || isConfigureMode) && (
+                    <div className="flex items-center gap-1.5 z-20">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (isEditMode) {
+                            handleMoveGlobal('left', art.id);
+                          } else {
+                            handleMoveFavorite('left', art.id);
+                          }
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                          if (isEditMode) {
+                            handleMoveGlobal('left', art.id);
+                          } else {
+                            handleMoveFavorite('left', art.id);
+                          }
+                        }}
+                        disabled={(isEditMode ? allArticles : favoriteArticles).findIndex(a => a.id === art.id) === 0}
+                        className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-neutral-550 dark:text-neutral-450 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors shadow-sm active:scale-95"
+                        title="Переместить назад"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (isEditMode) {
+                            handleMoveGlobal('right', art.id);
+                          } else {
+                            handleMoveFavorite('right', art.id);
+                          }
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                          if (isEditMode) {
+                            handleMoveGlobal('right', art.id);
+                          } else {
+                            handleMoveFavorite('right', art.id);
+                          }
+                        }}
+                        disabled={
+                          (isEditMode ? allArticles : favoriteArticles).findIndex(a => a.id === art.id) === 
+                          (isEditMode ? allArticles : favoriteArticles).length - 1
+                        }
+                        className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-neutral-550 dark:text-neutral-450 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors shadow-sm active:scale-95"
+                        title="Переместить вперед"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
                   {!isEditMode && !isConfigureMode && (
                     <Link
                       to={`/articles/${art.slug}`}
