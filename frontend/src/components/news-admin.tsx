@@ -260,7 +260,7 @@ export function NewsAdmin() {
         {!isEditing && (
           <button
             onClick={handleCreateClick}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 transition-all self-start sm:self-auto"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 transition-all self-start sm:self-auto"
           >
             <Plus className="w-4 h-4" />
             Создать новость
@@ -357,7 +357,7 @@ export function NewsAdmin() {
                       type="checkbox"
                       checked={isPublished}
                       onChange={(e) => setIsPublished(e.target.checked)}
-                      className="rounded text-indigo-650 focus:ring-indigo-500 w-4 h-4 border-neutral-350 dark:border-neutral-800 dark:bg-neutral-900"
+                      className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 border-neutral-350 dark:border-neutral-800 dark:bg-neutral-900"
                     />
                     <span className="text-xs text-neutral-700 dark:text-neutral-300">Опубликовать сразу</span>
                   </label>
@@ -367,7 +367,7 @@ export function NewsAdmin() {
                       type="checkbox"
                       checked={isPinned}
                       onChange={(e) => setIsPinned(e.target.checked)}
-                      className="rounded text-indigo-650 focus:ring-indigo-500 w-4 h-4 border-neutral-350 dark:border-neutral-800 dark:bg-neutral-900"
+                      className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 border-neutral-350 dark:border-neutral-800 dark:bg-neutral-900"
                     />
                     <span className="text-xs text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
                       <Pin className="w-3.5 h-3.5 text-amber-500 fill-current" />
@@ -479,7 +479,7 @@ export function NewsAdmin() {
               {/* SAVE ACTION BAR */}
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/10 transition-all"
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/10 transition-all"
               >
                 Сохранить и опубликовать
               </button>

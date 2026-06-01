@@ -35,7 +35,7 @@ export function BookIcon({ isOpen, onClick }: BookIconProps) {
           style={{ transform: 'rotateY(0deg)' }}
         >
           {/* Back Cover (outer skin, visible when book is closed or looking from behind) */}
-          <div className="absolute inset-0 bg-gradient-to-r from-indigo-700 to-indigo-850 dark:from-indigo-800 dark:to-indigo-900 rounded-r border-t border-b border-r border-indigo-900 dark:border-indigo-950 [backface-visibility:hidden]" />
+          <div className="absolute inset-0 bg-gradient-to-r from-indigo-700 to-indigo-800 dark:from-indigo-800 dark:to-indigo-900 rounded-r border-t border-b border-r border-indigo-900 dark:border-indigo-950 [backface-visibility:hidden]" />
           
           {/* Right Page Body (visible when open) */}
           <div className="absolute inset-[1px] bg-gradient-to-r from-amber-50 to-amber-100/90 dark:from-neutral-800 dark:to-neutral-900 rounded-r border-t border-b border-r border-amber-250/20 dark:border-neutral-700 flex flex-col justify-around py-1 px-1 pl-1.5 shadow-inner">
@@ -58,7 +58,7 @@ export function BookIcon({ isOpen, onClick }: BookIconProps) {
         >
           {/* Front Cover Front-Side (visible when book is CLOSED - is on back of the left wing after opening) */}
           <div 
-            className="absolute inset-0 bg-gradient-to-l from-indigo-600 to-indigo-750 dark:from-indigo-700 dark:to-indigo-850 rounded-r border-t border-b border-r border-indigo-900 dark:border-indigo-950 shadow-md flex flex-col justify-between p-0.5 select-none"
+            className="absolute inset-0 bg-gradient-to-l from-indigo-600 to-indigo-700 dark:from-indigo-700 dark:to-indigo-800 rounded-r border-t border-b border-r border-indigo-900 dark:border-indigo-950 shadow-md flex flex-col justify-between p-0.5 select-none"
             style={{ transform: 'rotateY(180deg)', backfaceVisibility: 'hidden' }}
           >
             {/* Gold foil lines on closed book cover */}

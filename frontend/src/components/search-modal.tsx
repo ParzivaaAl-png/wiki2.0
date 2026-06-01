@@ -297,7 +297,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
               >
                 <span className="text-sm">{car.brand} {car.model}</span>
                 {isSelected && (
-                  <span className="text-[9px] text-indigo-650 dark:text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded">
+                  <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded">
                     Выбрано
                   </span>
                 )}
@@ -597,7 +597,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                           onClick={() => setMobileTab('classifier')}
                           className={`flex-1 py-2 text-center text-xs font-bold transition-all border-b-2 ${
                             mobileTab === 'classifier' 
-                              ? 'border-indigo-500 text-indigo-650 dark:text-indigo-400 font-semibold' 
+                              ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 font-semibold' 
                               : 'border-transparent text-neutral-400 dark:text-neutral-500'
                           }`}
                         >

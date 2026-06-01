@@ -725,7 +725,7 @@ export default function Home() {
                         <div className="text-[10px] text-neutral-450 mt-0.5 line-clamp-1">{art.summary}</div>
                       </div>
                       <button
-                        className="px-2.5 py-1 text-[10px] font-bold text-indigo-650 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-md transition-colors cursor-pointer shrink-0"
+                        className="px-2.5 py-1 text-[10px] font-bold text-indigo-600 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-md transition-colors cursor-pointer shrink-0"
                       >
                         Выбрать
                       </button>
