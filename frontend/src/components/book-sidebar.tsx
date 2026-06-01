@@ -18,8 +18,8 @@ const line1Variants = {
 };
 
 const line2Variants = {
-  closed: { opacity: 1, scaleX: 1 },
-  open: { opacity: 0, scaleX: 0 }
+  closed: { opacity: 1, scaleX: 1, width: 20 },
+  open: { opacity: 0, scaleX: 0, width: 20 }
 };
 
 const line3Variants = {
@@ -201,9 +201,37 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
 
   return (
     <>
-      {/* 1. FIXED LEFT STRIP (56px) - Always visible for logged-in users */}
+      {/* Mobile Floating Menu Button */}
+      <button
+        onClick={onToggle}
+        className="fixed left-3 top-3 z-50 flex lg:hidden w-8 h-8 items-center justify-center rounded-lg text-indigo-500 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200/60 dark:border-neutral-800/60 shadow-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+        aria-label="Toggle navigation menu"
+      >
+        <div className="w-5 h-[12px] relative flex items-center justify-center">
+          <motion.span 
+            variants={line1Variants} 
+            animate={isOpen ? "open" : "closed"}
+            transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+            className="absolute top-0 left-0 h-[2px] bg-indigo-500 dark:bg-indigo-400 rounded-full origin-center" 
+          />
+          <motion.span 
+            variants={line2Variants} 
+            animate={isOpen ? "open" : "closed"}
+            transition={{ duration: 0.2 }}
+            className="absolute top-[5px] left-0 h-[2px] bg-indigo-500 dark:bg-indigo-400 rounded-full origin-center" 
+          />
+          <motion.span 
+            variants={line3Variants} 
+            animate={isOpen ? "open" : "closed"}
+            transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+            className="absolute top-[10px] left-0 h-[2px] bg-indigo-500 dark:bg-indigo-400 rounded-full origin-center" 
+          />
+        </div>
+      </button>
+
+      {/* 1. FIXED LEFT STRIP (56px) - Desktop only */}
       <div 
-        className="fixed left-0 top-0 h-screen w-14 bg-neutral-50 dark:bg-neutral-950 border-r border-neutral-200/50 dark:border-neutral-850/50 z-50 flex flex-col items-center py-4 shrink-0 shadow-sm"
+        className="hidden lg:flex fixed left-0 top-0 h-screen w-14 bg-neutral-50 dark:bg-neutral-950 border-r border-neutral-200/50 dark:border-neutral-850/50 z-50 flex-col items-center py-4 shrink-0 shadow-sm"
       >
         {/* Custom Animated Burger Button */}
         <button
@@ -260,10 +288,10 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-            className="fixed left-14 top-0 h-screen w-[290px] bg-neutral-100/90 dark:bg-neutral-900/90 backdrop-blur-xl border-r border-neutral-200/50 dark:border-neutral-800/55 shadow-2xl flex flex-col z-40 overflow-hidden"
+            className="fixed lg:left-14 left-0 top-0 h-screen w-[290px] bg-neutral-100/90 dark:bg-neutral-900/90 backdrop-blur-xl border-r border-neutral-200/50 dark:border-neutral-800/55 shadow-2xl flex flex-col z-40 overflow-hidden"
           >
             {/* Header */}
-            <div className="p-4 border-b border-neutral-200/40 dark:border-neutral-800/40 flex items-center justify-between pl-6 shrink-0">
+            <div className="p-4 border-b border-neutral-200/40 dark:border-neutral-800/40 flex items-center justify-between lg:pl-6 pl-14 shrink-0">
               <div className="flex items-center gap-2 text-indigo-500 font-semibold tracking-tight text-sm uppercase">
                 <BookOpen className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
                 <span className="font-outfit font-bold text-neutral-800 dark:text-neutral-200">Навигация</span>

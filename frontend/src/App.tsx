@@ -55,8 +55,7 @@ function Header() {
     <header className="sticky top-0 z-40 w-full border-b border-neutral-200/50 dark:border-neutral-800/50 glass-header shadow-sm transition-all duration-350">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
         
-        {/* Brand Logo */}
-        <Link to="/" className="flex items-center gap-2 shrink-0 group">
+        <Link to="/" className={`flex items-center gap-2 shrink-0 group ${user ? 'ml-11 lg:ml-0' : ''}`}>
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/10 group-hover:shadow-indigo-500/20 transition-all duration-300">
             <BookOpen className="w-4.5 h-4.5" />
           </div>
@@ -144,7 +143,7 @@ function AppContent() {
   }, [location.pathname]);
 
   return (
-    <div className={`flex flex-col min-h-screen bg-background text-foreground transition-all duration-300 ${user ? 'pl-[56px]' : ''}`}>
+    <div className={`flex flex-col min-h-screen bg-background text-foreground transition-all duration-300 ${user ? 'lg:pl-[56px] pl-0' : ''}`}>
       <Header />
       {user && (
         <BookSidebar 
