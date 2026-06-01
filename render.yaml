@@ -42,7 +42,7 @@ services:
         fromService:
           type: web
           name: wiki-search
-          property: url
+          property: hostport
       - key: MEILI_MASTER_KEY
         value: "superSecretMeilisearchMasterKey2026"
 
