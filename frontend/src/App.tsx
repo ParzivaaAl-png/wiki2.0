@@ -4,6 +4,7 @@ import { BookOpen, ShieldAlert, LogIn } from 'lucide-react';
 import { ThemeProvider } from './components/theme-provider';
 import { ThemeToggle } from './components/theme-toggle';
 import { SearchModal } from './components/search-modal';
+import { NewsBell } from './components/news-bell';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import { ErrorBoundary } from './components/error-boundary';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -67,6 +68,7 @@ function Header() {
         {/* Navigation Actions */}
         <div className="flex items-center gap-1.5 sm:gap-3">
           {user && <SearchModal />}
+          {user && <NewsBell />}
           
           {user ? (
             <div className="flex items-center gap-1.5 sm:gap-3">

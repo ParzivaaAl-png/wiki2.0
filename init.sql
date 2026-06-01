@@ -5,6 +5,12 @@ DROP TABLE IF EXISTS categories CASCADE;
 DROP TABLE IF EXISTS user_sessions CASCADE;
 DROP TABLE IF EXISTS user_audit_logs CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS news_images CASCADE;
+DROP TABLE IF EXISTS news_attachments CASCADE;
+DROP TABLE IF EXISTS news_views CASCADE;
+DROP TABLE IF EXISTS news_read_status CASCADE;
+DROP TABLE IF EXISTS news_tags CASCADE;
+DROP TABLE IF EXISTS news CASCADE;
 
 -- Create Users Table
 CREATE TABLE users (
@@ -75,6 +81,65 @@ CREATE TABLE article_tags (
     tag_name VARCHAR(50) NOT NULL,
     PRIMARY KEY (article_id, tag_name)
 );
+
+-- Create News Tables
+CREATE TABLE news (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    content TEXT NOT NULL,
+    is_published BOOLEAN DEFAULT TRUE,
+    is_pinned BOOLEAN DEFAULT FALSE,
+    author_id INT REFERENCES users(id) ON DELETE SET NULL,
+    published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE news_images (
+    id SERIAL PRIMARY KEY,
+    news_id INT REFERENCES news(id) ON DELETE CASCADE,
+    image_url VARCHAR(512) NOT NULL,
+    position INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE news_attachments (
+    id SERIAL PRIMARY KEY,
+    news_id INT REFERENCES news(id) ON DELETE CASCADE,
+    file_url VARCHAR(512) NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_size INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE news_views (
+    id SERIAL PRIMARY KEY,
+    news_id INT REFERENCES news(id) ON DELETE CASCADE,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE news_read_status (
+    news_id INT REFERENCES news(id) ON DELETE CASCADE,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    is_read BOOLEAN DEFAULT FALSE,
+    read_at TIMESTAMP,
+    PRIMARY KEY (news_id, user_id)
+);
+
+CREATE TABLE news_tags (
+    news_id INT REFERENCES news(id) ON DELETE CASCADE,
+    tag_name VARCHAR(50) NOT NULL,
+    PRIMARY KEY (news_id, tag_name)
+);
+
+CREATE INDEX idx_news_published_pinned ON news(is_published, is_pinned, published_at DESC);
+CREATE INDEX idx_news_images_news_id ON news_images(news_id);
+CREATE INDEX idx_news_attachments_news_id ON news_attachments(news_id);
+CREATE INDEX idx_news_views_news_id_user_id ON news_views(news_id, user_id);
+CREATE INDEX idx_news_read_status_user_id ON news_read_status(user_id);
+CREATE INDEX idx_news_tags_news_id ON news_tags(news_id);
 
 -- Seed Yandex Pro Taxi Categories
 INSERT INTO categories (name, slug, icon, description, position) VALUES

@@ -9,10 +9,13 @@ import {
   checkMeilisearchConnection, 
   initializeMeilisearch, 
   bulkSyncArticles,
+  bulkSyncNews,
   ArticleDocument,
+  NewsDocument,
   msClient
 } from './services/meilisearch';
 import * as ArticleModel from './models/article';
+import * as NewsModel from './models/news';
 
 dotenv.config();
 
@@ -96,6 +99,24 @@ const startServer = async () => {
     }));
 
     await bulkSyncArticles(docs);
+
+    // 4b. Synchronize DB News with Meilisearch Index
+    console.log('Synchronizing database news with Meilisearch...');
+    const dbNews = await NewsModel.getAllNews({ publishedOnly: false });
+    const newsDocs: NewsDocument[] = dbNews.map((n) => ({
+      id: n.id,
+      title: n.title,
+      description: n.description,
+      content: n.content,
+      tags: n.tags || [],
+      attachments: (n.attachments || []).map((a: any) => a.file_name),
+      isPublished: n.is_published,
+      isPinned: n.is_pinned,
+      publishedAt: n.published_at instanceof Date ? n.published_at.toISOString() : new Date(n.published_at).toISOString(),
+      createdAt: n.created_at instanceof Date ? n.created_at.toISOString() : new Date(n.created_at).toISOString(),
+    }));
+
+    await bulkSyncNews(newsDocs);
     console.log('Database and Meilisearch sync completed.');
   } catch (err) {
     console.error('Failed to sync PostgreSQL data with Meilisearch:', err);

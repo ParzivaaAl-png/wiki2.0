@@ -151,6 +151,79 @@ export const initializeDatabase = async () => {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_notifications_role ON notifications(role)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)');
 
+    // Create News Tables
+    console.log('Ensuring news and related tables exist...');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS news (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        content TEXT NOT NULL,
+        is_published BOOLEAN DEFAULT TRUE,
+        is_pinned BOOLEAN DEFAULT FALSE,
+        author_id INT REFERENCES users(id) ON DELETE SET NULL,
+        published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS news_images (
+        id SERIAL PRIMARY KEY,
+        news_id INT REFERENCES news(id) ON DELETE CASCADE,
+        image_url VARCHAR(512) NOT NULL,
+        position INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS news_attachments (
+        id SERIAL PRIMARY KEY,
+        news_id INT REFERENCES news(id) ON DELETE CASCADE,
+        file_url VARCHAR(512) NOT NULL,
+        file_name VARCHAR(255) NOT NULL,
+        file_size INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS news_views (
+        id SERIAL PRIMARY KEY,
+        news_id INT REFERENCES news(id) ON DELETE CASCADE,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS news_read_status (
+        news_id INT REFERENCES news(id) ON DELETE CASCADE,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        is_read BOOLEAN DEFAULT FALSE,
+        read_at TIMESTAMP,
+        PRIMARY KEY (news_id, user_id)
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS news_tags (
+        news_id INT REFERENCES news(id) ON DELETE CASCADE,
+        tag_name VARCHAR(50) NOT NULL,
+        PRIMARY KEY (news_id, tag_name)
+      );
+    `);
+
+    // Indexes for news performance
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_news_published_pinned ON news(is_published, is_pinned, published_at DESC)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_news_images_news_id ON news_images(news_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_news_attachments_news_id ON news_attachments(news_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_news_views_news_id_user_id ON news_views(news_id, user_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_news_read_status_user_id ON news_read_status(user_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_news_tags_news_id ON news_tags(news_id)');
+
     console.log('Database tables and indexes verified/created successfully.');
   } catch (error) {
     console.error('Failed to initialize database tables:', error);

@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 
 import * as articlesController from '../controllers/articles';
 import * as authController from '../controllers/auth';
+import * as newsController from '../controllers/news';
 import { requireAuth, requireRole } from '../middleware/auth';
 
 // Ensure uploads folder exists
@@ -30,14 +31,18 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit (allow documents)
   fileFilter: (req, file, cb) => {
     // Allow images and documents
-    const allowedExtensions = /jpeg|jpg|png|gif|webp|pdf|docx|txt|xlsx|csv/;
+    const allowedExtensions = /jpeg|jpg|png|gif|webp|pdf|docx|txt|xlsx|csv|zip/;
     const extName = allowedExtensions.test(path.extname(file.originalname).toLowerCase());
-    const mimeType = allowedExtensions.test(file.mimetype) || file.originalname.endsWith('.docx') || file.originalname.endsWith('.xlsx') || file.originalname.endsWith('.csv');
+    const mimeType = allowedExtensions.test(file.mimetype) || 
+                     file.originalname.endsWith('.docx') || 
+                     file.originalname.endsWith('.xlsx') || 
+                     file.originalname.endsWith('.csv') ||
+                     file.originalname.endsWith('.zip');
     
     if (extName || mimeType) {
       cb(null, true);
     } else {
-      cb(new Error('Format not supported. Only images and docs (pdf, docx, txt, xlsx, csv) are allowed.'));
+      cb(new Error('Format not supported. Only images and docs (pdf, docx, txt, xlsx, csv, zip) are allowed.'));
     }
   },
 });
@@ -74,6 +79,16 @@ router.put('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), artic
 router.delete('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.deleteArticle);
 router.post('/articles/reorder', requireAuth, requireRole(['Admin', 'Editor']), articlesController.reorderArticles);
 
+// News Routes
+router.get('/news', requireAuth, newsController.getNews);
+router.get('/news/unread-count', requireAuth, newsController.getUnreadCount);
+router.get('/news/search', requireAuth, newsController.searchNews);
+router.get('/news/:id', requireAuth, newsController.getNewsDetail);
+router.post('/news', requireAuth, requireRole(['Admin', 'Editor']), newsController.createNews);
+router.put('/news/:id', requireAuth, requireRole(['Admin', 'Editor']), newsController.updateNews);
+router.delete('/news/:id', requireAuth, requireRole(['Admin', 'Editor']), newsController.deleteNews);
+router.post('/news/upload-attachment', requireAuth, requireRole(['Admin', 'Editor']), upload.single('file'), newsController.uploadAttachment);
+
 // Sync operations routes
 router.post('/articles/:id/sync', requireAuth, requireRole(['Admin', 'Editor']), articlesController.syncArticle);
 router.get('/articles/:id/sync-history', requireAuth, requireRole(['Admin', 'Editor']), articlesController.getArticleSyncHistory);
@@ -81,8 +96,6 @@ router.get('/articles/:id/sync-history', requireAuth, requireRole(['Admin', 'Edi
 // System notifications routes
 router.get('/notifications', requireAuth, articlesController.getNotifications);
 router.post('/notifications/read', requireAuth, articlesController.markNotificationsRead);
-
-
 
 // Image/File upload & import route
 router.post('/upload', requireAuth, requireRole(['Admin', 'Editor']), upload.single('image'), articlesController.uploadImage);

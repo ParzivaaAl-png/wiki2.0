@@ -582,4 +582,119 @@ export async function markNotificationsAsRead(): Promise<{ message: string }> {
   });
 }
 
+export interface NewsAttachment {
+  id: number;
+  file_url: string;
+  file_name: string;
+  file_size: number;
+  created_at: string;
+}
+
+export interface News {
+  id: number;
+  title: string;
+  description: string;
+  content: string;
+  is_published: boolean;
+  is_pinned: boolean;
+  author_id: number | null;
+  author_name?: string;
+  published_at: string;
+  created_at: string;
+  updated_at: string;
+  tags: string[];
+  images: string[];
+  attachments: NewsAttachment[];
+  is_read?: boolean;
+}
+
+export interface NewsSearchResult {
+  id: number;
+  title: string;
+  description: string;
+  tags: string[];
+  attachments: string[];
+  isPublished: boolean;
+  isPinned: boolean;
+  publishedAt: string;
+  createdAt: string;
+  highlights: string[];
+  score: number;
+}
+
+export async function fetchNews(): Promise<News[]> {
+  return apiCall<News[]>('/news', { cache: 'no-store' });
+}
+
+export async function fetchNewsDetail(id: number): Promise<News> {
+  clearApiCache();
+  return apiCall<News>(`/news/${id}`, { cache: 'no-store' });
+}
+
+export async function fetchUnreadNewsCount(): Promise<number> {
+  const result = await apiCall<{ count: number }>('/news/unread-count', { cache: 'no-store' });
+  return result.count;
+}
+
+export async function createNews(data: {
+  title: string;
+  description: string;
+  content: string;
+  is_published: boolean;
+  is_pinned: boolean;
+  published_at?: string;
+  tags: string[];
+  images: string[];
+  attachments: { file_url: string; file_name: string; file_size: number }[];
+}): Promise<News> {
+  clearApiCache();
+  return apiCall<News>('/news', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateNews(
+  id: number,
+  data: {
+    title: string;
+    description: string;
+    content: string;
+    is_published: boolean;
+    is_pinned: boolean;
+    published_at?: string;
+    tags: string[];
+    images: string[];
+    attachments: { file_url: string; file_name: string; file_size: number }[];
+  }
+): Promise<News> {
+  clearApiCache();
+  return apiCall<News>(`/news/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteNews(id: number): Promise<void> {
+  clearApiCache();
+  return apiCall<void>(`/news/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function searchNews(q: string, tag?: string): Promise<NewsSearchResult[]> {
+  const queryParams = new URLSearchParams({ q });
+  if (tag) queryParams.set('tag', tag);
+  return apiCall<NewsSearchResult[]>(`/news/search?${queryParams.toString()}`);
+}
+
+export async function uploadNewsAttachment(file: File): Promise<{ file_url: string; file_name: string; file_size: number }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiCall<{ file_url: string; file_name: string; file_size: number }>('/news/upload-attachment', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
 

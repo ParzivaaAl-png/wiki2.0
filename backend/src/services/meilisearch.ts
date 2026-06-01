@@ -28,6 +28,7 @@ export const msClient = new Meilisearch({
 });
 
 const INDEX_NAME = 'articles';
+const NEWS_INDEX_NAME = 'news';
 
 export interface ArticleDocument {
   id: number;
@@ -38,6 +39,19 @@ export interface ArticleDocument {
   categoryName: string;
   tags: string[];
   published: boolean;
+  createdAt: string;
+}
+
+export interface NewsDocument {
+  id: number;
+  title: string;
+  description: string;
+  content: string;
+  tags: string[];
+  attachments: string[];
+  isPublished: boolean;
+  isPinned: boolean;
+  publishedAt: string;
   createdAt: string;
 }
 
@@ -66,6 +80,7 @@ export const checkMeilisearchConnection = async (retries = 10, delay = 3000): Pr
  */
 export const initializeMeilisearch = async () => {
   try {
+    // 1. Initialize Articles Index
     let indexExists = false;
     try {
       await msClient.getIndex(INDEX_NAME);
@@ -90,7 +105,7 @@ export const initializeMeilisearch = async () => {
     }
 
     // Configure settings for autocomplete, search filters, and sorting
-    console.log('Configuring settings for Meilisearch index...');
+    console.log('Configuring settings for Meilisearch index articles...');
     const settingsTask = await msClient.index(INDEX_NAME).updateSettings({
       searchableAttributes: [
         'title',
@@ -118,9 +133,64 @@ export const initializeMeilisearch = async () => {
     });
 
     await msClient.tasks.waitForTask(settingsTask.taskUid);
-    console.log('Meilisearch settings configured successfully.');
+    console.log('Meilisearch index articles settings configured successfully.');
+
+    // 2. Initialize News Index
+    let newsIndexExists = false;
+    try {
+      await msClient.getIndex(NEWS_INDEX_NAME);
+      newsIndexExists = true;
+      console.log(`Meilisearch index "${NEWS_INDEX_NAME}" already exists.`);
+    } catch (err: any) {
+      const isNotFound =
+        err.code === 'index_not_found' ||
+        err.cause?.code === 'index_not_found' ||
+        err.message?.includes('not found') ||
+        err.message?.includes('index_not_found');
+      if (!isNotFound) {
+        throw err;
+      }
+    }
+
+    if (!newsIndexExists) {
+      console.log(`Creating Meilisearch index "${NEWS_INDEX_NAME}"...`);
+      const task = await msClient.createIndex(NEWS_INDEX_NAME, { primaryKey: 'id' });
+      await msClient.tasks.waitForTask(task.taskUid);
+      console.log(`Meilisearch index "${NEWS_INDEX_NAME}" created successfully.`);
+    }
+
+    console.log('Configuring settings for Meilisearch index news...');
+    const newsSettingsTask = await msClient.index(NEWS_INDEX_NAME).updateSettings({
+      searchableAttributes: [
+        'title',
+        'description',
+        'content',
+        'tags',
+        'attachments',
+      ],
+      filterableAttributes: [
+        'isPublished',
+        'isPinned',
+        'tags',
+      ],
+      sortableAttributes: [
+        'publishedAt',
+        'createdAt',
+      ],
+      typoTolerance: {
+        enabled: true,
+        minWordSizeForTypos: {
+          oneTypo: 4,
+          twoTypos: 7,
+        },
+      },
+    });
+
+    await msClient.tasks.waitForTask(newsSettingsTask.taskUid);
+    console.log('Meilisearch index news settings configured successfully.');
+
   } catch (error) {
-    console.error('Failed to initialize Meilisearch index:', error);
+    console.error('Failed to initialize Meilisearch indexes:', error);
   }
 };
 
@@ -366,6 +436,105 @@ export const suggestArticles = async (queryText: string) => {
     }));
   } catch (error) {
     console.error('Meilisearch suggestions query failed:', error);
+    return [];
+  }
+};
+
+/**
+ * Indexes or updates a single news item.
+ */
+export const indexNews = async (news: NewsDocument) => {
+  try {
+    const task = await msClient.index(NEWS_INDEX_NAME).addDocuments([news]);
+    await msClient.tasks.waitForTask(task.taskUid);
+    console.log(`Indexed news in Meilisearch: ID ${news.id} (${news.title})`);
+  } catch (error) {
+    console.error(`Failed to index news ${news.id} in Meilisearch:`, error);
+  }
+};
+
+/**
+ * Deletes a news item from the index by ID.
+ */
+export const deleteNews = async (id: number) => {
+  try {
+    const task = await msClient.index(NEWS_INDEX_NAME).deleteDocument(id);
+    await msClient.tasks.waitForTask(task.taskUid);
+    console.log(`Deleted news from Meilisearch: ID ${id}`);
+  } catch (error) {
+    console.error(`Failed to delete news ${id} from Meilisearch:`, error);
+  }
+};
+
+/**
+ * Indexes multiple news items in bulk.
+ */
+export const bulkSyncNews = async (newsList: NewsDocument[]) => {
+  try {
+    if (newsList.length === 0) return;
+    const task = await msClient.index(NEWS_INDEX_NAME).addDocuments(newsList);
+    await msClient.tasks.waitForTask(task.taskUid);
+    console.log(`Successfully bulk indexed ${newsList.length} news items into Meilisearch.`);
+  } catch (error) {
+    console.error('Bulk sync news with Meilisearch failed:', error);
+  }
+};
+
+/**
+ * Searches news with filters, highlighting, and typo tolerance.
+ */
+export const searchNews = async (
+  queryText: string,
+  tagName?: string,
+  includeUnpublished = false
+) => {
+  try {
+    const filterArray: string[] = [];
+
+    if (!includeUnpublished) {
+      filterArray.push('isPublished = true');
+    }
+
+    if (tagName) {
+      filterArray.push(`tags = "${tagName}"`);
+    }
+
+    const searchParams: any = {
+      filter: filterArray,
+      attributesToHighlight: ['title', 'description', 'content'],
+      highlightPreTag: '<mark class="bg-indigo-500/20 text-indigo-200 px-1 rounded font-semibold">',
+      highlightPostTag: '</mark>',
+      showRankingScore: true,
+      limit: 30,
+    };
+
+    // If query is empty, sort by pinned first, then by published date (newest first)
+    if (!queryText || queryText.trim().length === 0) {
+      searchParams.sort = ['isPinned:desc', 'publishedAt:desc'];
+    }
+
+    const response = await msClient.index(NEWS_INDEX_NAME).search(queryText, searchParams);
+
+    return response.hits.map((hit: any) => {
+      const formatted = hit._formatted || {};
+      const contentHighlights = extractHighlights(formatted.content || '');
+
+      return {
+        id: Number(hit.id),
+        title: formatted.title || hit.title,
+        description: formatted.description || hit.description,
+        tags: hit.tags,
+        attachments: hit.attachments || [],
+        isPublished: hit.isPublished,
+        isPinned: hit.isPinned,
+        publishedAt: hit.publishedAt,
+        createdAt: hit.createdAt,
+        highlights: contentHighlights,
+        score: hit._rankingScore || 1.0,
+      };
+    });
+  } catch (error) {
+    console.error('Meilisearch search news query failed:', error);
     return [];
   }
 };

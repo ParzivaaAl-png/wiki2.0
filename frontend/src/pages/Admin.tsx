@@ -23,7 +23,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
-  Info
+  Info,
+  MessageSquare
 } from 'lucide-react';
 import { 
   fetchArticles, 
@@ -43,6 +44,7 @@ import { useAuth } from '../lib/auth-context';
 import UserManagement from '../components/user-management';
 import SessionManagement from '../components/session-management';
 import PreviewModal from '../components/preview-modal';
+import { NewsAdmin } from '../components/news-admin';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export default function Admin() {
@@ -53,7 +55,7 @@ export default function Admin() {
   
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'published' | 'drafts'>('all');
-  const [activeTab, setActiveTab] = React.useState<'articles' | 'archive' | 'users' | 'sessions'>('articles');
+  const [activeTab, setActiveTab] = React.useState<'articles' | 'archive' | 'users' | 'sessions' | 'news'>('articles');
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = React.useState(false);
@@ -416,6 +418,18 @@ export default function Admin() {
             <Trash2 className="w-4 h-4 text-neutral-400" />
             Архив статей
           </button>
+
+          <button
+            onClick={() => setActiveTab('news')}
+            className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
+              activeTab === 'news'
+                ? 'border-indigo-500 text-indigo-500'
+                : 'border-transparent text-neutral-500 hover:text-neutral-950 dark:hover:text-white'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4 text-neutral-450 dark:text-neutral-500" />
+            Новости
+          </button>
           
           {user?.role === 'Admin' && (
             <>
@@ -453,6 +467,10 @@ export default function Admin() {
 
       {activeTab === 'sessions' && user?.role === 'Admin' && (
         <SessionManagement />
+      )}
+
+      {activeTab === 'news' && (
+        <NewsAdmin />
       )}
 
       {/* STATS AND MAIN ARTICLES TAB */}
