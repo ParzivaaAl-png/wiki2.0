@@ -183,14 +183,32 @@ export default function TariffsClassifier() {
   // Accordion states: we can track which index/key is open
   const [openAccordion, setOpenAccordion] = React.useState<string | null>(TARIFFS[0].key);
 
+  // Sync selectedCity state when initialCity (derived from URL) changes
+  React.useEffect(() => {
+    setSelectedCity(initialCity);
+  }, [initialCity]);
+
+  // Sync selectedBrand, selectedModel, and selectedYear when they change in URL (e.g. via search modal)
+  React.useEffect(() => {
+    setSelectedBrand(paramBrand);
+  }, [paramBrand]);
+
+  React.useEffect(() => {
+    setSelectedModel(paramModel);
+  }, [paramModel]);
+
+  React.useEffect(() => {
+    setSelectedYear(paramYear ? Number(paramYear) : '');
+  }, [paramYear]);
+
   // Sync state to URL if query param is not set
   React.useEffect(() => {
-    if (!searchParams.has('city')) {
-      const newParams = new URLSearchParams(searchParams);
-      newParams.set('city', initialCity.id);
-      setSearchParams(newParams, { replace: true });
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('city')) {
+      params.set('city', initialCity.id);
+      setSearchParams(params, { replace: true });
     }
-  }, [searchParams, initialCity.id, setSearchParams]);
+  }, [initialCity.id, setSearchParams]);
 
   // Sync state to local storage and URL when city is selected
   const handleCitySelect = (city: City) => {

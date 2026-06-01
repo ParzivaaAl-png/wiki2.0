@@ -48,14 +48,19 @@ export default function TariffDetails({ tariffKey }: TariffDetailsProps) {
 
   const [selectedCity, setSelectedCity] = React.useState<City>(initialCity);
 
+  // Keep selectedCity in sync if initialCity (derived from URL) changes
+  React.useEffect(() => {
+    setSelectedCity(initialCity);
+  }, [initialCity]);
+
   // Sync state to URL if query param is not set
   React.useEffect(() => {
-    if (!searchParams.has('city')) {
-      const newParams = new URLSearchParams(searchParams);
-      newParams.set('city', initialCity.id);
-      setSearchParams(newParams, { replace: true });
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('city')) {
+      params.set('city', initialCity.id);
+      setSearchParams(params, { replace: true });
     }
-  }, [searchParams, initialCity.id, setSearchParams]);
+  }, [initialCity.id, setSearchParams]);
 
   // Sync state to local storage and URL when city is selected
   const handleCitySelect = (city: City) => {
