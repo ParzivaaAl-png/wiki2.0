@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { 
   X, Calendar, User, Pin, FileText, Download, 
   ChevronLeft, ChevronRight, Maximize2, ExternalLink 
@@ -111,7 +112,7 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-neutral-950/60 backdrop-blur-sm overflow-hidden select-text">
       {/* Detail Window Card */}
       <motion.div
@@ -163,23 +164,9 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
             </div>
           </div>
 
-          {/* Description summary (italic, styled) */}
-          {news.description && (
-            <div className="p-3.5 bg-neutral-50 dark:bg-neutral-900/40 rounded-xl border border-neutral-200/40 dark:border-neutral-900 italic text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed font-light">
-              {news.description}
-            </div>
-          )}
-
-          {/* NOTION-STYLE ARTICLE BODY */}
-          <div 
-            className="prose-custom prose dark:prose-invert max-w-none text-neutral-800 dark:text-neutral-200"
-            dangerouslySetInnerHTML={{ __html: news.content }}
-          />
-
           {/* PREMIUM INSTAGRAM / TELEGRAM IMAGE GALLERY */}
           {hasImages && (
-            <div className="space-y-2 mt-6">
-              <h3 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider">Галерея</h3>
+            <div className="space-y-2">
               <div 
                 className="relative aspect-video sm:rounded-xl overflow-hidden bg-neutral-950 flex items-center justify-center group"
                 onTouchStart={handleTouchStart}
@@ -202,8 +189,9 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
                 {/* Left Button */}
                 {currentPhotoIdx > 0 && (
                   <button
-                    onClick={() => setCurrentPhotoIdx(prev => prev - 1)}
-                    className="absolute left-3 p-1.5 rounded-full bg-black/50 hover:bg-black/70 text-white transition-all backdrop-blur-sm opacity-100 group-hover:scale-105"
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setCurrentPhotoIdx(prev => prev - 1); }}
+                    className="absolute left-3 p-1.5 rounded-full bg-black/50 hover:bg-black/70 text-white transition-all backdrop-blur-sm opacity-100 group-hover:scale-105 hidden sm:inline-flex"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
@@ -212,8 +200,9 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
                 {/* Right Button */}
                 {currentPhotoIdx < imageCount - 1 && (
                   <button
-                    onClick={() => setCurrentPhotoIdx(prev => prev + 1)}
-                    className="absolute right-3 p-1.5 rounded-full bg-black/50 hover:bg-black/70 text-white transition-all backdrop-blur-sm opacity-100 group-hover:scale-105"
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setCurrentPhotoIdx(prev => prev + 1); }}
+                    className="absolute right-3 p-1.5 rounded-full bg-black/50 hover:bg-black/70 text-white transition-all backdrop-blur-sm opacity-100 group-hover:scale-105 hidden sm:inline-flex"
                   >
                     <ChevronRight className="w-5 h-5" />
                   </button>
@@ -221,7 +210,8 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
 
                 {/* Maximize Button */}
                 <button
-                  onClick={() => setIsFullscreen(true)}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setIsFullscreen(true); }}
                   className="absolute bottom-3 right-3 p-1.5 rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
                   title="На весь экран"
                 >
@@ -230,6 +220,19 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
               </div>
             </div>
           )}
+
+          {/* Description summary (italic, styled) */}
+          {news.description && (
+            <div className="p-3.5 bg-neutral-50 dark:bg-neutral-900/40 rounded-xl border border-neutral-200/40 dark:border-neutral-900 italic text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed font-light">
+              {news.description}
+            </div>
+          )}
+
+          {/* NOTION-STYLE ARTICLE BODY */}
+          <div 
+            className="prose-custom prose dark:prose-invert max-w-none text-neutral-800 dark:text-neutral-200"
+            dangerouslySetInnerHTML={{ __html: news.content }}
+          />
 
           {/* FILE ATTACHMENTS SECTION */}
           {news.attachments && news.attachments.length > 0 && (
@@ -289,7 +292,12 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
       {/* FULLSCREEN GALLERY OVERLAY */}
       <AnimatePresence>
         {isFullscreen && hasImages && (
-          <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center overflow-hidden">
+          <div 
+            className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center overflow-hidden"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
             {/* Close fullscreen */}
             <button
               onClick={() => setIsFullscreen(false)}
@@ -301,8 +309,9 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
             {/* Left navigation fullscreen */}
             {currentPhotoIdx > 0 && (
               <button
-                onClick={() => setCurrentPhotoIdx(prev => prev - 1)}
-                className="absolute left-4 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-md z-50"
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setCurrentPhotoIdx(prev => prev - 1); }}
+                className="absolute left-4 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-md z-50 hidden sm:inline-flex"
               >
                 <ChevronLeft className="w-8 h-8" />
               </button>
@@ -311,8 +320,9 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
             {/* Right navigation fullscreen */}
             {currentPhotoIdx < imageCount - 1 && (
               <button
-                onClick={() => setCurrentPhotoIdx(prev => prev + 1)}
-                className="absolute right-4 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-md z-50"
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setCurrentPhotoIdx(prev => prev + 1); }}
+                className="absolute right-4 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-md z-50 hidden sm:inline-flex"
               >
                 <ChevronRight className="w-8 h-8" />
               </button>
@@ -337,6 +347,7 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </div>,
+    document.body
   );
 }
