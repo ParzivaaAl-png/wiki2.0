@@ -10,9 +10,12 @@ const REFRESH_SECRET = process.env.REFRESH_SECRET || 'super_secret_refresh_key_w
 
 const generateTokens = (userId: number) => {
   const accessToken = jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: '15m' });
-  const refreshToken = jwt.sign({ id: userId }, REFRESH_SECRET, { expiresIn: '7d' });
+  const refreshToken = jwt.sign({ id: userId }, REFRESH_SECRET);
   return { accessToken, refreshToken };
 };
+
+// 100 years in milliseconds for practically infinite session lifetime
+const INFINITE_COOKIE_AGE = 100 * 365 * 24 * 60 * 60 * 1000;
 
 const setCookieOptions = (maxAgeMs: number) => ({
   httpOnly: true,
@@ -48,7 +51,7 @@ export const register = async (req: Request, res: Response) => {
     );
 
     res.cookie('accessToken', accessToken, setCookieOptions(15 * 60 * 1000));
-    res.cookie('refreshToken', refreshToken, setCookieOptions(7 * 24 * 60 * 60 * 1000));
+    res.cookie('refreshToken', refreshToken, setCookieOptions(INFINITE_COOKIE_AGE));
 
     res.status(201).json({ user, accessToken });
   } catch (error: any) {
@@ -90,7 +93,7 @@ export const login = async (req: Request, res: Response) => {
     );
 
     res.cookie('accessToken', accessToken, setCookieOptions(15 * 60 * 1000));
-    res.cookie('refreshToken', refreshToken, setCookieOptions(7 * 24 * 60 * 60 * 1000));
+    res.cookie('refreshToken', refreshToken, setCookieOptions(INFINITE_COOKIE_AGE));
 
     const userResponse = {
       id: user.id,
@@ -156,7 +159,7 @@ export const refresh = async (req: Request, res: Response) => {
     );
 
     res.cookie('accessToken', tokens.accessToken, setCookieOptions(15 * 60 * 1000));
-    res.cookie('refreshToken', tokens.refreshToken, setCookieOptions(7 * 24 * 60 * 60 * 1000));
+    res.cookie('refreshToken', tokens.refreshToken, setCookieOptions(INFINITE_COOKIE_AGE));
 
     res.json({ accessToken: tokens.accessToken });
   } catch (error: any) {
