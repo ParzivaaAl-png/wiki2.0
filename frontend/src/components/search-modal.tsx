@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { searchArticles, SearchResult, fetchClassifierData } from '../lib/api';
 import { createPortal } from 'react-dom';
 import { CITIES, TARIFFS, CAR_DATA } from '../lib/classifier-data';
+import { getQueryVariants } from '../utils/text';
 
 interface SearchBarProps {
   variant?: 'header' | 'hero';
@@ -65,31 +66,43 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
   }, [carData]);
 
   const matchedCar = React.useMemo(() => {
-    const q = query.toLowerCase().trim();
+    const q = query.trim();
     if (q.length < 2) return null;
-    const words = q.split(/\s+/);
+    const variants = getQueryVariants(q);
 
     for (const car of carData) {
       const brand = car.brand.toLowerCase();
       const modelName = car.model.toLowerCase();
       const fullName = `${brand} ${modelName}`;
 
-      if (q === brand || q === modelName || q === fullName || fullName.includes(q)) {
+      const hasMatch = variants.some(variant => {
+        const v = variant.toLowerCase().trim();
+        return v === brand || v === modelName || v === fullName || fullName.includes(v);
+      });
+
+      if (hasMatch) {
         return car;
       }
 
-      if (words.length >= 2) {
-        const hasBrand = words.some(w => brand.includes(w) || w.includes(brand));
-        const hasModel = words.some(w => modelName.includes(w) || w.includes(modelName));
-        if (hasBrand && hasModel) {
-          return car;
+      for (const variant of variants) {
+        const words = variant.toLowerCase().split(/\s+/);
+        if (words.length >= 2) {
+          const hasBrand = words.some(w => brand.includes(w) || w.includes(brand));
+          const hasModel = words.some(w => modelName.includes(w) || w.includes(modelName));
+          if (hasBrand && hasModel) {
+            return car;
+          }
         }
       }
     }
 
     for (const car of carData) {
       const brand = car.brand.toLowerCase();
-      if (q === brand || brand.includes(q)) {
+      const hasBrandMatch = variants.some(variant => {
+        const v = variant.toLowerCase().trim();
+        return v === brand || brand.includes(v);
+      });
+      if (hasBrandMatch) {
         return car;
       }
     }
@@ -102,9 +115,18 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
   }, [matchedCar]);
 
   const matchedBrand = React.useMemo(() => {
-    const q = query.toLowerCase().trim();
+    const q = query.trim();
     if (q.length < 2) return null;
-    return dynamicBrands.find(b => b.toLowerCase().includes(q) || q.includes(b.toLowerCase())) || null;
+    const variants = getQueryVariants(q);
+    for (const b of dynamicBrands) {
+      const brandLower = b.toLowerCase();
+      const hasMatch = variants.some(variant => {
+        const v = variant.toLowerCase().trim();
+        return brandLower.includes(v) || v.includes(brandLower);
+      });
+      if (hasMatch) return b;
+    }
+    return null;
   }, [query, dynamicBrands]);
 
   const brandModels = React.useMemo(() => {
