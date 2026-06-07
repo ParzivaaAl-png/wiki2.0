@@ -212,7 +212,7 @@ export const initializeDatabase = async () => {
       CREATE TABLE IF NOT EXISTS news_images (
         id SERIAL PRIMARY KEY,
         news_id INT REFERENCES news(id) ON DELETE CASCADE,
-        image_url VARCHAR(512) NOT NULL,
+        image_url TEXT NOT NULL,
         position INT DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -222,7 +222,7 @@ export const initializeDatabase = async () => {
       CREATE TABLE IF NOT EXISTS news_attachments (
         id SERIAL PRIMARY KEY,
         news_id INT REFERENCES news(id) ON DELETE CASCADE,
-        file_url VARCHAR(512) NOT NULL,
+        file_url TEXT NOT NULL,
         file_name VARCHAR(255) NOT NULL,
         file_size INT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -263,6 +263,11 @@ export const initializeDatabase = async () => {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_news_views_news_id_user_id ON news_views(news_id, user_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_news_read_status_user_id ON news_read_status(user_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_news_tags_news_id ON news_tags(news_id)');
+
+    // Migration: Alter image_url and file_url columns to TEXT to allow storing large base64 strings
+    console.log('Altering news image and attachment URL columns to TEXT...');
+    await pool.query('ALTER TABLE news_images ALTER COLUMN image_url TYPE TEXT');
+    await pool.query('ALTER TABLE news_attachments ALTER COLUMN file_url TYPE TEXT');
 
     console.log('Database tables and indexes verified/created successfully.');
   } catch (error) {
