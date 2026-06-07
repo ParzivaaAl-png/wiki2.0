@@ -8,6 +8,11 @@ import {
   reorderArticles, 
   fetchFavoriteArticles, 
   saveFavoriteArticles, 
+  fetchReadingHistory,
+  clearReadingHistory,
+  fetchPopularArticles,
+  fetchTrendingArticles,
+  fetchRecommendedArticles,
   Article 
 } from '../lib/api';
 import { CategoryIcon } from '../components/icon';
@@ -21,15 +26,22 @@ export default function Home() {
   const { user } = useAuth();
   const [allArticles, setAllArticles] = React.useState<Article[]>([]);
   const [favoriteArticles, setFavoriteArticles] = React.useState<Article[]>([]);
+  const [readingHistory, setReadingHistory] = React.useState<Article[]>([]);
+  
+  const [popularRanking, setPopularRanking] = React.useState<Article[]>([]);
+  const [trendingRanking, setTrendingRanking] = React.useState<Article[]>([]);
+  const [recommendedRanking, setRecommendedRanking] = React.useState<Article[]>([]);
+
   const [isLoading, setIsLoading] = React.useState(true);
 
-  // Filter Tab State: 'favorites' | 'new' | 'popular' | 'recent'
-  const [filterTab, setFilterTab] = React.useState<'favorites' | 'new' | 'popular' | 'recent'>('favorites');
+  // Filter Tab State: 'all' | 'new' | 'popular' | 'actual'
+  const [filterTab, setFilterTab] = React.useState<'all' | 'new' | 'popular' | 'actual'>('all');
 
   // Customization States (Personal Favorites)
   const [isConfigureMode, setIsConfigureMode] = React.useState(false);
   const [isAddFavModalOpen, setIsAddFavModalOpen] = React.useState(false);
   const [favSearchQuery, setFavSearchQuery] = React.useState('');
+  const [searchFavQuery, setSearchFavQuery] = React.useState('');
 
   // Global Edit Mode States (Editor / Admin only)
   const [isEditMode, setIsEditMode] = React.useState(false);
@@ -42,11 +54,26 @@ export default function Home() {
       setAllArticles(arts.filter(art => !art.slug.startsWith('auto-list-')));
 
       if (user) {
-        const favs = await fetchFavoriteArticles();
+        const [favs, history] = await Promise.all([
+          fetchFavoriteArticles(),
+          fetchReadingHistory()
+        ]);
         setFavoriteArticles(favs);
+        setReadingHistory(history);
       } else {
         setFavoriteArticles([]);
+        setReadingHistory([]);
       }
+
+      // Fetch rankings
+      const [pop, trend, rec] = await Promise.all([
+        fetchPopularArticles(),
+        fetchTrendingArticles(),
+        fetchRecommendedArticles()
+      ]);
+      setPopularRanking(pop.slice(0, 5));
+      setTrendingRanking(trend.slice(0, 5));
+      setRecommendedRanking(rec.slice(0, 5));
     } catch (error) {
       console.error('Home data load failed:', error);
     } finally {
@@ -74,34 +101,33 @@ export default function Home() {
       return allArticles;
     }
 
-    if (filterTab === 'favorites') {
-      // If user has set favorites, show them. Otherwise show first 4 articles.
-      if (favoriteArticles.length > 0) return favoriteArticles.slice(0, 4);
-      return allArticles.filter(a => a.is_visible !== false && a.published).slice(0, 4);
-    }
-
     const visibleArticles = allArticles.filter(a => a.is_visible !== false && a.published);
 
     if (filterTab === 'new') {
       return [...visibleArticles]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 4);
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     }
 
     if (filterTab === 'popular') {
       return [...visibleArticles]
-        .sort((a, b) => (b.views || 0) - (a.views || 0))
-        .slice(0, 4);
+        .sort((a, b) => (b.views || 0) - (a.views || 0));
     }
 
-    if (filterTab === 'recent') {
+    if (filterTab === 'actual') {
       return [...visibleArticles]
-        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-        .slice(0, 4);
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
     }
 
-    return visibleArticles.slice(0, 4);
-  }, [filterTab, allArticles, favoriteArticles, isEditMode]);
+    return visibleArticles;
+  }, [filterTab, allArticles, isEditMode]);
+
+  const filteredFavs = React.useMemo(() => {
+    if (!searchFavQuery.trim()) return favoriteArticles;
+    const q = searchFavQuery.toLowerCase();
+    return favoriteArticles.filter(art =>
+      art.title.toLowerCase().includes(q) || (art.summary || '').toLowerCase().includes(q)
+    );
+  }, [favoriteArticles, searchFavQuery]);
 
   // Drag and Drop for PERSONAL Favorites Configuration
   const handleFavDragStart = (e: React.DragEvent, id: number) => {
@@ -221,6 +247,17 @@ export default function Home() {
       await reorderArticles(reordered.map(a => ({ id: a.id, position: a.position })));
     } catch (err) {
       console.error('Failed to save global articles order:', err);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (!window.confirm('Вы уверены, что хотите очистить всю историю просмотров?')) return;
+    try {
+      await clearReadingHistory();
+      setReadingHistory([]);
+    } catch (err: any) {
+      console.error('Failed to clear reading history:', err);
+      alert('Не удалось очистить историю: ' + err.message);
     }
   };
 
@@ -365,308 +402,489 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* FILTER TABS SELECTOR */}
-      <section className="max-w-5xl mx-auto px-4 mb-4 mt-6 flex justify-center">
-        <div className="flex bg-neutral-150/70 dark:bg-neutral-900/60 p-1.5 rounded-xl border border-neutral-200/40 dark:border-neutral-800/40 shadow-sm gap-1">
-          <button
-            onClick={() => setFilterTab('favorites')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              filterTab === 'favorites' && !isEditMode
-                ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/10'
-                : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-white'
-            }`}
-          >
-            <Star className="w-3.5 h-3.5 shrink-0" />
-            <span>Быстрый доступ</span>
-          </button>
+      {/* FILTER TABS & ARTICLES CATALOG SECTION */}
+      <section className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          <button
-            onClick={() => setFilterTab('new')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              filterTab === 'new' && !isEditMode
-                ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/10'
-                : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-white'
-            }`}
-          >
-            Новые
-          </button>
-
-          <button
-            onClick={() => setFilterTab('popular')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              filterTab === 'popular' && !isEditMode
-                ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/10'
-                : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-white'
-            }`}
-          >
-            Популярные
-          </button>
-
-          <button
-            onClick={() => setFilterTab('recent')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              filterTab === 'recent' && !isEditMode
-                ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/10'
-                : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-white'
-            }`}
-          >
-            Актуальные
-          </button>
-        </div>
-      </section>
-
-      {/* Main Articles Grid Section */}
-      <section className="max-w-5xl mx-auto px-3 sm:px-4 py-6">
-        <div className="flex items-center justify-between mb-6 px-1">
-          <motion.h2 
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            className="font-outfit text-sm font-bold tracking-wider text-neutral-400 uppercase select-none"
-          >
-            {isEditMode 
-              ? 'Все статьи базы знаний (Режим редактирования)'
-              : filterTab === 'favorites' 
-                ? 'Мои избранные статьи' 
-                : filterTab === 'new' 
-                  ? 'Последние созданные статьи' 
-                  : filterTab === 'popular' 
-                    ? 'Самые читаемые статьи' 
-                    : 'Недавно обновлённые статьи'
-            }
-          </motion.h2>
-
-          <div className="flex items-center gap-2">
-            {/* Configure Mode Toggle for users (Favorites List ONLY) */}
-            {user && filterTab === 'favorites' && !isEditMode && (
-              <button
-                onClick={() => setIsConfigureMode(prev => !prev)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-sm ${
-                  isConfigureMode
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-450'
-                    : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20'
-                }`}
-              >
-                {isConfigureMode ? (
-                  <>
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Готово</span>
-                  </>
-                ) : (
-                  <>
-                    <span>✏️ Настроить</span>
-                  </>
-                )}
-              </button>
-            )}
-
-            {/* Global Edit Mode Toggle for Admins/Editors */}
-            {isStaff && !isConfigureMode && (
-              <button
-                onClick={() => setIsEditMode(prev => !prev)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-sm ${
-                  isEditMode
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-450 hover:bg-emerald-500/20'
-                    : 'bg-violet-500/10 border-violet-500/20 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20'
-                }`}
-              >
-                {isEditMode ? (
-                  <>
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Готово</span>
-                  </>
-                ) : (
-                  <>
-                    <span>✏️ Редактировать</span>
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Bento Grid */}
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="show"
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
-        >
-          {displayedArticles.map((art) => {
-            const isBeingDragged = art.id === draggedId;
-            const borderAccentColor = getArticleColor(art.id);
-            const iconName = getArticleIcon(art.id);
-            const isHidden = art.is_visible === false;
+          {/* Left Main Column */}
+          <div className="lg:col-span-8 space-y-8">
             
-            return (
-              <motion.div
-                key={art.id}
-                variants={itemVariants}
-                whileHover={!isEditMode && !isConfigureMode ? { y: -3, scale: 1.01 } : undefined}
-                draggable={isEditMode || isConfigureMode}
-                onDragStart={(e) => isEditMode ? handleGlobalDragStart(e as any, art.id) : handleFavDragStart(e as any, art.id)}
-                onDragOver={(e) => handleDragOver(e, art.id)}
-                onDrop={(e) => isEditMode ? handleGlobalDrop(e, art.id) : handleFavDrop(e, art.id)}
-                onDragEnd={handleDragEnd}
-                onClick={(e) => (isEditMode || isConfigureMode) && e.preventDefault()}
-                style={{ 
-                  borderColor: (isEditMode || isConfigureMode) ? borderAccentColor : undefined,
-                  boxShadow: (isEditMode || isConfigureMode) ? `0 0 10px ${borderAccentColor}18` : undefined
-                }}
-                className={`group relative flex flex-col justify-between p-5 rounded-xl border bg-white dark:bg-neutral-950 transition-all duration-300 ${
-                  (isEditMode || isConfigureMode) 
-                    ? 'border-2 cursor-grab active:cursor-grabbing hover:scale-[1.01]' 
-                    : 'border-neutral-200/60 dark:border-neutral-800 hover:border-indigo-500/20 dark:hover:border-indigo-500/20 hover:shadow-glow dark:hover:shadow-glow'
-                } ${isBeingDragged ? 'opacity-40 border-dashed scale-95' : ''} ${isHidden ? 'opacity-65' : ''} shadow-premium dark:shadow-premium-dark`}
-              >
-                {/* Personalize Favorites deletion button */}
-                {isConfigureMode && (
+            {/* "Продолжить чтение" (Reading History) */}
+            {user && readingHistory.length > 0 && (
+              <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark space-y-4">
+                <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3">
+                  <h3 className="font-outfit text-xs font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 uppercase tracking-wider">
+                    <Clock className="w-4 h-4 text-indigo-500" />
+                    Продолжить чтение
+                  </h3>
                   <button
-                    onClick={(e) => handleRemoveFromFavorites(e, art.id)}
-                    onTouchStart={(e) => {
-                      e.stopPropagation();
-                      handleRemoveFromFavorites(e, art.id);
-                    }}
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-650 text-white flex items-center justify-center cursor-pointer shadow-md hover:scale-110 active:scale-95 transition-all z-20 border border-white dark:border-neutral-950"
-                    title="Убрать из быстрого доступа"
+                    onClick={handleClearHistory}
+                    className="text-[10px] font-bold text-red-500 hover:text-red-650 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 rounded transition-colors cursor-pointer"
                   >
-                    <span className="w-2.5 h-[2px] bg-white rounded-full" />
+                    Очистить историю
                   </button>
-                )}
-
-                {/* Global editor archiving button */}
-                {isEditMode && (
-                  <button
-                    onClick={(e) => handleArchiveArticle(e, art)}
-                    onTouchStart={(e) => {
-                      e.stopPropagation();
-                      handleArchiveArticle(e, art);
-                    }}
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-650 text-white flex items-center justify-center cursor-pointer shadow-md hover:scale-110 active:scale-95 transition-all z-20 border border-white dark:border-neutral-950"
-                    title="Скрыть статью в архив"
-                  >
-                    <span className="w-2.5 h-[2px] bg-white rounded-full" />
-                  </button>
-                )}
-
-                <div>
-                  <div 
-                    className="w-10 h-10 rounded-lg flex items-center justify-center mb-4 border transition-colors duration-300"
-                    style={{ 
-                      backgroundColor: `${borderAccentColor}10`,
-                      borderColor: `${borderAccentColor}25`,
-                      color: borderAccentColor
-                    }}
-                  >
-                    <CategoryIcon name={iconName} className="w-5 h-5" />
-                  </div>
-                  
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <h3 className="font-outfit text-base font-bold text-neutral-900 dark:text-neutral-100 line-clamp-2 leading-snug">
-                      {art.title}
-                    </h3>
-                  </div>
-
-                  <p className="text-neutral-500 dark:text-neutral-400 text-xs line-clamp-2 leading-relaxed font-light">
-                    {art.summary || 'Краткое содержание статьи отсутствует.'}
-                  </p>
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {readingHistory.slice(0, 4).map((art) => {
+                    return (
+                      <Link
+                        key={art.id}
+                        to={`/articles/${art.slug}`}
+                        className="flex items-start gap-3 p-3 rounded-lg border border-neutral-105 dark:border-neutral-900 hover:border-indigo-500/25 hover:bg-neutral-50/50 dark:hover:bg-neutral-900/10 transition-all group"
+                      >
+                        <div className="w-8 h-8 rounded-md bg-indigo-500/5 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5 font-bold text-xs">
+                          🕒
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-xs font-bold text-neutral-800 dark:text-neutral-200 group-hover:text-indigo-500 transition-colors truncate">
+                            {art.title}
+                          </h4>
+                          <p className="text-[10px] text-neutral-450 truncate mt-0.5">
+                            {art.summary || 'Описание отсутствует'}
+                          </p>
+                          <span className="text-[9px] text-neutral-400 block mt-1">
+                            Просмотрено: {new Date(art.viewed_at!).toLocaleString()}
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
-                <div className="mt-6 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-medium text-neutral-400 dark:text-neutral-500 uppercase tracking-wider bg-neutral-100 dark:bg-neutral-900/60 px-1.5 py-0.5 rounded">
-                      {art.views || 0} просм.
-                    </span>
-                    {isHidden && (
-                      <span className="text-[8px] font-bold text-red-500 bg-red-500/10 px-1 py-0.5 rounded uppercase tracking-wider border border-red-500/20 flex items-center gap-0.5 select-none">
-                        <EyeOff className="w-2 h-2" /> Скрыто
-                      </span>
+            {/* "⭐ Избранное" (Favorites) */}
+            {user && (
+              <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3 gap-3">
+                  <h3 className="font-outfit text-xs font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 uppercase tracking-wider">
+                    <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                    Избранное
+                  </h3>
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                    <input
+                      type="text"
+                      placeholder="Поиск по избранному..."
+                      value={searchFavQuery}
+                      onChange={(e) => setSearchFavQuery(e.target.value)}
+                      className="text-[10px] px-2.5 py-1.5 border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white rounded-md outline-none focus:border-indigo-500 placeholder-neutral-450 w-full sm:w-36"
+                    />
+                    <button
+                      onClick={() => setIsConfigureMode(prev => !prev)}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all cursor-pointer shadow-sm shrink-0 ${
+                        isConfigureMode
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-450'
+                          : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20'
+                      }`}
+                    >
+                      {isConfigureMode ? <Check className="w-3 h-3" /> : null}
+                      <span>{isConfigureMode ? 'Готово' : 'Настроить'}</span>
+                    </button>
+                  </div>
+                </div>
+                
+                {filteredFavs.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-neutral-400 italic">
+                    {searchFavQuery ? 'Ничего не найдено' : 'В вашем избранном пока нет статей.'}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {filteredFavs.map((art) => {
+                      const isBeingDragged = art.id === draggedId;
+                      const borderAccentColor = getArticleColor(art.id);
+                      return (
+                        <div
+                          key={art.id}
+                          draggable={isConfigureMode}
+                          onDragStart={(e) => handleFavDragStart(e as any, art.id)}
+                          onDragOver={(e) => handleDragOver(e, art.id)}
+                          onDrop={(e) => handleFavDrop(e, art.id)}
+                          onDragEnd={handleDragEnd}
+                          onClick={(e) => isConfigureMode && e.preventDefault()}
+                          style={{ 
+                            borderColor: isConfigureMode ? borderAccentColor : undefined,
+                          }}
+                          className={`group relative flex items-start gap-3 p-3 rounded-lg border transition-all duration-300 ${
+                            isConfigureMode 
+                              ? 'border-2 cursor-grab active:cursor-grabbing hover:scale-[1.01]' 
+                              : 'border-neutral-150 dark:border-neutral-900 hover:border-indigo-500/25 hover:bg-neutral-50/50 dark:hover:bg-neutral-900/10'
+                          } ${isBeingDragged ? 'opacity-40 border-dashed scale-95' : ''}`}
+                        >
+                          {isConfigureMode && (
+                            <button
+                              onClick={(e) => handleRemoveFromFavorites(e, art.id)}
+                              onTouchStart={(e) => {
+                                e.stopPropagation();
+                                handleRemoveFromFavorites(e, art.id);
+                              }}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-650 text-white flex items-center justify-center cursor-pointer shadow-md hover:scale-110 active:scale-95 transition-all z-20 border border-white dark:border-neutral-950"
+                              title="Удалить из избранного"
+                            >
+                              <span className="w-2 h-[2px] bg-white rounded-full" />
+                            </button>
+                          )}
+
+                          <div className="w-8 h-8 rounded-md bg-amber-500/5 dark:bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0 mt-0.5">
+                            ⭐
+                          </div>
+                          
+                          <div className="min-w-0 flex-1 pr-4">
+                            <Link to={`/articles/${art.slug}`} className="block">
+                              <h4 className="text-xs font-bold text-neutral-800 dark:text-neutral-200 group-hover:text-indigo-500 transition-colors truncate">
+                                {art.title}
+                              </h4>
+                            </Link>
+                            <p className="text-[10px] text-neutral-450 truncate mt-0.5">
+                              {art.summary || 'Описание отсутствует'}
+                            </p>
+                            {art.favorited_at && (
+                              <span className="text-[9px] text-neutral-400 block mt-1 font-mono">
+                                Добавлено: {new Date(art.favorited_at).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+
+                          {isConfigureMode && (
+                            <div className="absolute right-2 bottom-2 flex items-center gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleMoveFavorite('left', art.id);
+                                }}
+                                disabled={favoriteArticles.findIndex(a => a.id === art.id) === 0}
+                                className="p-1 rounded bg-neutral-100 dark:bg-neutral-900 text-neutral-500 disabled:opacity-30 cursor-pointer"
+                              >
+                                <ChevronLeft className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleMoveFavorite('right', art.id);
+                                }}
+                                disabled={favoriteArticles.findIndex(a => a.id === art.id) === favoriteArticles.length - 1}
+                                className="p-1 rounded bg-neutral-100 dark:bg-neutral-900 text-neutral-550 disabled:opacity-30 cursor-pointer"
+                              >
+                                <ChevronRight className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Dotted Plus Slot for adding article to Personal Favorites (Configure Mode only) */}
+                    {isConfigureMode && favoriteArticles.length < 4 && (
+                      <div
+                        onClick={() => setIsAddFavModalOpen(true)}
+                        className="group cursor-pointer flex items-center justify-center p-3 rounded-lg border-2 border-dashed border-indigo-500/40 bg-indigo-500/[0.01] hover:bg-indigo-500/[0.04] hover:border-indigo-500/80 transition-all duration-300 min-h-[72px] shadow-sm select-none"
+                      >
+                        <Plus className="w-5 h-5 text-indigo-500/60 group-hover:text-indigo-500 transition-colors animate-pulse" />
+                        <span className="text-[10px] font-bold text-indigo-500/65 group-hover:text-indigo-500 uppercase tracking-wider ml-1.5 font-sans">
+                          Добавить
+                        </span>
+                      </div>
                     )}
                   </div>
-                  
-                  {(isEditMode || isConfigureMode) && (
-                    <div className="flex items-center gap-1.5 z-20">
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (isEditMode) {
-                            handleMoveGlobal('left', art.id);
-                          } else {
-                            handleMoveFavorite('left', art.id);
-                          }
-                        }}
-                        onTouchStart={(e) => {
-                          e.stopPropagation();
-                          if (isEditMode) {
-                            handleMoveGlobal('left', art.id);
-                          } else {
-                            handleMoveFavorite('left', art.id);
-                          }
-                        }}
-                        disabled={(isEditMode ? allArticles : favoriteArticles).findIndex(a => a.id === art.id) === 0}
-                        className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-neutral-550 dark:text-neutral-450 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors shadow-sm active:scale-95"
-                        title="Переместить назад"
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (isEditMode) {
-                            handleMoveGlobal('right', art.id);
-                          } else {
-                            handleMoveFavorite('right', art.id);
-                          }
-                        }}
-                        onTouchStart={(e) => {
-                          e.stopPropagation();
-                          if (isEditMode) {
-                            handleMoveGlobal('right', art.id);
-                          } else {
-                            handleMoveFavorite('right', art.id);
-                          }
-                        }}
-                        disabled={
-                          (isEditMode ? allArticles : favoriteArticles).findIndex(a => a.id === art.id) === 
-                          (isEditMode ? allArticles : favoriteArticles).length - 1
-                        }
-                        className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-neutral-550 dark:text-neutral-450 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors shadow-sm active:scale-95"
-                        title="Переместить вперед"
-                      >
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
+                )}
+              </div>
+            )}
 
-                  {!isEditMode && !isConfigureMode && (
-                    <Link
-                      to={`/articles/${art.slug}`}
-                      className="text-xs font-semibold text-indigo-500 dark:text-indigo-400 flex items-center gap-1 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all"
+            {/* Articles Catalog Card */}
+            <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark space-y-4">
+              
+              {/* Header & Tabs */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-neutral-105 dark:border-neutral-900 pb-3 gap-3">
+                <div className="flex bg-neutral-100 dark:bg-neutral-900 p-1 rounded-xl border border-neutral-205/30 dark:border-neutral-800/30 shadow-inner gap-0.5 shrink-0 self-start md:self-auto select-none">
+                  <button
+                    onClick={() => setFilterTab('all')}
+                    className={`px-3.5 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                      filterTab === 'all' && !isEditMode
+                        ? 'bg-indigo-500 text-white shadow'
+                        : 'text-neutral-550 hover:text-neutral-950 dark:hover:text-white'
+                    }`}
+                  >
+                    Все
+                  </button>
+                  <button
+                    onClick={() => setFilterTab('new')}
+                    className={`px-3.5 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                      filterTab === 'new' && !isEditMode
+                        ? 'bg-indigo-500 text-white shadow'
+                        : 'text-neutral-550 hover:text-neutral-950 dark:hover:text-white'
+                    }`}
+                  >
+                    Новые
+                  </button>
+                  <button
+                    onClick={() => setFilterTab('popular')}
+                    className={`px-3.5 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                      filterTab === 'popular' && !isEditMode
+                        ? 'bg-indigo-500 text-white shadow'
+                        : 'text-neutral-550 hover:text-neutral-950 dark:hover:text-white'
+                    }`}
+                  >
+                    Популярные
+                  </button>
+                  <button
+                    onClick={() => setFilterTab('actual')}
+                    className={`px-3.5 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                      filterTab === 'actual' && !isEditMode
+                        ? 'bg-indigo-500 text-white shadow'
+                        : 'text-neutral-550 hover:text-neutral-950 dark:hover:text-white'
+                    }`}
+                  >
+                    Актуальные
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {isStaff && !isConfigureMode && (
+                    <button
+                      onClick={() => setIsEditMode(prev => !prev)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-all cursor-pointer shadow-sm ${
+                        isEditMode
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-450'
+                          : 'bg-violet-500/10 border-violet-500/20 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20'
+                      }`}
                     >
-                      Читать <ChevronRight className="w-3.5 h-3.5" />
-                    </Link>
+                      {isEditMode ? <Check className="w-3.5 h-3.5" /> : null}
+                      <span>{isEditMode ? 'Готово' : 'Порядок статей'}</span>
+                    </button>
                   )}
                 </div>
-              </motion.div>
-            );
-          })}
+              </div>
 
-          {/* Dotted Plus Slot for adding article to Personal Favorites (Configure Mode only) */}
-          {isConfigureMode && favoriteArticles.length < 4 && (
-            <motion.div
-              whileHover={{ scale: 1.01, y: -2 }}
-              onClick={() => setIsAddFavModalOpen(true)}
-              className="group cursor-pointer flex flex-col items-center justify-center p-5 rounded-xl border-2 border-dashed border-indigo-500/40 bg-indigo-500/[0.01] hover:bg-indigo-500/[0.04] hover:border-indigo-500/80 transition-all duration-300 min-h-[160px] shadow-sm select-none"
-            >
-              <Plus className="w-8 h-8 text-indigo-500/60 group-hover:text-indigo-500 transition-colors animate-pulse" />
-              <span className="text-[11px] font-bold text-indigo-500/65 group-hover:text-indigo-500 uppercase tracking-wider mt-2">
-                Добавить статью
-              </span>
-            </motion.div>
-          )}
-        </motion.div>
+              {/* Bento Grid */}
+              <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                animate="show"
+                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
+              >
+                {displayedArticles.map((art) => {
+                  const isBeingDragged = art.id === draggedId;
+                  const borderAccentColor = getArticleColor(art.id);
+                  const iconName = getArticleIcon(art.id);
+                  const isHidden = art.is_visible === false;
+                  
+                  return (
+                    <motion.div
+                      key={art.id}
+                      variants={itemVariants}
+                      whileHover={!isEditMode && !isConfigureMode ? { y: -3, scale: 1.01 } : undefined}
+                      draggable={isEditMode}
+                      onDragStart={(e) => handleGlobalDragStart(e as any, art.id)}
+                      onDragOver={(e) => handleDragOver(e, art.id)}
+                      onDrop={(e) => handleGlobalDrop(e, art.id)}
+                      onDragEnd={handleDragEnd}
+                      onClick={(e) => isEditMode && e.preventDefault()}
+                      style={{ 
+                        borderColor: isEditMode ? borderAccentColor : undefined,
+                        boxShadow: isEditMode ? `0 0 10px ${borderAccentColor}18` : undefined
+                      }}
+                      className={`group relative flex flex-col justify-between p-5 rounded-xl border bg-white dark:bg-neutral-950 transition-all duration-300 ${
+                        isEditMode 
+                          ? 'border-2 cursor-grab active:cursor-grabbing hover:scale-[1.01]' 
+                          : 'border-neutral-200/60 dark:border-neutral-800 hover:border-indigo-500/25 dark:hover:border-indigo-500/25 hover:shadow-glow dark:hover:shadow-glow'
+                      } ${isBeingDragged ? 'opacity-40 border-dashed scale-95' : ''} ${isHidden ? 'opacity-65' : ''} shadow-premium dark:shadow-premium-dark`}
+                    >
+                      {isEditMode && (
+                        <button
+                          onClick={(e) => handleArchiveArticle(e, art)}
+                          onTouchStart={(e) => {
+                            e.stopPropagation();
+                            handleArchiveArticle(e, art);
+                          }}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-650 text-white flex items-center justify-center cursor-pointer shadow-md hover:scale-110 active:scale-95 transition-all z-20 border border-white dark:border-neutral-950"
+                          title="Скрыть статью в архив"
+                        >
+                          <span className="w-2 h-[2px] bg-white rounded-full" />
+                        </button>
+                      )}
+
+                      <div>
+                        <div 
+                          className="w-10 h-10 rounded-lg flex items-center justify-center mb-4 border transition-colors duration-300"
+                          style={{ 
+                            backgroundColor: `${borderAccentColor}10`,
+                            borderColor: `${borderAccentColor}25`,
+                            color: borderAccentColor
+                          }}
+                        >
+                          <CategoryIcon name={iconName} className="w-5 h-5" />
+                        </div>
+                        
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <h3 className="font-outfit text-xs font-bold text-neutral-900 dark:text-neutral-100 line-clamp-2 leading-snug">
+                            {art.title}
+                          </h3>
+                        </div>
+
+                        <p className="text-neutral-500 dark:text-neutral-400 text-[10px] line-clamp-2 leading-relaxed font-light">
+                          {art.summary || 'Краткое содержание статьи отсутствует.'}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[8px] font-medium text-neutral-400 dark:text-neutral-500 uppercase tracking-wider bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded font-mono">
+                            {art.views || 0} просм.
+                          </span>
+                          {isHidden && (
+                            <span className="text-[8px] font-bold text-red-500 bg-red-500/10 px-1 py-0.5 rounded uppercase tracking-wider border border-red-500/20 flex items-center gap-0.5 select-none font-mono">
+                              Скрыто
+                            </span>
+                          )}
+                        </div>
+                        
+                        {isEditMode && (
+                          <div className="flex items-center gap-1.5 z-20">
+                            <button
+                              onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleMoveGlobal('left', art.id);
+                              }}
+                              disabled={allArticles.findIndex(a => a.id === art.id) === 0}
+                              className="p-1 rounded bg-neutral-100 dark:bg-neutral-900 text-neutral-550 disabled:opacity-30 cursor-pointer"
+                            >
+                              <ChevronLeft className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleMoveGlobal('right', art.id);
+                              }}
+                              disabled={allArticles.findIndex(a => a.id === art.id) === allArticles.length - 1}
+                              className="p-1 rounded bg-neutral-100 dark:bg-neutral-900 text-neutral-550 disabled:opacity-30 cursor-pointer"
+                            >
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+
+                        {!isEditMode && !isConfigureMode && (
+                          <Link
+                            to={`/articles/${art.slug}`}
+                            className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 flex items-center gap-1 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all"
+                          >
+                            Читать <ChevronRight className="w-3 h-3 shrink-0" />
+                          </Link>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+            </div>
+
+          </div>
+          
+          {/* Right Sidebar Column */}
+          <aside className="lg:col-span-4 space-y-6">
+            
+            {/* Widget 1: Popular */}
+            <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
+              <h3 className="font-outfit text-xs font-bold text-neutral-900 dark:text-white uppercase tracking-wider mb-4 flex items-center gap-1.5 border-b border-neutral-100 dark:border-neutral-900 pb-2 select-none">
+                <span>🔥 Популярные статьи</span>
+              </h3>
+              {popularRanking.length === 0 ? (
+                <div className="text-center py-4 text-xs text-neutral-400 italic">Нет данных</div>
+              ) : (
+                <div className="space-y-3">
+                  {popularRanking.map((art, idx) => (
+                    <Link
+                      key={art.id}
+                      to={`/articles/${art.slug}`}
+                      className="flex items-center justify-between gap-3 text-xs group hover:text-indigo-500 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono font-bold text-[10px] text-neutral-400 dark:text-neutral-500 w-3 text-right">
+                          {idx + 1}
+                        </span>
+                        <span className="font-semibold text-neutral-850 dark:text-neutral-250 truncate">
+                          {art.title}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-neutral-400 dark:text-neutral-550 bg-neutral-100 dark:bg-neutral-905 px-1.5 py-0.5 rounded shrink-0">
+                        {art.views}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Widget 2: Trending */}
+            <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
+              <h3 className="font-outfit text-xs font-bold text-neutral-900 dark:text-white uppercase tracking-wider mb-4 flex items-center gap-1.5 border-b border-neutral-100 dark:border-neutral-900 pb-2 select-none">
+                <span>📈 Трендовые (7 дней)</span>
+              </h3>
+              {trendingRanking.length === 0 ? (
+                <div className="text-center py-4 text-xs text-neutral-400 italic">Нет данных</div>
+              ) : (
+                <div className="space-y-3">
+                  {trendingRanking.map((art, idx) => (
+                    <Link
+                      key={art.id}
+                      to={`/articles/${art.slug}`}
+                      className="flex items-center justify-between gap-3 text-xs group hover:text-indigo-500 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono font-bold text-[10px] text-neutral-400 dark:text-neutral-500 w-3 text-right">
+                          {idx + 1}
+                        </span>
+                        <span className="font-semibold text-neutral-850 dark:text-neutral-250 truncate">
+                          {art.title}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0 font-bold">
+                        +{art.trending_views || 0}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Widget 3: Recommended */}
+            <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark">
+              <h3 className="font-outfit text-xs font-bold text-neutral-900 dark:text-white uppercase tracking-wider mb-4 flex items-center gap-1.5 border-b border-neutral-100 dark:border-neutral-900 pb-2 select-none">
+                <span>⭐ Рекомендуемые</span>
+              </h3>
+              {recommendedRanking.length === 0 ? (
+                <div className="text-center py-4 text-xs text-neutral-400 italic">Нет данных</div>
+              ) : (
+                <div className="space-y-3">
+                  {recommendedRanking.map((art, idx) => (
+                    <Link
+                      key={art.id}
+                      to={`/articles/${art.slug}`}
+                      className="flex items-center justify-between gap-3 text-xs group hover:text-indigo-500 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono font-bold text-[10px] text-neutral-400 dark:text-neutral-500 w-3 text-right">
+                          {idx + 1}
+                        </span>
+                        <span className="font-semibold text-neutral-850 dark:text-neutral-250 truncate">
+                          {art.title}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-amber-500 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0 font-bold flex items-center gap-0.5">
+                        ⭐ {art.favorites_count || 0}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </aside>
+          
+        </div>
       </section>
 
       {/* POPUP: Add to Favorites Search Dialog */}

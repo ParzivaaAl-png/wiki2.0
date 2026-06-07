@@ -1,8 +1,9 @@
 import * as React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Search, Sparkles, X, FileText, CornerDownLeft, MapPin, CheckCircle2, XCircle, Info, Car, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Search, Sparkles, X, FileText, CornerDownLeft, MapPin, CheckCircle2, XCircle, Info, Car, ChevronRight, AlertTriangle, Star } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { searchArticles, SearchResult, fetchClassifierData } from '../lib/api';
+import { searchArticles, SearchResult, fetchClassifierData, fetchFavoriteArticles } from '../lib/api';
+import { useAuth } from '../lib/auth-context';
 import { createPortal } from 'react-dom';
 import { CITIES, TARIFFS, CAR_DATA } from '../lib/classifier-data';
 import { getQueryVariants } from '../utils/text';
@@ -19,6 +20,20 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(false);
   const [carData, setCarData] = React.useState<typeof CAR_DATA>(CAR_DATA);
+
+  const { user } = useAuth();
+  const [favoriteArticles, setFavoriteArticles] = React.useState<any[]>([]);
+  const [searchOnlyFavorites, setSearchOnlyFavorites] = React.useState(false);
+
+  React.useEffect(() => {
+    if (user && (isOpen || isFocused)) {
+      fetchFavoriteArticles()
+        .then(setFavoriteArticles)
+        .catch(err => console.error('Failed to load favorites in SearchModal:', err));
+    } else if (!user) {
+      setFavoriteArticles([]);
+    }
+  }, [user, isOpen, isFocused]);
 
   React.useEffect(() => {
     fetchClassifierData()
@@ -236,8 +251,15 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
     }
   };
 
+  const filteredResults = React.useMemo(() => {
+    if (searchOnlyFavorites) {
+      return results.filter(res => favoriteArticles.some(fav => fav.id === res.id));
+    }
+    return results;
+  }, [results, searchOnlyFavorites, favoriteArticles]);
+
   // Process results into Article Matches and Snippet Matches
-  const matchedArticles = results;
+  const matchedArticles = filteredResults;
 
   const textMatches = React.useMemo(() => {
     const list: {
@@ -249,7 +271,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
       matchedWord: string;
     }[] = [];
 
-    results.forEach((res) => {
+    filteredResults.forEach((res) => {
       if (res.highlights && res.highlights.length > 0) {
         res.highlights.forEach((hl) => {
           const match = hl.match(/<mark[^>]*>(.*?)<\/mark>/i);
@@ -267,7 +289,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
       }
     });
     return list;
-  }, [results, query]);
+  }, [filteredResults, query]);
 
   const totalItems = matchedArticles.length + textMatches.length;
 
@@ -577,16 +599,29 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Поиск..."
+                  placeholder={searchOnlyFavorites ? "Поиск по избранному..." : "Поиск..."}
                   autoFocus
                   className="w-full bg-transparent text-neutral-900 dark:text-neutral-50 outline-none placeholder-neutral-400 text-base"
                 />
                 {isLoading && (
                   <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin shrink-0" />
                 )}
+                {user && favoriteArticles.length > 0 && (
+                  <button
+                    onClick={() => setSearchOnlyFavorites(prev => !prev)}
+                    className={`p-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-sm shrink-0 ${
+                      searchOnlyFavorites
+                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-450'
+                        : 'bg-neutral-50 border-neutral-200 text-neutral-400 hover:bg-neutral-100 dark:bg-neutral-900 dark:border-neutral-800'
+                    }`}
+                    title={searchOnlyFavorites ? "Поиск по всем статьям" : "Поиск только в избранном"}
+                  >
+                    <Star className={`w-3.5 h-3.5 ${searchOnlyFavorites ? 'fill-amber-400 text-amber-500' : ''}`} />
+                  </button>
+                )}
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="p-1.5 rounded-md text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                  className="p-1.5 rounded-md text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-900 shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -743,11 +778,25 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => setIsFocused(true)}
             onKeyDown={handleListKeyDown}
-            placeholder="Поиск по базе знаний..."
+            placeholder={searchOnlyFavorites ? "Поиск по избранному..." : "Поиск по базе знаний..."}
             className="flex-1 bg-transparent border-0 outline-none text-base text-neutral-900 dark:text-neutral-50 placeholder-neutral-400"
           />
           {isLoading && (
             <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin shrink-0" />
+          )}
+          {user && favoriteArticles.length > 0 && (
+            <button
+              onClick={() => setSearchOnlyFavorites(prev => !prev)}
+              className={`p-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-sm shrink-0 flex items-center gap-1.5 ${
+                searchOnlyFavorites
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-450'
+                  : 'bg-neutral-50 border-neutral-200 text-neutral-400 hover:bg-neutral-100 dark:bg-neutral-900 dark:border-neutral-800'
+              }`}
+              title={searchOnlyFavorites ? "Поиск по всем статьям" : "Поиск только в избранном"}
+            >
+              <Star className={`w-3.5 h-3.5 ${searchOnlyFavorites ? 'fill-amber-400 text-amber-500' : ''}`} />
+              <span className="text-[10px] hidden md:inline">В избранном</span>
+            </button>
           )}
           {!query && (
             <kbd className="hidden sm:inline-flex h-6 select-none items-center gap-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-2 font-mono text-[11px] font-medium text-neutral-400">
@@ -798,8 +847,8 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
 
       {/* Desktop inline input search bar */}
       <div 
-        className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 bg-neutral-50 dark:bg-neutral-900/50 text-neutral-500 dark:text-neutral-400 text-sm hover:border-neutral-300 dark:hover:border-neutral-700 transition-all duration-300 ${
-          isFocused ? 'w-80 lg:w-[420px] ring-1 ring-indigo-500/20 border-indigo-500/40 bg-white dark:bg-neutral-950' : 'w-48 lg:w-64'
+        className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 bg-neutral-50 dark:bg-neutral-900/50 text-neutral-550 dark:text-neutral-400 text-sm hover:border-neutral-300 dark:hover:border-neutral-700 transition-all duration-300 ${
+          isFocused ? 'w-96 lg:w-[480px] ring-1 ring-indigo-500/20 border-indigo-500/40 bg-white dark:bg-neutral-950' : 'w-48 lg:w-64'
         }`}
       >
         <Search className="w-4 h-4 shrink-0 text-neutral-400" />
@@ -811,11 +860,23 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onKeyDown={handleListKeyDown}
-          placeholder="Поиск по вики..."
+          placeholder={searchOnlyFavorites ? "Поиск в избранном..." : "Поиск по вики..."}
           className="flex-1 bg-transparent border-0 outline-none text-xs text-neutral-900 dark:text-neutral-50 placeholder-neutral-400 py-0.5"
         />
         {isLoading && (
           <div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin shrink-0" />
+        )}
+        {user && favoriteArticles.length > 0 && isFocused && (
+          <button
+            onClick={() => setSearchOnlyFavorites(prev => !prev)}
+            className={`p-1 rounded transition-colors cursor-pointer shrink-0 flex items-center gap-0.5 ${
+              searchOnlyFavorites ? 'text-amber-500 bg-amber-500/10' : 'text-neutral-450'
+            }`}
+            title={searchOnlyFavorites ? "Поиск по всем статьям" : "Поиск только в избранном"}
+          >
+            <Star className={`w-3 h-3 ${searchOnlyFavorites ? 'fill-amber-400 text-amber-500' : ''}`} />
+            <span className="text-[9px] hidden lg:inline font-bold">Избранное</span>
+          </button>
         )}
         {!query && (
           <kbd className="hidden md:inline-flex h-4 select-none items-center gap-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 font-mono text-[9px] font-medium text-neutral-400 opacity-100">
@@ -825,7 +886,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
         {query && (
           <button
             onClick={() => setQuery('')}
-            className="p-0.5 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400"
+            className="p-0.5 rounded hover:bg-neutral-100 dark:hover:bg-neutral-850 text-neutral-450"
           >
             <X className="w-3 h-3" />
           </button>

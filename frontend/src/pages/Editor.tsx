@@ -30,6 +30,8 @@ export default function Editor() {
   const [syncInterval, setSyncInterval] = React.useState('manual');
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [changeDescription, setChangeDescription] = React.useState('');
+  const [editorComment, setEditorComment] = React.useState('');
 
   // Initial Fetch
   React.useEffect(() => {
@@ -109,6 +111,10 @@ export default function Editor() {
       position,
       source_url: sourceUrl || null,
       sync_interval: syncInterval,
+      ...(isEditMode && {
+        change_description: changeDescription || undefined,
+        editor_comment: editorComment || undefined,
+      }),
     };
 
     try {
@@ -251,6 +257,38 @@ export default function Editor() {
                 </div>
               )}
             </div>
+
+            {isEditMode && (
+              <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-3">
+                <h4 className="font-outfit text-xs font-bold text-neutral-900 dark:text-neutral-100">
+                  Журнал изменений статьи
+                </h4>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">
+                    Описание изменений (что нового?)
+                  </label>
+                  <textarea
+                    value={changeDescription}
+                    onChange={(e) => setChangeDescription(e.target.value)}
+                    placeholder="Например: Добавлен раздел по Docker, обновлены настройки окружения"
+                    rows={2}
+                    className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 resize-none placeholder-neutral-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">
+                    Комментарий редактора (внутренний)
+                  </label>
+                  <input
+                    type="text"
+                    value={editorComment}
+                    onChange={(e) => setEditorComment(e.target.value)}
+                    placeholder="Например: Исправление критической уязвимости"
+                    className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 placeholder-neutral-400"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-2">
               <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">Опубликовать статью</span>

@@ -7,7 +7,7 @@ import rateLimit from 'express-rate-limit';
 import * as articlesController from '../controllers/articles';
 import * as authController from '../controllers/auth';
 import * as newsController from '../controllers/news';
-import { requireAuth, requireRole } from '../middleware/auth';
+import { requireAuth, requireRole, optionalAuth } from '../middleware/auth';
 
 // Ensure uploads folder exists
 const uploadDir = path.join(__dirname, '../../uploads');
@@ -63,6 +63,10 @@ router.post('/auth/refresh', authController.refresh);
 router.get('/auth/me', requireAuth, authController.getMe);
 router.get('/users/me/favorites', requireAuth, authController.getFavoriteArticles);
 router.post('/users/me/favorites', requireAuth, authController.setFavoriteArticles);
+router.post('/users/me/favorites/add', requireAuth, authController.addFavoriteArticle);
+router.post('/users/me/favorites/remove', requireAuth, authController.removeFavoriteArticle);
+router.get('/users/me/history', requireAuth, authController.getReadingHistory);
+router.post('/users/me/history/clear', requireAuth, authController.clearReadingHistory);
 
 // Search routes (public — no auth required; results already filtered by published=true)
 router.get('/search', articlesController.searchArticles);
@@ -72,12 +76,16 @@ router.get('/search/suggest', articlesController.suggestArticles);
 router.get('/classifier/data', articlesController.getClassifierData);
 
 // Article routes (Read-only for public, writes protected)
-router.get('/articles', articlesController.getArticles);
-router.get('/articles/:slugOrId', articlesController.getArticle);
+router.get('/articles', optionalAuth, articlesController.getArticles);
+router.get('/articles/:slugOrId', optionalAuth, articlesController.getArticle);
 router.post('/articles', requireAuth, requireRole(['Admin', 'Editor']), articlesController.createArticle);
 router.put('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.updateArticle);
 router.delete('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.deleteArticle);
 router.post('/articles/reorder', requireAuth, requireRole(['Admin', 'Editor']), articlesController.reorderArticles);
+router.get('/articles/:id/changes', requireAuth, articlesController.getArticleChanges);
+router.get('/articles/ranking/popular', optionalAuth, articlesController.getPopularArticles);
+router.get('/articles/ranking/trending', optionalAuth, articlesController.getTrendingArticles);
+router.get('/articles/ranking/recommended', optionalAuth, articlesController.getRecommendedArticles);
 
 // News Routes
 router.get('/news', requireAuth, newsController.getNews);

@@ -103,6 +103,46 @@ export const initializeDatabase = async () => {
       );
     `;
     await pool.query(createFavsTableQuery);
+    await pool.query('ALTER TABLE user_favorite_articles ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+
+    // Create user_reading_history table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_reading_history (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        article_id INT REFERENCES articles(id) ON DELETE CASCADE,
+        viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (user_id, article_id)
+      );
+    `);
+
+    // Create article_views_log table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS article_views_log (
+        id SERIAL PRIMARY KEY,
+        article_id INT REFERENCES articles(id) ON DELETE CASCADE,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        ip_address VARCHAR(45) NOT NULL,
+        viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create article_changes_log table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS article_changes_log (
+        id SERIAL PRIMARY KEY,
+        article_id INT REFERENCES articles(id) ON DELETE CASCADE,
+        user_id INT REFERENCES users(id) ON DELETE SET NULL,
+        changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        change_description TEXT,
+        editor_comment TEXT
+      );
+    `);
+
+    // Add indexes for new tables
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_user_reading_history_user_id ON user_reading_history(user_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_article_views_log_article_id ON article_views_log(article_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_article_changes_log_article_id ON article_changes_log(article_id)');
 
     // Create database indexes for performance speedup
     console.log('Creating database indexes for performance speedup...');

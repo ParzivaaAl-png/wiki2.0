@@ -76,3 +76,35 @@ export const requireRole = (allowedRoles: string[]) => {
     next();
   };
 };
+
+export const optionalAuth = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    let token = '';
+
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1];
+    } else if (req.cookies && req.cookies.accessToken) {
+      token = req.cookies.accessToken;
+    }
+
+    if (token) {
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      const user = await getUserById(decoded.id);
+      if (user && !user.is_blocked) {
+        req.user = {
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          role: user.role,
+        };
+      }
+    }
+  } catch (error) {
+    // Ignore error, proceed without req.user
+  }
+  next();
+};

@@ -8,9 +8,24 @@ import {
   Calendar, 
   Edit3, 
   ChevronDown,
-  ArrowLeft
+  ArrowLeft,
+  Star,
+  History,
+  X,
+  Info,
+  Loader2
 } from 'lucide-react';
-import { fetchArticle, Article as ArticleType } from '../lib/api';
+import { 
+  fetchArticle, 
+  Article as ArticleType,
+  addFavoriteArticle,
+  removeFavoriteArticle,
+  fetchFavoriteArticles,
+  fetchArticleChanges,
+  ArticleChangeLog
+} from '../lib/api';
+import { useAuth } from '../lib/auth-context';
+import { AnimatePresence, motion } from 'framer-motion';
 import TariffsClassifier from '../components/tariffs-classifier';
 import TariffDetails from '../components/tariff-details';
 
@@ -33,6 +48,13 @@ export default function ArticlePage() {
   const [article, setArticle] = React.useState<ArticleType | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
 
+  const { user } = useAuth();
+  const [isFavorited, setIsFavorited] = React.useState(false);
+  const [isFavoriteLoading, setIsFavoriteLoading] = React.useState(false);
+  const [isChangesModalOpen, setIsChangesModalOpen] = React.useState(false);
+  const [changesLog, setChangesLog] = React.useState<ArticleChangeLog[]>([]);
+  const [isChangesLoading, setIsChangesLoading] = React.useState(false);
+
   // Fetch article data on slug change
   React.useEffect(() => {
     async function loadArticleData() {
@@ -49,6 +71,53 @@ export default function ArticlePage() {
     }
     loadArticleData();
   }, [slug]);
+
+  // Check favorite status if authenticated
+  React.useEffect(() => {
+    async function checkFavoriteStatus() {
+      if (!user || !article) return;
+      try {
+        const favorites = await fetchFavoriteArticles();
+        const found = favorites.some(fav => fav.id === article.id);
+        setIsFavorited(found);
+      } catch (err) {
+        console.error('Failed to load favorites:', err);
+      }
+    }
+    checkFavoriteStatus();
+  }, [user, article]);
+
+  const handleToggleFavorite = async () => {
+    if (!user || !article || isFavoriteLoading) return;
+    setIsFavoriteLoading(true);
+    try {
+      if (isFavorited) {
+        await removeFavoriteArticle(article.id);
+        setIsFavorited(false);
+      } else {
+        await addFavoriteArticle(article.id);
+        setIsFavorited(true);
+      }
+    } catch (err: any) {
+      console.error('Failed to update favorite status:', err);
+      alert('Ошибка при обновлении избранного: ' + err.message);
+    } finally {
+      setIsFavoriteLoading(false);
+    }
+  };
+
+  const handleOpenChangesModal = async () => {
+    setIsChangesModalOpen(true);
+    setIsChangesLoading(true);
+    try {
+      const logs = await fetchArticleChanges(article!.id);
+      setChangesLog(logs);
+    } catch (err: any) {
+      console.error('Failed to fetch changes log:', err);
+    } finally {
+      setIsChangesLoading(false);
+    }
+  };
 
   // Effect to highlight and scroll to text
   React.useEffect(() => {
@@ -140,12 +209,30 @@ export default function ArticlePage() {
 
         <article className="prose-custom">
           <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center justify-between gap-3 sm:gap-4 mb-6 border-b border-neutral-200/50 dark:border-neutral-800/80 pb-6">
-            <div className="w-full sm:w-auto">
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-white mb-3">
-                {article.title}
-              </h1>
+            <div className="w-full sm:w-auto flex-1">
+              <div className="flex items-center gap-3 mb-3 flex-wrap">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-white">
+                  {article.title}
+                </h1>
+                {user && (
+                  <button
+                    onClick={handleToggleFavorite}
+                    disabled={isFavoriteLoading}
+                    className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors shadow-sm cursor-pointer select-none text-neutral-400 dark:text-neutral-500 hover:text-amber-500 dark:hover:text-amber-400"
+                    title={isFavorited ? "Удалить из избранного" : "Добавить в избранное"}
+                  >
+                    <Star
+                      className={`w-5 h-5 transition-all ${
+                        isFavorited
+                          ? 'fill-amber-400 text-amber-400 scale-110'
+                          : 'scale-100 hover:scale-110'
+                      }`}
+                    />
+                  </button>
+                )}
+              </div>
               
-              <div className="flex flex-wrap items-center gap-4 text-xs text-neutral-400 dark:text-neutral-500">
+              <div className="flex flex-wrap items-center gap-4 text-xs text-neutral-400 dark:text-neutral-500 font-medium">
                 <span className="flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5" />
                   {new Date(article.updated_at).toLocaleDateString()}
@@ -153,14 +240,52 @@ export default function ArticlePage() {
               </div>
             </div>
 
-            <Link
-              to={`/admin/editor/${article.id}`}
-              className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shrink-0 shadow-sm"
-            >
-              <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
-              Редактировать
-            </Link>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={handleOpenChangesModal}
+                className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shrink-0 shadow-sm cursor-pointer"
+                title="История изменений этой статьи"
+              >
+                <History className="w-3.5 h-3.5 text-indigo-500" />
+                История изменений
+              </button>
+
+              <Link
+                to={`/admin/editor/${article.id}`}
+                className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shrink-0 shadow-sm"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
+                Редактировать
+              </Link>
+            </div>
           </div>
+
+          {article.latest_change && (
+            <div className="mb-6 p-4 rounded-xl border border-indigo-150/40 dark:border-indigo-900/35 bg-indigo-50/20 dark:bg-indigo-950/5 flex items-start gap-3 shadow-sm text-xs text-neutral-700 dark:text-neutral-300">
+              <Info className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1">
+                <div className="font-bold text-indigo-950 dark:text-indigo-300 flex items-center gap-1.5 text-xs sm:text-sm">
+                  <span>📢 Статья обновлена</span>
+                </div>
+                <div className="text-[11px] text-neutral-500 dark:text-neutral-450">
+                  Последняя правка: <span className="font-semibold text-neutral-800 dark:text-neutral-200">{new Date(article.latest_change.changed_at).toLocaleString()}</span>
+                  {article.latest_change.user_name && (
+                    <>
+                      {' '}автором <span className="font-semibold text-neutral-850 dark:text-neutral-150">{article.latest_change.user_name}</span> ({article.latest_change.user_role === 'Admin' ? 'Администратор' : article.latest_change.user_role === 'Editor' ? 'Редактор' : 'Пользователь'})
+                    </>
+                  )}
+                </div>
+                <div className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-1.5 pl-2 border-l border-indigo-300 dark:border-indigo-850">
+                  <span className="font-semibold text-neutral-700 dark:text-neutral-300">Изменения:</span> {article.latest_change.change_description}
+                  {article.latest_change.editor_comment && (
+                    <div className="mt-0.5 italic text-neutral-500 dark:text-neutral-450 font-light">
+                      Комментарий редактора: "{article.latest_change.editor_comment}"
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {article.tags && article.tags.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 mb-6">
@@ -244,6 +369,86 @@ export default function ArticlePage() {
           </div>
         </aside>
       )}
+
+      {/* Changes Log Modal */}
+      <AnimatePresence>
+        {isChangesModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsChangesModalOpen(false)}
+              className="absolute inset-0 bg-neutral-950/40 backdrop-blur-sm"
+            />
+            {/* Modal Content */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl shadow-premium dark:shadow-premium-dark flex flex-col max-h-[80vh] overflow-hidden"
+            >
+              <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-800">
+                <h3 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+                  <History className="w-4.5 h-4.5 text-indigo-500" />
+                  История изменений статьи
+                </h3>
+                <button
+                  onClick={() => setIsChangesModalOpen(false)}
+                  className="p-1 rounded-md text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-4 overflow-y-auto space-y-4 flex-1">
+                {isChangesLoading ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+                    <span className="text-xs text-neutral-400">Загрузка истории правок...</span>
+                  </div>
+                ) : changesLog.length === 0 ? (
+                  <div className="text-center py-10 text-xs text-neutral-400 italic">
+                    У этой статьи пока нет записанных изменений в журнале.
+                  </div>
+                ) : (
+                  <div className="space-y-4 relative before:absolute before:left-3 before:top-2 before:bottom-2 before:w-[1px] before:bg-neutral-200/50 dark:before:bg-neutral-800/50">
+                    {changesLog.map((log) => (
+                      <div key={log.id} className="relative pl-7 text-xs">
+                        {/* Dot */}
+                        <div className="absolute left-[9px] top-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-4 ring-white dark:ring-neutral-950" />
+                        
+                        <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-400 mb-1">
+                          <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+                            {log.user_name || 'Система'} 
+                            {log.user_role && ` (${log.user_role === 'Admin' ? 'Админ' : log.user_role === 'Editor' ? 'Редактор' : 'Пользователь'})`}
+                          </span>
+                          <span>
+                            {new Date(log.changed_at).toLocaleString()}
+                          </span>
+                        </div>
+                        
+                        <div className="bg-neutral-50 dark:bg-neutral-900/30 p-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800 space-y-1.5">
+                          <div>
+                            <span className="font-semibold text-neutral-700 dark:text-neutral-300 font-mono text-[10px]">ИЗМЕНЕНИЯ:</span>{' '}
+                            {log.change_description}
+                          </div>
+                          {log.editor_comment && (
+                            <div className="text-[11px] text-neutral-450 dark:text-neutral-500 italic pl-1.5 border-l-2 border-indigo-500/30">
+                              "{log.editor_comment}"
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

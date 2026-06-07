@@ -418,14 +418,14 @@ export const getFavoriteArticles = async (req: AuthenticatedRequest, res: Respon
     const userId = req.user.id;
     
     const favsRes = await query(
-      `SELECT a.*, u.name as author_name,
+      `SELECT a.*, fa.created_at as favorited_at, u.name as author_name,
               COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
        FROM user_favorite_articles fa
        JOIN articles a ON fa.article_id = a.id
        LEFT JOIN users u ON a.author_id = u.id
        LEFT JOIN article_tags t ON a.id = t.article_id
        WHERE fa.user_id = $1 AND a.is_visible = true
-       GROUP BY a.id, fa.position, u.name
+       GROUP BY a.id, fa.position, fa.created_at, u.name
        ORDER BY fa.position ASC`,
       [userId]
     );
@@ -450,15 +450,26 @@ export const setFavoriteArticles = async (req: AuthenticatedRequest, res: Respon
     try {
       await client.query('BEGIN');
       
-      // Delete existing favorites
-      await client.query('DELETE FROM user_favorite_articles WHERE user_id = $1', [userId]);
+      // Get current favorites
+      const currentRes = await client.query('SELECT article_id FROM user_favorite_articles WHERE user_id = $1', [userId]);
+      const currentIds = currentRes.rows.map(r => Number(r.article_id));
       
-      // Insert new favorites
-      if (articleIds.length > 0) {
-        for (let i = 0; i < articleIds.length; i++) {
+      const newIds = articleIds.map(id => Number(id));
+      
+      // Delete favorites not in new list
+      const idsToDelete = currentIds.filter(id => !newIds.includes(id));
+      if (idsToDelete.length > 0) {
+        await client.query('DELETE FROM user_favorite_articles WHERE user_id = $1 AND article_id = ANY($2::int[])', [userId, idsToDelete]);
+      }
+      
+      // Upsert new favorites preserving their created_at if already exists
+      if (newIds.length > 0) {
+        for (let i = 0; i < newIds.length; i++) {
           await client.query(
-            'INSERT INTO user_favorite_articles (user_id, article_id, position) VALUES ($1, $2, $3)',
-            [userId, Number(articleIds[i]), i]
+            `INSERT INTO user_favorite_articles (user_id, article_id, position)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (user_id, article_id) DO UPDATE SET position = $3`,
+            [userId, newIds[i], i]
           );
         }
       }
@@ -473,6 +484,86 @@ export const setFavoriteArticles = async (req: AuthenticatedRequest, res: Respon
     }
   } catch (error: any) {
     console.error('Error setting favorites:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const addFavoriteArticle = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    const userId = req.user.id;
+    const { articleId } = req.body;
+    
+    if (!articleId) return res.status(400).json({ error: 'articleId is required.' });
+    
+    // Find next position
+    const posRes = await query('SELECT COALESCE(MAX(position), -1) as max_pos FROM user_favorite_articles WHERE user_id = $1', [userId]);
+    const nextPos = posRes.rows[0].max_pos + 1;
+    
+    await query(`
+      INSERT INTO user_favorite_articles (user_id, article_id, position)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (user_id, article_id) DO NOTHING
+    `, [userId, Number(articleId), nextPos]);
+    
+    res.json({ message: 'Article added to favorites' });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const removeFavoriteArticle = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    const userId = req.user.id;
+    const { articleId } = req.body;
+    
+    if (!articleId) return res.status(400).json({ error: 'articleId is required.' });
+    
+    await query(
+      'DELETE FROM user_favorite_articles WHERE user_id = $1 AND article_id = $2',
+      [userId, Number(articleId)]
+    );
+    
+    res.json({ message: 'Article removed from favorites' });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const getReadingHistory = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    const userId = req.user.id;
+    
+    const historyRes = await query(
+      `SELECT h.viewed_at, a.*, u.name as author_name,
+              COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+       FROM user_reading_history h
+       JOIN articles a ON h.article_id = a.id
+       LEFT JOIN users u ON a.author_id = u.id
+       LEFT JOIN article_tags t ON a.id = t.article_id
+       WHERE h.user_id = $1 AND a.is_visible = true
+       GROUP BY a.id, h.viewed_at, u.name
+       ORDER BY h.viewed_at DESC
+       LIMIT 20`,
+      [userId]
+    );
+    res.json(historyRes.rows);
+  } catch (error: any) {
+    console.error('Error fetching reading history:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const clearReadingHistory = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    const userId = req.user.id;
+    
+    await query('DELETE FROM user_reading_history WHERE user_id = $1', [userId]);
+    res.json({ message: 'Reading history cleared successfully' });
+  } catch (error: any) {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 };

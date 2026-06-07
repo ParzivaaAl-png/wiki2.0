@@ -8,13 +8,54 @@ import { query } from '../config/db';
 
 export const getArticles = async (req: Request, res: Response) => {
   try {
-    const { tag, all } = req.query;
+    const { tag, all, filter } = req.query;
     
-    const articles = await ArticleModel.getAllArticles({
-      publishedOnly: all === 'true' ? false : true,
-      tag: tag as string,
-      all: all === 'true',
-    });
+    let articles = [];
+    if (filter === 'new') {
+      const resData = await query(
+        `SELECT a.*, u.name as author_name,
+                COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+         FROM articles a
+         LEFT JOIN users u ON a.author_id = u.id
+         LEFT JOIN article_tags t ON a.id = t.article_id
+         WHERE a.published = true AND a.is_visible = true
+         GROUP BY a.id, u.name
+         ORDER BY a.created_at DESC`
+      );
+      articles = resData.rows;
+    } else if (filter === 'popular') {
+      const resData = await query(
+        `SELECT a.*, u.name as author_name,
+                COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+         FROM articles a
+         LEFT JOIN users u ON a.author_id = u.id
+         LEFT JOIN article_tags t ON a.id = t.article_id
+         WHERE a.published = true AND a.is_visible = true
+         GROUP BY a.id, u.name
+         ORDER BY a.views DESC, a.created_at DESC`
+      );
+      articles = resData.rows;
+    } else if (filter === 'actual') {
+      // Актуальные: трендовые по просмотрам за последние 7 дней, с флбэком на дату обновления
+      const resData = await query(
+        `SELECT a.*, COUNT(DISTINCT COALESCE(vl.user_id::text, vl.ip_address)) as trending_views, u.name as author_name,
+                COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+         FROM articles a
+         LEFT JOIN users u ON a.author_id = u.id
+         LEFT JOIN article_tags t ON a.id = t.article_id
+         LEFT JOIN article_views_log vl ON a.id = vl.article_id AND vl.viewed_at > NOW() - INTERVAL '7 days'
+         WHERE a.published = true AND a.is_visible = true
+         GROUP BY a.id, u.name
+         ORDER BY trending_views DESC, a.views DESC, a.created_at DESC`
+      );
+      articles = resData.rows;
+    } else {
+      articles = await ArticleModel.getAllArticles({
+        publishedOnly: all === 'true' ? false : true,
+        tag: tag as string,
+        all: all === 'true',
+      });
+    }
     
     res.json(articles);
   } catch (error: any) {
@@ -26,6 +67,7 @@ export const getArticles = async (req: Request, res: Response) => {
 export const getArticle = async (req: Request, res: Response) => {
   try {
     const { slugOrId } = req.params;
+    const authReq = req as AuthenticatedRequest;
     let article = null;
     
     if (isNaN(Number(slugOrId))) {
@@ -38,12 +80,48 @@ export const getArticle = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Article not found' });
     }
 
-    // Increment view count in background
-    ArticleModel.incrementArticleViews(article.id).catch(err => 
+    // Запись детального просмотра с IP и User ID в фоновом режиме
+    const ip = (authReq.headers['x-forwarded-for'] as string) || authReq.socket.remoteAddress || authReq.ip || '';
+    const userId = authReq.user ? authReq.user.id : null;
+    
+    ArticleModel.incrementArticleViews(article.id, userId, ip).catch(err => 
       console.error(`Failed to increment views for article ${article?.id}:`, err)
     );
 
-    res.json(article);
+    // Добавление в историю просмотров пользователя с лимитом в 20 записей
+    if (userId) {
+      query(`
+        INSERT INTO user_reading_history (user_id, article_id, viewed_at)
+        VALUES ($1, $2, CURRENT_TIMESTAMP)
+        ON CONFLICT (user_id, article_id) DO UPDATE SET viewed_at = CURRENT_TIMESTAMP
+      `, [userId, article.id]).then(() => {
+        query(`
+          DELETE FROM user_reading_history
+          WHERE user_id = $1 AND id NOT IN (
+            SELECT id FROM user_reading_history
+            WHERE user_id = $1
+            ORDER BY viewed_at DESC
+            LIMIT 20
+          )
+        `, [userId]);
+      }).catch(err => console.error('Failed to save to reading history:', err));
+    }
+
+    // Получение информации о последнем изменении статьи
+    const changesRes = await query(
+      `SELECT cl.*, u.name as user_name, u.role as user_role
+       FROM article_changes_log cl
+       LEFT JOIN users u ON cl.user_id = u.id
+       WHERE cl.article_id = $1
+       ORDER BY cl.changed_at DESC LIMIT 1`,
+      [article.id]
+    );
+    const latestChange = changesRes.rows.length ? changesRes.rows[0] : null;
+
+    res.json({
+      ...article,
+      latest_change: latestChange
+    });
   } catch (error: any) {
     console.error('Error fetching article:', error);
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
@@ -101,7 +179,7 @@ export const createArticle = async (req: Request, res: Response) => {
 export const updateArticle = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, slug, content, summary, published, tags, position, is_visible, source_url, sync_interval } = req.body;
+    const { title, slug, content, summary, published, tags, position, is_visible, source_url, sync_interval, change_description, editor_comment } = req.body;
 
     if (!title || !slug || !content) {
       return res.status(400).json({ error: 'Title, slug, and content are required.' });
@@ -124,6 +202,19 @@ export const updateArticle = async (req: Request, res: Response) => {
     if (!article) {
       return res.status(404).json({ error: 'Article not found' });
     }
+
+    // Сохранение записи в журнале изменений статьи
+    const authReq = req as AuthenticatedRequest;
+    await query(
+      `INSERT INTO article_changes_log (article_id, user_id, change_description, editor_comment)
+       VALUES ($1, $2, $3, $4)`,
+      [
+        article.id,
+        authReq.user ? authReq.user.id : null,
+        change_description || 'Обновлено содержание статьи',
+        editor_comment || 'Редактирование статьи'
+      ]
+    );
 
     // Auto-index or delete from Meilisearch depending on published and visible status
     if (article.published && article.is_visible) {
@@ -399,6 +490,82 @@ export const markNotificationsRead = async (req: AuthenticatedRequest, res: Resp
     res.json({ message: 'Уведомления помечены как прочитанные' });
   } catch (error: any) {
     console.error('Failed to mark notifications read:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const getArticleChanges = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      `SELECT cl.*, u.name as user_name, u.role as user_role
+       FROM article_changes_log cl
+       LEFT JOIN users u ON cl.user_id = u.id
+       WHERE cl.article_id = $1
+       ORDER BY cl.changed_at DESC`,
+      [Number(id)]
+    );
+    res.json(result.rows);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const getPopularArticles = async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `SELECT a.*, u.name as author_name,
+              COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+       FROM articles a
+       LEFT JOIN users u ON a.author_id = u.id
+       LEFT JOIN article_tags t ON a.id = t.article_id
+       WHERE a.published = true AND a.is_visible = true
+       GROUP BY a.id, u.name
+       ORDER BY a.views DESC, a.created_at DESC
+       LIMIT 10`
+    );
+    res.json(result.rows);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const getTrendingArticles = async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `SELECT a.*, COUNT(DISTINCT COALESCE(vl.user_id::text, vl.ip_address)) as trending_views, u.name as author_name,
+              COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+       FROM articles a
+       LEFT JOIN users u ON a.author_id = u.id
+       LEFT JOIN article_tags t ON a.id = t.article_id
+       LEFT JOIN article_views_log vl ON a.id = vl.article_id AND vl.viewed_at > NOW() - INTERVAL '7 days'
+       WHERE a.published = true AND a.is_visible = true
+       GROUP BY a.id, u.name
+       ORDER BY trending_views DESC, a.views DESC, a.created_at DESC
+       LIMIT 10`
+    );
+    res.json(result.rows);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const getRecommendedArticles = async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `SELECT a.*, COUNT(fa.user_id) as favorites_count, u.name as author_name,
+              COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+       FROM articles a
+       LEFT JOIN users u ON a.author_id = u.id
+       LEFT JOIN article_tags t ON a.id = t.article_id
+       LEFT JOIN user_favorite_articles fa ON a.id = fa.article_id
+       WHERE a.published = true AND a.is_visible = true
+       GROUP BY a.id, u.name
+       ORDER BY favorites_count DESC, a.views DESC, a.created_at DESC
+       LIMIT 10`
+    );
+    res.json(result.rows);
+  } catch (error: any) {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 };

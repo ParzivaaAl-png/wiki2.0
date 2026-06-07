@@ -67,6 +67,17 @@ export interface User {
   updated_at?: string;
 }
 
+export interface ArticleChangeLog {
+  id: number;
+  article_id: number;
+  user_id: number | null;
+  user_name: string | null;
+  user_role: string | null;
+  changed_at: string;
+  change_description: string;
+  editor_comment: string;
+}
+
 export interface Article {
   id: number;
   title: string;
@@ -90,6 +101,11 @@ export interface Article {
   last_sync_at?: string | null;
   next_sync_at?: string | null;
   structured_data?: any | null;
+  latest_change?: ArticleChangeLog | null;
+  favorited_at?: string;
+  viewed_at?: string;
+  trending_views?: number | string;
+  favorites_count?: number | string;
 }
 
 export interface SearchResult {
@@ -294,11 +310,13 @@ export async function fetchArticles(params?: {
   category?: string;
   tag?: string;
   all?: boolean;
+  filter?: string;
 }): Promise<Article[]> {
   const queryParams = new URLSearchParams();
   if (params?.category) queryParams.set('category', params.category);
   if (params?.tag) queryParams.set('tag', params.tag);
   if (params?.all) queryParams.set('all', 'true');
+  if (params?.filter) queryParams.set('filter', params.filter);
 
   return apiCallWithCache<Article[]>(`/articles?${queryParams.toString()}`, { cache: 'no-store' });
 }
@@ -333,7 +351,7 @@ export async function createArticle(data: Omit<Article, 'id' | 'created_at' | 'u
 
 export async function updateArticle(
   id: number,
-  data: Omit<Article, 'id' | 'created_at' | 'updated_at' | 'views'>
+  data: Omit<Article, 'id' | 'created_at' | 'updated_at' | 'views'> & { change_description?: string; editor_comment?: string }
 ): Promise<Article> {
   clearApiCache();
   return apiCall<Article>(`/articles/${id}`, {
@@ -695,6 +713,53 @@ export async function uploadNewsAttachment(file: File): Promise<{ file_url: stri
     method: 'POST',
     body: formData,
   });
+}
+
+// Favorites add/remove
+export async function addFavoriteArticle(articleId: number): Promise<void> {
+  clearApiCache();
+  return apiCall<void>('/users/me/favorites/add', {
+    method: 'POST',
+    body: JSON.stringify({ articleId }),
+  });
+}
+
+export async function removeFavoriteArticle(articleId: number): Promise<void> {
+  clearApiCache();
+  return apiCall<void>('/users/me/favorites/remove', {
+    method: 'POST',
+    body: JSON.stringify({ articleId }),
+  });
+}
+
+// Reading History
+export async function fetchReadingHistory(): Promise<Article[]> {
+  return apiCall<Article[]>('/users/me/history', { cache: 'no-store' });
+}
+
+export async function clearReadingHistory(): Promise<void> {
+  clearApiCache();
+  return apiCall<void>('/users/me/history/clear', {
+    method: 'POST',
+  });
+}
+
+// Article Changes
+export async function fetchArticleChanges(id: number): Promise<ArticleChangeLog[]> {
+  return apiCall<ArticleChangeLog[]>(`/articles/${id}/changes`, { cache: 'no-store' });
+}
+
+// Article Rankings
+export async function fetchPopularArticles(): Promise<Article[]> {
+  return apiCall<Article[]>('/articles/ranking/popular', { cache: 'no-store' });
+}
+
+export async function fetchTrendingArticles(): Promise<Article[]> {
+  return apiCall<Article[]>('/articles/ranking/trending', { cache: 'no-store' });
+}
+
+export async function fetchRecommendedArticles(): Promise<Article[]> {
+  return apiCall<Article[]>('/articles/ranking/recommended', { cache: 'no-store' });
 }
 
 

@@ -246,8 +246,12 @@ export const deleteArticle = async (id: number): Promise<boolean> => {
   return (res.rowCount ?? 0) > 0;
 };
 
-export const incrementArticleViews = async (id: number): Promise<void> => {
+export const incrementArticleViews = async (id: number, userId: number | null = null, ipAddress: string = ''): Promise<void> => {
   await query('UPDATE articles SET views = views + 1 WHERE id = $1', [id]);
+  await query(
+    'INSERT INTO article_views_log (article_id, user_id, ip_address) VALUES ($1, $2, $3)',
+    [id, userId, ipAddress]
+  );
 };
 
 export const updateArticlePosition = async (id: number, position: number): Promise<void> => {
