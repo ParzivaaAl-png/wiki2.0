@@ -216,12 +216,12 @@ export default function TariffsClassifier() {
 
   // Sync state to URL if query param is not set
   React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (!params.has('city')) {
-      params.set('city', initialCity.id);
-      setSearchParams(params, { replace: true });
+    if (!searchParams.has('city')) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set('city', initialCity.id);
+      setSearchParams(nextParams, { replace: true });
     }
-  }, [initialCity.id, setSearchParams]);
+  }, [initialCity.id, searchParams, setSearchParams]);
 
   // Sync state to local storage and URL when city is selected
   const handleCitySelect = (city: City) => {
