@@ -49,6 +49,32 @@ export const getArticles = async (req: Request, res: Response) => {
          ORDER BY trending_views DESC, a.views DESC, a.created_at DESC`
       );
       articles = resData.rows;
+    } else if (filter === 'trending') {
+      const resData = await query(
+        `SELECT a.*, COUNT(DISTINCT COALESCE(vl.user_id::text, vl.ip_address)) as trending_views, u.name as author_name,
+                COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+         FROM articles a
+         LEFT JOIN users u ON a.author_id = u.id
+         LEFT JOIN article_tags t ON a.id = t.article_id
+         LEFT JOIN article_views_log vl ON a.id = vl.article_id AND vl.viewed_at > NOW() - INTERVAL '7 days'
+         WHERE a.published = true AND a.is_visible = true
+         GROUP BY a.id, u.name
+         ORDER BY trending_views DESC, a.views DESC, a.created_at DESC`
+      );
+      articles = resData.rows;
+    } else if (filter === 'recommended') {
+      const resData = await query(
+        `SELECT a.*, COUNT(fa.user_id) as favorites_count, u.name as author_name,
+                COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+         FROM articles a
+         LEFT JOIN users u ON a.author_id = u.id
+         LEFT JOIN article_tags t ON a.id = t.article_id
+         LEFT JOIN user_favorite_articles fa ON a.id = fa.article_id
+         WHERE a.published = true AND a.is_visible = true
+         GROUP BY a.id, u.name
+         ORDER BY favorites_count DESC, a.views DESC, a.created_at DESC`
+      );
+      articles = resData.rows;
     } else {
       articles = await ArticleModel.getAllArticles({
         publishedOnly: all === 'true' ? false : true,
