@@ -832,55 +832,6 @@ export default function Home() {
           </motion.div>
         </div>
 
-        {/* BOTTOM COMPACT READING HISTORY ("История чтения") */}
-        {user && readingHistory.length > 0 && (
-          <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark space-y-4">
-            <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-2.5">
-              <h3 className="font-outfit text-xs font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 uppercase tracking-wider select-none">
-                <Clock className="w-4 h-4 text-indigo-500" />
-                История чтения
-              </h3>
-              <button
-                onClick={handleClearHistory}
-                className="text-[9px] font-bold text-neutral-450 hover:text-red-500 hover:bg-red-500/10 px-2 py-1 rounded transition-all cursor-pointer"
-              >
-                Очистить историю
-              </button>
-            </div>
-            
-            <div className="divide-y divide-neutral-100 dark:divide-neutral-900 max-h-[250px] overflow-y-auto pr-1 scrollbar-thin">
-              {readingHistory.map((art) => (
-                <div
-                  key={`history-row-${art.id}`}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between py-2.5 gap-2 text-xs"
-                >
-                  <div className="min-w-0 flex-1">
-                    <Link
-                      to={`/articles/${art.slug}`}
-                      className="font-semibold text-neutral-850 dark:text-neutral-200 hover:text-indigo-500 transition-colors"
-                    >
-                      {art.title}
-                    </Link>
-                    <span className="text-[10px] text-neutral-400 dark:text-neutral-500 ml-2 font-light">
-                      — {art.summary || 'Описание отсутствует'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0 text-[10px] text-neutral-450 select-none">
-                    {art.tags && art.tags.length > 0 && (
-                      <span className="bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded text-[8px] uppercase font-semibold tracking-wider font-mono">
-                        {art.tags[0]}
-                      </span>
-                    )}
-                    <span className="font-mono text-[9px]">
-                      {new Date(art.viewed_at!).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
       </section>
 
       {/* POPUP: Add to Favorites Search Dialog */}
