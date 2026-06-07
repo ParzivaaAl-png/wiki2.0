@@ -159,7 +159,7 @@ export function NewsBell() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.98 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-neutral-950 border border-neutral-200/60 dark:border-neutral-850/80 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[500px]"
+            className="fixed left-4 right-4 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:w-96 mt-2 bg-white dark:bg-neutral-950 border border-neutral-200/60 dark:border-neutral-850/80 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[500px]"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-150 dark:border-neutral-900 bg-neutral-50/50 dark:bg-neutral-900/40 shrink-0">
