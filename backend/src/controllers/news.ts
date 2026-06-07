@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth';
 import * as NewsModel from '../models/news';
 import * as msService from '../services/meilisearch';
+import fs from 'fs';
 
 export const getNews = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -225,8 +226,16 @@ export const uploadAttachment = async (req: AuthenticatedRequest, res: Response)
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded.' });
     }
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
+    
+    // Convert to base64 data URL
+    const fileBuffer = await fs.promises.readFile(req.file.path);
+    const base64 = fileBuffer.toString('base64');
+    const fileUrl = `data:${req.file.mimetype};base64,${base64}`;
+    
+    // Delete the file from the ephemeral disk
+    await fs.promises.unlink(req.file.path).catch(err => {
+      console.error('Failed to delete temp file:', err);
+    });
 
     res.status(201).json({
       message: 'Attachment uploaded successfully',

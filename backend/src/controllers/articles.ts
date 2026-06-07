@@ -329,9 +329,15 @@ export const uploadImage = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'No image file uploaded.' });
     }
     
-    // Construct public url
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
+    // Convert to base64 data URL
+    const fileBuffer = await fs.promises.readFile(req.file.path);
+    const base64 = fileBuffer.toString('base64');
+    const imageUrl = `data:${req.file.mimetype};base64,${base64}`;
+    
+    // Delete the file from the ephemeral disk
+    await fs.promises.unlink(req.file.path).catch(err => {
+      console.error('Failed to delete temp file:', err);
+    });
     
     res.status(201).json({ 
       message: 'Image uploaded successfully', 
