@@ -10,8 +10,7 @@ import {
   saveFavoriteArticles, 
   fetchReadingHistory,
   clearReadingHistory,
-  Article,
-  fetchRecentChanges
+  Article
 } from '../lib/api';
 import { CategoryIcon } from '../components/icon';
 import { SearchModal } from '../components/search-modal';
@@ -27,7 +26,7 @@ export default function Home() {
   const [recommendedArticles, setRecommendedArticles] = React.useState<Article[]>([]);
   const [favoriteArticles, setFavoriteArticles] = React.useState<Article[]>([]);
   const [readingHistory, setReadingHistory] = React.useState<Article[]>([]);
-  const [recentChanges, setRecentChanges] = React.useState<any[]>([]);
+
   
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -64,18 +63,15 @@ export default function Home() {
       setRecommendedArticles(recommendedArts.filter(art => !art.slug.startsWith('auto-list-')));
 
       if (user) {
-        const [favs, history, changes] = await Promise.all([
+        const [favs, history] = await Promise.all([
           fetchFavoriteArticles(),
-          fetchReadingHistory(),
-          fetchRecentChanges()
+          fetchReadingHistory()
         ]);
         setFavoriteArticles(favs);
         setReadingHistory(history);
-        setRecentChanges(changes);
       } else {
         setFavoriteArticles([]);
         setReadingHistory([]);
-        setRecentChanges([]);
       }
     } catch (error) {
       console.error('Home data load failed:', error);
@@ -475,7 +471,7 @@ export default function Home() {
             </div>
 
             {/* Middle Block: Избранное */}
-            <div className="lg:col-span-4 flex">
+            <div className="lg:col-span-7 flex">
               <div className="w-full p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3 mb-4 gap-2">
@@ -624,52 +620,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Right Block: Последние изменения */}
-            <div className="lg:col-span-3 flex">
-              <div className="w-full p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3 mb-4">
-                    <h3 className="font-outfit text-xs font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 uppercase tracking-wider select-none">
-                      <Clock className="w-4 h-4 text-indigo-500" />
-                      Последние изменения
-                    </h3>
-                  </div>
 
-                  {recentChanges.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-center text-neutral-455 text-xs italic">
-                      <span>Нет недавних изменений.</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {recentChanges.slice(0, 3).map((change) => (
-                        <Link
-                          key={change.id}
-                          to={`/articles/${change.article_slug}`}
-                          className="flex items-start gap-2.5 p-3 rounded-lg border border-neutral-150 dark:border-neutral-900 hover:border-indigo-500/25 hover:bg-neutral-50/50 dark:hover:bg-neutral-900/10 transition-all group"
-                        >
-                          <div className="w-8 h-8 rounded-md bg-indigo-500/5 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5 font-bold text-xs select-none">
-                            📢
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h4 className="text-xs font-bold text-neutral-800 dark:text-neutral-200 group-hover:text-indigo-500 transition-colors truncate">
-                              {change.article_title}
-                            </h4>
-                            <p className="text-[10px] text-neutral-455 truncate mt-0.5">
-                              {change.change_description}
-                            </p>
-                            <div className="flex items-center gap-1 mt-1 text-[9px] text-neutral-400 font-mono truncate">
-                              <span>{change.user_name || 'Система'}</span>
-                              <span>•</span>
-                              <span>{formatRelativeTime(change.changed_at)}</span>
-                            </div>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
 
           </div>
         )}
