@@ -41,7 +41,8 @@ export const register = async (req: Request, res: Response) => {
     
     const { accessToken, refreshToken } = generateTokens(user.id);
     
-    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
+    const rawIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
+    const ipAddress = rawIp.split(',')[0].trim();
     const userAgent = req.headers['user-agent'] || '';
     
     // Save session in DB
@@ -83,7 +84,8 @@ export const login = async (req: Request, res: Response) => {
 
     const { accessToken, refreshToken } = generateTokens(user.id);
     
-    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
+    const rawIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
+    const ipAddress = rawIp.split(',')[0].trim();
     const userAgent = req.headers['user-agent'] || '';
     
     // Save session in DB
@@ -149,7 +151,8 @@ export const refresh = async (req: Request, res: Response) => {
 
     const tokens = generateTokens(user.id);
     
-    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
+    const rawIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
+    const ipAddress = rawIp.split(',')[0].trim();
     const userAgent = req.headers['user-agent'] || '';
 
     // Update session with new refresh token

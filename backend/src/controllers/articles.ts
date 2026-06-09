@@ -107,7 +107,8 @@ export const getArticle = async (req: Request, res: Response) => {
     }
 
     // Запись детального просмотра с IP и User ID в фоновом режиме
-    const ip = (authReq.headers['x-forwarded-for'] as string) || authReq.socket.remoteAddress || authReq.ip || '';
+    const rawIp = (authReq.headers['x-forwarded-for'] as string) || authReq.socket.remoteAddress || authReq.ip || '';
+    const ip = rawIp.split(',')[0].trim();
     const userId = authReq.user ? authReq.user.id : null;
     
     ArticleModel.incrementArticleViews(article.id, userId, ip).catch(err => 
