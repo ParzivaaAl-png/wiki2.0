@@ -185,29 +185,8 @@ function AppContent() {
     };
   }, [user]);
 
-  // Generate SVG Watermark background
-  const getWatermarkSvg = React.useMemo(() => {
-    if (!user) return '';
-    const text = `${user.name} (${user.username})`;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240">
-      <text x="50%" y="50%" fill="rgba(120, 120, 120, 0.14)" font-size="13" font-family="system-ui, sans-serif" font-weight="600" text-anchor="middle" transform="rotate(-22 160 120)">
-        ${text}
-      </text>
-    </svg>`;
-    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-  }, [user]);
-
   return (
     <div className={`flex flex-col min-h-screen bg-background text-foreground transition-all duration-300 ${user ? 'lg:pl-[56px] pl-0' : ''} ${user?.role === 'User' ? 'select-none' : ''}`}>
-      {user?.role === 'User' && (
-        <div 
-          className="fixed inset-0 z-[9999] pointer-events-none select-none overflow-hidden" 
-          style={{
-            backgroundImage: `url("${getWatermarkSvg}")`,
-            backgroundRepeat: 'repeat',
-          }}
-        />
-      )}
       <Header />
       {user && (
         <BookSidebar 
