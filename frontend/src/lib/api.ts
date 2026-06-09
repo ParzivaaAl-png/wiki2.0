@@ -232,7 +232,7 @@ async function apiCall<T>(path: string, options: RequestInit = {}): Promise<T> {
     let errorMessage = 'Произошла ошибка при запросе к серверу.';
     try {
       const err = await response.json();
-      errorMessage = err.error || errorMessage;
+      errorMessage = err.details ? `${err.error}: ${err.details}` : (err.error || errorMessage);
     } catch (e) {
       // JSON parsing failed, keep default message
     }

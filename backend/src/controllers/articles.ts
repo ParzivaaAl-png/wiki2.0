@@ -238,34 +238,42 @@ export const updateArticle = async (req: Request, res: Response) => {
 
     // Сохранение записи в журнале изменений статьи со снимками
     const authReq = req as AuthenticatedRequest;
-    await query(
-      `INSERT INTO article_changes_log (article_id, user_id, change_description, editor_comment, old_content, new_content, old_title, new_title)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        article.id,
-        authReq.user ? authReq.user.id : null,
-        change_description || 'Обновлено содержание статьи',
-        editor_comment || 'Редактирование статьи',
-        currentArticle.content,
-        article.content,
-        currentArticle.title,
-        article.title
-      ]
-    );
+    try {
+      await query(
+        `INSERT INTO article_changes_log (article_id, user_id, change_description, editor_comment, old_content, new_content, old_title, new_title)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          article.id,
+          authReq.user ? authReq.user.id : null,
+          change_description || 'Обновлено содержание статьи',
+          editor_comment || 'Редактирование статьи',
+          currentArticle.content,
+          article.content,
+          currentArticle.title,
+          article.title
+        ]
+      );
+    } catch (logErr) {
+      console.error('Failed to write article change log (non-fatal):', logErr);
+    }
 
     // Добавление системного уведомления
     const authorName = authReq.user ? authReq.user.name : 'Система';
     const authorRole = authReq.user ? authReq.user.role : '';
     const authorRoleName = authorRole === 'Admin' ? 'Администратор' : (authorRole === 'Editor' ? 'Редактор' : 'Пользователь');
 
-    await query(
-      `INSERT INTO notifications (title, message, type) VALUES ($1, $2, $3)`,
-      [
-        `Статья "${article.title}" была обновлена.`,
-        `Автор: ${authorName} (${authorRoleName})\n\nОписание изменений:\n${change_description || 'Обновлено содержание статьи'}`,
-        'info'
-      ]
-    );
+    try {
+      await query(
+        `INSERT INTO notifications (title, message, type) VALUES ($1, $2, $3)`,
+        [
+          `Статья "${article.title}" была обновлена.`,
+          `Автор: ${authorName} (${authorRoleName})\n\nОписание изменений:\n${change_description || 'Обновлено содержание статьи'}`,
+          'info'
+        ]
+      );
+    } catch (notifErr) {
+      console.error('Failed to write notification (non-fatal):', notifErr);
+    }
 
     // Auto-index or delete from Meilisearch depending on published and visible status
     if (article.published && article.is_visible) {
