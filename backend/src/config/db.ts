@@ -139,6 +139,12 @@ export const initializeDatabase = async () => {
       );
     `);
 
+    // Ensure version snapshot columns exist
+    await pool.query('ALTER TABLE article_changes_log ADD COLUMN IF NOT EXISTS old_content TEXT DEFAULT NULL');
+    await pool.query('ALTER TABLE article_changes_log ADD COLUMN IF NOT EXISTS new_content TEXT DEFAULT NULL');
+    await pool.query('ALTER TABLE article_changes_log ADD COLUMN IF NOT EXISTS old_title VARCHAR(255) DEFAULT NULL');
+    await pool.query('ALTER TABLE article_changes_log ADD COLUMN IF NOT EXISTS new_title VARCHAR(255) DEFAULT NULL');
+
     // Add indexes for new tables
     await pool.query('CREATE INDEX IF NOT EXISTS idx_user_reading_history_user_id ON user_reading_history(user_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_article_views_log_article_id ON article_views_log(article_id)');

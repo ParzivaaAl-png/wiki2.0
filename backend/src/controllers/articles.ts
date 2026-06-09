@@ -212,6 +212,12 @@ export const updateArticle = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Title, slug, and content are required.' });
     }
 
+    // Retrieve current state before update
+    const currentArticle = await ArticleModel.getArticleById(Number(id));
+    if (!currentArticle) {
+      return res.status(404).json({ error: 'Article not found' });
+    }
+
     const article = await ArticleModel.updateArticle(Number(id), {
       title,
       slug,
@@ -230,16 +236,34 @@ export const updateArticle = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Article not found' });
     }
 
-    // Сохранение записи в журнале изменений статьи
+    // Сохранение записи в журнале изменений статьи со снимками
     const authReq = req as AuthenticatedRequest;
     await query(
-      `INSERT INTO article_changes_log (article_id, user_id, change_description, editor_comment)
-       VALUES ($1, $2, $3, $4)`,
+      `INSERT INTO article_changes_log (article_id, user_id, change_description, editor_comment, old_content, new_content, old_title, new_title)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         article.id,
         authReq.user ? authReq.user.id : null,
         change_description || 'Обновлено содержание статьи',
-        editor_comment || 'Редактирование статьи'
+        editor_comment || 'Редактирование статьи',
+        currentArticle.content,
+        article.content,
+        currentArticle.title,
+        article.title
+      ]
+    );
+
+    // Добавление системного уведомления
+    const authorName = authReq.user ? authReq.user.name : 'Система';
+    const authorRole = authReq.user ? authReq.user.role : '';
+    const authorRoleName = authorRole === 'Admin' ? 'Администратор' : (authorRole === 'Editor' ? 'Редактор' : 'Пользователь');
+
+    await query(
+      `INSERT INTO notifications (title, message, type) VALUES ($1, $2, $3)`,
+      [
+        `Статья "${article.title}" была обновлена.`,
+        `Автор: ${authorName} (${authorRoleName})\n\nОписание изменений:\n${change_description || 'Обновлено содержание статьи'}`,
+        'info'
       ]
     );
 
@@ -272,6 +296,120 @@ export const updateArticle = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 };
+
+export const getRecentChanges = async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `SELECT cl.*, a.title as article_title, a.slug as article_slug, u.name as user_name, u.role as user_role
+       FROM article_changes_log cl
+       INNER JOIN articles a ON cl.article_id = a.id
+       LEFT JOIN users u ON cl.user_id = u.id
+       ORDER BY cl.changed_at DESC
+       LIMIT 5`
+    );
+    res.json(result.rows);
+  } catch (error: any) {
+    console.error('Failed to get recent changes:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const restoreArticleVersion = async (req: Request, res: Response) => {
+  try {
+    const { id, changeId } = req.params;
+    const authReq = req as AuthenticatedRequest;
+
+    if (!authReq.user || authReq.user.role !== 'Admin') {
+      return res.status(403).json({ error: 'Доступ запрещен. Только Администраторы могут восстанавливать версии.' });
+    }
+
+    const versionRes = await query(
+      'SELECT * FROM article_changes_log WHERE id = $1 AND article_id = $2',
+      [Number(changeId), Number(id)]
+    );
+    if (versionRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Версия не найдена.' });
+    }
+    const version = versionRes.rows[0];
+
+    const currentArticle = await ArticleModel.getArticleById(Number(id));
+    if (!currentArticle) {
+      return res.status(404).json({ error: 'Статья не найдена.' });
+    }
+
+    const restoredContent = version.new_content !== null ? version.new_content : currentArticle.content;
+    const restoredTitle = version.new_title !== null ? version.new_title : currentArticle.title;
+
+    const updatedArticle = await ArticleModel.updateArticle(Number(id), {
+      title: restoredTitle,
+      slug: currentArticle.slug,
+      content: restoredContent,
+      summary: currentArticle.summary || '',
+      category_id: currentArticle.category_id,
+      published: currentArticle.published,
+      is_visible: currentArticle.is_visible,
+      tags: currentArticle.tags || [],
+      position: currentArticle.position,
+      source_url: currentArticle.source_url || null,
+      sync_interval: currentArticle.sync_interval || 'manual',
+    });
+
+    if (!updatedArticle) {
+      return res.status(404).json({ error: 'Не удалось обновить статью при восстановлении.' });
+    }
+
+    const restoredDateStr = new Date(version.changed_at).toLocaleString('ru-RU');
+    const changeDescription = `Восстановление к версии от ${restoredDateStr}`;
+    const editorComment = `Откат к изменениям #${changeId}`;
+
+    await query(
+      `INSERT INTO article_changes_log (article_id, user_id, change_description, editor_comment, old_content, new_content, old_title, new_title)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        updatedArticle.id,
+        authReq.user.id,
+        changeDescription,
+        editorComment,
+        currentArticle.content,
+        restoredContent,
+        currentArticle.title,
+        restoredTitle
+      ]
+    );
+
+    await query(
+      `INSERT INTO notifications (title, message, type) VALUES ($1, $2, $3)`,
+      [
+        `Статья "${updatedArticle.title}" была восстановлена.`,
+        `Автор: ${authReq.user.name} (Администратор)\n\nОписание изменений:\n${changeDescription}`,
+        'info'
+      ]
+    );
+
+    if (updatedArticle.published && updatedArticle.is_visible) {
+      const doc: msService.ArticleDocument = {
+        id: updatedArticle.id,
+        title: updatedArticle.title,
+        slug: updatedArticle.slug,
+        content: updatedArticle.content,
+        summary: updatedArticle.summary,
+        categoryName: '',
+        tags: updatedArticle.tags,
+        published: updatedArticle.published,
+        createdAt: updatedArticle.created_at.toISOString(),
+      };
+      await msService.indexArticle(doc);
+    } else {
+      await msService.deleteArticle(updatedArticle.id);
+    }
+
+    res.json(updatedArticle);
+  } catch (error: any) {
+    console.error('Failed to restore article version:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
 
 export const deleteArticle = async (req: Request, res: Response) => {
   try {

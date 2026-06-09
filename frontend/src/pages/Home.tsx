@@ -10,7 +10,8 @@ import {
   saveFavoriteArticles, 
   fetchReadingHistory,
   clearReadingHistory,
-  Article 
+  Article,
+  fetchRecentChanges
 } from '../lib/api';
 import { CategoryIcon } from '../components/icon';
 import { SearchModal } from '../components/search-modal';
@@ -26,6 +27,7 @@ export default function Home() {
   const [recommendedArticles, setRecommendedArticles] = React.useState<Article[]>([]);
   const [favoriteArticles, setFavoriteArticles] = React.useState<Article[]>([]);
   const [readingHistory, setReadingHistory] = React.useState<Article[]>([]);
+  const [recentChanges, setRecentChanges] = React.useState<any[]>([]);
   
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -62,15 +64,18 @@ export default function Home() {
       setRecommendedArticles(recommendedArts.filter(art => !art.slug.startsWith('auto-list-')));
 
       if (user) {
-        const [favs, history] = await Promise.all([
+        const [favs, history, changes] = await Promise.all([
           fetchFavoriteArticles(),
-          fetchReadingHistory()
+          fetchReadingHistory(),
+          fetchRecentChanges()
         ]);
         setFavoriteArticles(favs);
         setReadingHistory(history);
+        setRecentChanges(changes);
       } else {
         setFavoriteArticles([]);
         setReadingHistory([]);
+        setRecentChanges([]);
       }
     } catch (error) {
       console.error('Home data load failed:', error);
@@ -410,13 +415,13 @@ export default function Home() {
 
       {/* MAIN CONTENT CONTAINER */}
       <section className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-8 py-6 space-y-6">
-        
-        {/* ROW OF PERSONAL BLOCKS (Continue Reading + Favorites) */}
+
+        {/* ROW OF PERSONAL BLOCKS (Continue Reading + Favorites + Recent Changes) */}
         {user && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
-            {/* Left Block: Продолжить чтение (Wide: col-span-7) */}
-            <div className="lg:col-span-7 flex">
+            {/* Left Block: Продолжить чтение */}
+            <div className="lg:col-span-5 flex">
               <div className="w-full p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3 mb-4">
@@ -427,25 +432,25 @@ export default function Home() {
                     {readingHistory.length > 0 && (
                       <button
                         onClick={handleClearHistory}
-                        className="text-[10px] font-bold text-red-500 hover:text-red-650 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 rounded transition-colors cursor-pointer"
+                        className="text-[10px] font-bold text-red-500 hover:text-red-655 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 rounded transition-colors cursor-pointer"
                       >
-                        Очистить историю
+                        Очистить
                       </button>
                     )}
                   </div>
 
                   {readingHistory.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-center text-neutral-450 text-xs italic">
+                    <div className="flex flex-col items-center justify-center py-10 text-center text-neutral-455 text-xs italic">
                       <Clock className="w-8 h-8 text-neutral-300 dark:text-neutral-800 mb-2 animate-pulse" />
                       <span>Здесь будут отображаться последние прочитанные вами статьи.</span>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {readingHistory.slice(0, 4).map((art) => (
+                    <div className="space-y-3">
+                      {readingHistory.slice(0, 3).map((art) => (
                         <Link
                           key={art.id}
                           to={`/articles/${art.slug}`}
-                          className="flex items-start gap-3 p-3 rounded-lg border border-neutral-105 dark:border-neutral-900 hover:border-indigo-500/25 hover:bg-neutral-50/50 dark:hover:bg-neutral-900/10 transition-all group"
+                          className="flex items-start gap-3 p-3 rounded-lg border border-neutral-150 dark:border-neutral-900 hover:border-indigo-500/25 hover:bg-neutral-50/50 dark:hover:bg-neutral-900/10 transition-all group"
                         >
                           <div className="w-8 h-8 rounded-md bg-indigo-500/5 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5 font-bold text-xs">
                             🕒
@@ -454,11 +459,11 @@ export default function Home() {
                             <h4 className="text-xs font-bold text-neutral-800 dark:text-neutral-200 group-hover:text-indigo-500 transition-colors truncate">
                               {art.title}
                             </h4>
-                            <p className="text-[10px] text-neutral-450 truncate mt-0.5">
+                            <p className="text-[10px] text-neutral-455 truncate mt-0.5">
                               {art.summary || 'Описание отсутствует'}
                             </p>
                             <span className="text-[9px] text-neutral-400 block mt-1 font-mono">
-                              {new Date(art.viewed_at!).toLocaleDateString()}
+                              {formatRelativeTime(art.viewed_at!)}
                             </span>
                           </div>
                         </Link>
@@ -469,8 +474,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Right Block: Избранное (Compact: col-span-5) */}
-            <div className="lg:col-span-5 flex">
+            {/* Middle Block: Избранное */}
+            <div className="lg:col-span-4 flex">
               <div className="w-full p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3 mb-4 gap-2">
@@ -485,26 +490,26 @@ export default function Home() {
                           placeholder="Поиск..."
                           value={searchFavQuery}
                           onChange={(e) => setSearchFavQuery(e.target.value)}
-                          className="text-[10px] px-2.5 py-1 border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white rounded outline-none focus:border-indigo-500 placeholder-neutral-450 w-24"
+                          className="text-[10px] px-2 py-0.5 border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white rounded outline-none focus:border-indigo-500 placeholder-neutral-455 w-16"
                         />
                       )}
                       <button
                         onClick={() => setIsConfigureMode(prev => !prev)}
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[9px] font-bold transition-all cursor-pointer shadow-sm shrink-0 ${
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-bold transition-all cursor-pointer shadow-sm shrink-0 ${
                           isConfigureMode
-                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-450'
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-455'
                             : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20'
                         }`}
                       >
                         {isConfigureMode ? <Check className="w-2.5 h-2.5" /> : null}
-                        <span>{isConfigureMode ? 'Готово' : 'Настроить'}</span>
+                        <span>{isConfigureMode ? 'Готово' : 'Наст.'}</span>
                       </button>
                     </div>
                   </div>
 
                   {filteredFavs.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
-                      <span className="text-[10px] text-neutral-450 italic">
+                      <span className="text-[10px] text-neutral-455 italic">
                         {searchFavQuery ? 'Ничего не найдено' : 'В вашем избранном пока нет статей.'}
                       </span>
                       {!searchFavQuery && !isConfigureMode && (
@@ -546,7 +551,7 @@ export default function Home() {
                                   e.stopPropagation();
                                   handleRemoveFromFavorites(e, art.id);
                                 }}
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-650 text-white flex items-center justify-center cursor-pointer shadow-md hover:scale-110 active:scale-95 transition-all z-20 border border-white dark:border-neutral-950"
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-655 text-white flex items-center justify-center cursor-pointer shadow-md hover:scale-110 active:scale-95 transition-all z-20 border border-white dark:border-neutral-950"
                                 title="Удалить из избранного"
                               >
                                 <span className="w-2 h-[2px] bg-white rounded-full" />
@@ -613,6 +618,53 @@ export default function Home() {
                           </span>
                         </div>
                       )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Block: Последние изменения */}
+            <div className="lg:col-span-3 flex">
+              <div className="w-full p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3 mb-4">
+                    <h3 className="font-outfit text-xs font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 uppercase tracking-wider select-none">
+                      <Clock className="w-4 h-4 text-indigo-500" />
+                      Последние изменения
+                    </h3>
+                  </div>
+
+                  {recentChanges.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center text-neutral-455 text-xs italic">
+                      <span>Нет недавних изменений.</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {recentChanges.slice(0, 3).map((change) => (
+                        <Link
+                          key={change.id}
+                          to={`/articles/${change.article_slug}`}
+                          className="flex items-start gap-2.5 p-3 rounded-lg border border-neutral-150 dark:border-neutral-900 hover:border-indigo-500/25 hover:bg-neutral-50/50 dark:hover:bg-neutral-900/10 transition-all group"
+                        >
+                          <div className="w-8 h-8 rounded-md bg-indigo-500/5 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5 font-bold text-xs select-none">
+                            📢
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-xs font-bold text-neutral-800 dark:text-neutral-200 group-hover:text-indigo-500 transition-colors truncate">
+                              {change.article_title}
+                            </h4>
+                            <p className="text-[10px] text-neutral-455 truncate mt-0.5">
+                              {change.change_description}
+                            </p>
+                            <div className="flex items-center gap-1 mt-1 text-[9px] text-neutral-400 font-mono truncate">
+                              <span>{change.user_name || 'Система'}</span>
+                              <span>•</span>
+                              <span>{formatRelativeTime(change.changed_at)}</span>
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -912,7 +964,35 @@ export default function Home() {
           </div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }
+
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'только что';
+  if (diffMins < 60) {
+    if (diffMins === 1) return '1 минуту назад';
+    if (diffMins % 10 === 1 && diffMins !== 11) return `${diffMins} минуту назад`;
+    if ([2, 3, 4].includes(diffMins % 10) && ![12, 13, 14].includes(diffMins)) return `${diffMins} минуты назад`;
+    return `${diffMins} минут назад`;
+  }
+  if (diffHours < 24) {
+    if (diffHours === 1) return '1 час назад';
+    if (diffHours % 10 === 1 && diffHours !== 11) return `${diffHours} час назад`;
+    if ([2, 3, 4].includes(diffHours % 10) && ![12, 13, 14].includes(diffHours)) return `${diffHours} часа назад`;
+    return `${diffHours} часов назад`;
+  }
+  if (diffDays === 1) return 'вчера';
+  if (diffDays === 2) return '2 дня назад';
+  if (diffDays % 10 === 1 && diffDays !== 11) return `${diffDays} день назад`;
+  if ([2, 3, 4].includes(diffDays % 10) && ![12, 13, 14].includes(diffDays)) return `${diffDays} дня назад`;
+  return `${diffDays} дней назад`;
+}
+

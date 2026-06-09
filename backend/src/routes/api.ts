@@ -77,12 +77,14 @@ router.get('/classifier/data', articlesController.getClassifierData);
 
 // Article routes (Read-only for public, writes protected)
 router.get('/articles', optionalAuth, articlesController.getArticles);
+router.get('/articles/changes/recent', requireAuth, articlesController.getRecentChanges);
 router.get('/articles/:slugOrId', optionalAuth, articlesController.getArticle);
 router.post('/articles', requireAuth, requireRole(['Admin', 'Editor']), articlesController.createArticle);
 router.put('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.updateArticle);
 router.delete('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.deleteArticle);
 router.post('/articles/reorder', requireAuth, requireRole(['Admin', 'Editor']), articlesController.reorderArticles);
 router.get('/articles/:id/changes', requireAuth, articlesController.getArticleChanges);
+router.post('/articles/:id/restore/:changeId', requireAuth, requireRole(['Admin']), articlesController.restoreArticleVersion);
 router.get('/articles/ranking/popular', optionalAuth, articlesController.getPopularArticles);
 router.get('/articles/ranking/trending', optionalAuth, articlesController.getTrendingArticles);
 router.get('/articles/ranking/recommended', optionalAuth, articlesController.getRecommendedArticles);

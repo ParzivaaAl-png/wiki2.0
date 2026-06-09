@@ -76,6 +76,10 @@ export interface ArticleChangeLog {
   changed_at: string;
   change_description: string;
   editor_comment: string;
+  old_content: string | null;
+  new_content: string | null;
+  old_title: string | null;
+  new_title: string | null;
 }
 
 export interface Article {
@@ -760,6 +764,22 @@ export async function fetchTrendingArticles(): Promise<Article[]> {
 
 export async function fetchRecommendedArticles(): Promise<Article[]> {
   return apiCall<Article[]>('/articles/ranking/recommended', { cache: 'no-store' });
+}
+
+export interface RecentChange extends ArticleChangeLog {
+  article_title: string;
+  article_slug: string;
+}
+
+export async function fetchRecentChanges(): Promise<RecentChange[]> {
+  return apiCall<RecentChange[]>('/articles/changes/recent', { cache: 'no-store' });
+}
+
+export async function restoreArticleVersion(id: number, changeId: number): Promise<Article> {
+  clearApiCache();
+  return apiCall<Article>(`/articles/${id}/restore/${changeId}`, {
+    method: 'POST',
+  });
 }
 
 

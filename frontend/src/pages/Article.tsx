@@ -22,7 +22,8 @@ import {
   removeFavoriteArticle,
   fetchFavoriteArticles,
   fetchArticleChanges,
-  ArticleChangeLog
+  ArticleChangeLog,
+  restoreArticleVersion
 } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -54,6 +55,8 @@ export default function ArticlePage() {
   const [isChangesModalOpen, setIsChangesModalOpen] = React.useState(false);
   const [changesLog, setChangesLog] = React.useState<ArticleChangeLog[]>([]);
   const [isChangesLoading, setIsChangesLoading] = React.useState(false);
+  const [selectedChange, setSelectedChange] = React.useState<ArticleChangeLog | null>(null);
+  const [isRestoring, setIsRestoring] = React.useState(false);
 
   // Fetch article data on slug change
   React.useEffect(() => {
@@ -116,6 +119,25 @@ export default function ArticlePage() {
       console.error('Failed to fetch changes log:', err);
     } finally {
       setIsChangesLoading(false);
+    }
+  };
+
+  const handleRestoreVersion = async (changeId: number) => {
+    if (!article || isRestoring) return;
+    if (!window.confirm('Вы действительно хотите откатить эту статью к выбранной версии?')) return;
+    
+    setIsRestoring(true);
+    try {
+      await restoreArticleVersion(article.id, changeId);
+      setIsChangesModalOpen(false);
+      setSelectedChange(null);
+      alert('Статья успешно восстановлена к выбранной версии!');
+      window.location.reload();
+    } catch (err: any) {
+      console.error('Failed to restore version:', err);
+      alert('Ошибка при восстановлении версии: ' + err.message);
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -261,28 +283,52 @@ export default function ArticlePage() {
           </div>
 
           {article.latest_change && (
-            <div className="mb-6 p-4 rounded-xl border border-indigo-150/40 dark:border-indigo-900/35 bg-indigo-50/20 dark:bg-indigo-950/5 flex items-start gap-3 shadow-sm text-xs text-neutral-700 dark:text-neutral-300">
-              <Info className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
-              <div className="flex-1 space-y-1">
-                <div className="font-bold text-indigo-950 dark:text-indigo-300 flex items-center gap-1.5 text-xs sm:text-sm">
-                  <span>📢 Статья обновлена</span>
+            <div className="mb-6 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-950/60 bg-indigo-50/15 dark:bg-indigo-950/5 shadow-premium dark:shadow-premium-dark space-y-3">
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-sm">
+                <span>📢 Последнее обновление</span>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-neutral-600 dark:text-neutral-400 border-b border-neutral-100 dark:border-neutral-900 pb-3">
+                <div>
+                  <span className="text-neutral-400">Когда:</span>{' '}
+                  <span className="font-semibold text-neutral-850 dark:text-neutral-200">
+                    Обновлено {formatRelativeTime(article.latest_change.changed_at)}
+                  </span>
                 </div>
-                <div className="text-[11px] text-neutral-500 dark:text-neutral-450">
-                  Последняя правка: <span className="font-semibold text-neutral-800 dark:text-neutral-200">{new Date(article.latest_change.changed_at).toLocaleString()}</span>
-                  {article.latest_change.user_name && (
-                    <>
-                      {' '}автором <span className="font-semibold text-neutral-850 dark:text-neutral-150">{article.latest_change.user_name}</span> ({article.latest_change.user_role === 'Admin' ? 'Администратор' : article.latest_change.user_role === 'Editor' ? 'Редактор' : 'Пользователь'})
-                    </>
-                  )}
+                <div>
+                  <span className="text-neutral-400">Автор:</span>{' '}
+                  <span className="font-semibold text-neutral-850 dark:text-neutral-200">
+                    {article.latest_change.user_name || 'Система'} ({article.latest_change.user_role === 'Admin' ? 'Администратор' : article.latest_change.user_role === 'Editor' ? 'Редактор' : 'Пользователь'})
+                  </span>
                 </div>
-                <div className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-1.5 pl-2 border-l border-indigo-300 dark:border-indigo-850">
-                  <span className="font-semibold text-neutral-700 dark:text-neutral-300">Изменения:</span> {article.latest_change.change_description}
-                  {article.latest_change.editor_comment && (
-                    <div className="mt-0.5 italic text-neutral-500 dark:text-neutral-450 font-light">
-                      Комментарий редактора: "{article.latest_change.editor_comment}"
+              </div>
+
+              <div className="text-xs space-y-1.5">
+                <span className="font-bold text-neutral-700 dark:text-neutral-350">Описание изменений:</span>
+                <div className="pl-3 border-l-2 border-indigo-400 dark:border-indigo-900 text-neutral-600 dark:text-neutral-400 space-y-1">
+                  {article.latest_change.change_description.split('\n').map((line, idx) => (
+                    <div key={idx} className="flex items-start gap-1.5">
+                      <span className="text-indigo-400 select-none">•</span>
+                      <span>{line.replace(/^[•\-\*\s]+/, '')}</span>
                     </div>
-                  )}
+                  ))}
                 </div>
+                {article.latest_change.editor_comment && (
+                  <div className="text-[11px] text-neutral-450 dark:text-neutral-500 italic pl-3 mt-1 font-light">
+                    * Комментарий: "{article.latest_change.editor_comment}"
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleOpenChangesModal}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-850 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shadow-sm cursor-pointer text-indigo-600 dark:text-indigo-400 bg-white dark:bg-neutral-950 select-none"
+                >
+                  <History className="w-3.5 h-3.5 text-indigo-500" />
+                  🕒 История изменений
+                </button>
               </div>
             </div>
           )}
@@ -379,7 +425,10 @@ export default function ArticlePage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsChangesModalOpen(false)}
+              onClick={() => {
+                setIsChangesModalOpen(false);
+                setSelectedChange(null);
+              }}
               className="absolute inset-0 bg-neutral-950/40 backdrop-blur-sm"
             />
             {/* Modal Content */}
@@ -387,15 +436,29 @@ export default function ArticlePage() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="relative w-full max-w-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl shadow-premium dark:shadow-premium-dark flex flex-col max-h-[80vh] overflow-hidden"
+              className={`relative w-full ${
+                selectedChange ? 'max-w-3xl' : 'max-w-lg'
+              } border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl shadow-premium dark:shadow-premium-dark flex flex-col max-h-[80vh] overflow-hidden transition-all duration-200`}
             >
               <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-800">
                 <h3 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
-                  <History className="w-4.5 h-4.5 text-indigo-500" />
-                  История изменений статьи
+                  {selectedChange ? (
+                    <button
+                      onClick={() => setSelectedChange(null)}
+                      className="mr-2 inline-flex items-center gap-1 px-2.5 py-1 text-xs text-neutral-500 hover:text-neutral-950 dark:hover:text-white bg-neutral-50 dark:bg-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 rounded-lg transition-colors cursor-pointer select-none font-sans font-semibold"
+                    >
+                      ← Назад
+                    </button>
+                  ) : (
+                    <History className="w-4.5 h-4.5 text-indigo-500" />
+                  )}
+                  {selectedChange ? `Сравнение изменений версии #${selectedChange.id}` : 'История изменений статьи'}
                 </h3>
                 <button
-                  onClick={() => setIsChangesModalOpen(false)}
+                  onClick={() => {
+                    setIsChangesModalOpen(false);
+                    setSelectedChange(null);
+                  }}
                   className="p-1 rounded-md text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4" />
@@ -407,6 +470,92 @@ export default function ArticlePage() {
                   <div className="flex flex-col items-center justify-center py-10 gap-2">
                     <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
                     <span className="text-xs text-neutral-400">Загрузка истории правок...</span>
+                  </div>
+                ) : selectedChange ? (
+                  /* Detail/Diff View */
+                  <div className="space-y-4 animate-fadeIn">
+                    <div className="p-3.5 bg-neutral-50/50 dark:bg-neutral-900/40 border border-neutral-200 dark:border-neutral-800 rounded-xl space-y-2 text-xs">
+                      <div className="flex justify-between items-start gap-4 flex-wrap sm:flex-nowrap">
+                        <div>
+                          <div className="font-bold text-neutral-950 dark:text-white">
+                            Автор: {selectedChange.user_name || 'Система'} 
+                            {selectedChange.user_role && ` (${selectedChange.user_role === 'Admin' ? 'Администратор' : selectedChange.user_role === 'Editor' ? 'Редактор' : 'Пользователь'})`}
+                          </div>
+                          <div className="text-neutral-400 text-[10px] mt-0.5">
+                            Дата правки: {new Date(selectedChange.changed_at).toLocaleString('ru-RU')}
+                          </div>
+                        </div>
+
+                        {user?.role === 'Admin' && (
+                          <button
+                            onClick={() => handleRestoreVersion(selectedChange.id)}
+                            disabled={isRestoring}
+                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-750 disabled:opacity-50 text-white rounded-lg text-[10px] font-bold shadow-md shadow-rose-600/15 transition-all cursor-pointer shrink-0"
+                          >
+                            {isRestoring ? 'Восстановление...' : 'Восстановить версию'}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="border-t border-neutral-200/50 dark:border-neutral-800/80 pt-2 space-y-1">
+                        <div>
+                          <span className="font-semibold text-neutral-700 dark:text-neutral-300">Описание изменений:</span>{' '}
+                          {selectedChange.change_description}
+                        </div>
+                        {selectedChange.editor_comment && (
+                          <div className="text-[11px] text-neutral-450 dark:text-neutral-550 italic pl-2 border-l-2 border-indigo-500/30">
+                            Комментарий редактора: "{selectedChange.editor_comment}"
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Title change diff */}
+                    {selectedChange.old_title && selectedChange.new_title && selectedChange.old_title !== selectedChange.new_title && (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs space-y-1">
+                        <div className="font-bold text-amber-700 dark:text-amber-450">Изменено название статьи:</div>
+                        <div className="text-neutral-450 line-through">- {selectedChange.old_title}</div>
+                        <div className="text-neutral-900 dark:text-white font-semibold">+ {selectedChange.new_title}</div>
+                      </div>
+                    )}
+
+                    {/* Content Diff */}
+                    <div className="border border-neutral-200 dark:border-neutral-850 rounded-xl overflow-hidden bg-neutral-50/50 dark:bg-neutral-950 flex flex-col shadow-inner">
+                      <div className="px-3 py-2 border-b border-neutral-200 dark:border-neutral-850 bg-neutral-100/50 dark:bg-neutral-900/50 text-[10px] font-bold uppercase text-neutral-400 tracking-wider">
+                        Сравнение Markdown-содержимого
+                      </div>
+                      <div className="overflow-y-auto max-h-[300px] divide-y divide-neutral-100/30 dark:divide-neutral-900/30">
+                        {computeDiff(selectedChange.old_content || '', selectedChange.new_content || '').map((line, idx) => {
+                          if (line.type === 'added') {
+                            return (
+                              <div key={idx} className="px-3 py-1 bg-green-50/50 dark:bg-green-950/20 border-l-4 border-green-500 font-mono text-xs whitespace-pre-wrap text-green-955 dark:text-green-300">
+                                + {line.text}
+                              </div>
+                            );
+                          }
+                          if (line.type === 'removed') {
+                            return (
+                              <div key={idx} className="px-3 py-1 bg-red-50/50 dark:bg-red-950/20 border-l-4 border-red-500 font-mono text-xs whitespace-pre-wrap text-red-950 dark:text-red-350 line-through opacity-85">
+                                - {line.text}
+                              </div>
+                            );
+                          }
+                          if (line.type === 'modified') {
+                            return (
+                              <div key={idx} className="px-3 py-1.5 bg-amber-50/40 dark:bg-amber-950/15 border-l-4 border-amber-500 font-mono text-xs whitespace-pre-wrap text-neutral-900 dark:text-neutral-100 space-y-0.5">
+                                <div className="text-neutral-400 line-through opacity-70">- {line.oldText}</div>
+                                <div className="text-neutral-900 dark:text-white font-semibold">+ {line.text}</div>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={idx} className="px-3 py-1 text-neutral-600 dark:text-neutral-450 font-mono text-xs whitespace-pre-wrap">
+                              &nbsp;&nbsp;{line.text}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 ) : changesLog.length === 0 ? (
                   <div className="text-center py-10 text-xs text-neutral-400 italic">
@@ -429,7 +578,11 @@ export default function ArticlePage() {
                           </span>
                         </div>
                         
-                        <div className="bg-neutral-50 dark:bg-neutral-900/30 p-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800 space-y-1.5">
+                        <div 
+                          onClick={() => setSelectedChange(log)}
+                          className="bg-neutral-50 dark:bg-neutral-900/30 p-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800 space-y-1.5 hover:border-indigo-500 dark:hover:border-indigo-500 cursor-pointer transition-all hover:bg-neutral-100/50 dark:hover:bg-neutral-900/80"
+                          title="Нажмите, чтобы сравнить с предыдущей версией"
+                        >
                           <div>
                             <span className="font-semibold text-neutral-700 dark:text-neutral-300 font-mono text-[10px]">ИЗМЕНЕНИЯ:</span>{' '}
                             {log.change_description}
@@ -529,3 +682,97 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
     }, 100);
   }
 }
+
+interface DiffLine {
+  type: 'added' | 'removed' | 'modified' | 'unchanged';
+  text: string;
+  oldText?: string;
+}
+
+function computeDiff(oldText: string, newText: string): DiffLine[] {
+  const oldLines = oldText ? oldText.split('\n') : [];
+  const newLines = newText ? newText.split('\n') : [];
+  
+  const dp: number[][] = Array(oldLines.length + 1)
+    .fill(null)
+    .map(() => Array(newLines.length + 1).fill(0));
+    
+  for (let i = 1; i <= oldLines.length; i++) {
+    for (let j = 1; j <= newLines.length; j++) {
+      if (oldLines[i - 1] === newLines[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+  
+  const rawDiff: { type: 'added' | 'removed' | 'unchanged'; text: string }[] = [];
+  let i = oldLines.length;
+  let j = newLines.length;
+  
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+      rawDiff.unshift({ type: 'unchanged', text: oldLines[i - 1] });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      rawDiff.unshift({ type: 'added', text: newLines[j - 1] });
+      j--;
+    } else {
+      rawDiff.unshift({ type: 'removed', text: oldLines[i - 1] });
+      i--;
+    }
+  }
+  
+  const processedDiff: DiffLine[] = [];
+  for (let k = 0; k < rawDiff.length; k++) {
+    const current = rawDiff[k];
+    const next = rawDiff[k + 1];
+    if (current.type === 'removed' && next && next.type === 'added') {
+      processedDiff.push({
+        type: 'modified',
+        text: next.text,
+        oldText: current.text
+      });
+      k++;
+    } else {
+      processedDiff.push({
+        type: current.type as any,
+        text: current.text
+      });
+    }
+  }
+  
+  return processedDiff;
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'только что';
+  if (diffMins < 60) {
+    if (diffMins === 1) return '1 минуту назад';
+    if (diffMins % 10 === 1 && diffMins !== 11) return `${diffMins} минуту назад`;
+    if ([2, 3, 4].includes(diffMins % 10) && ![12, 13, 14].includes(diffMins)) return `${diffMins} минуты назад`;
+    return `${diffMins} минут назад`;
+  }
+  if (diffHours < 24) {
+    if (diffHours === 1) return '1 час назад';
+    if (diffHours % 10 === 1 && diffHours !== 11) return `${diffHours} час назад`;
+    if ([2, 3, 4].includes(diffHours % 10) && ![12, 13, 14].includes(diffHours)) return `${diffHours} часа назад`;
+    return `${diffHours} часов назад`;
+  }
+  if (diffDays === 1) return 'вчера';
+  if (diffDays === 2) return '2 дня назад';
+  if (diffDays % 10 === 1 && diffDays !== 11) return `${diffDays} день назад`;
+  if ([2, 3, 4].includes(diffDays % 10) && ![12, 13, 14].includes(diffDays)) return `${diffDays} дня назад`;
+  return `${diffDays} дней назад`;
+}
+
+

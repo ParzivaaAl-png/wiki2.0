@@ -32,6 +32,7 @@ export default function Editor() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [changeDescription, setChangeDescription] = React.useState('');
   const [editorComment, setEditorComment] = React.useState('');
+  const [showSaveModal, setShowSaveModal] = React.useState(false);
 
   // Initial Fetch
   React.useEffect(() => {
@@ -92,13 +93,20 @@ export default function Editor() {
     setTags(tags.filter(t => t !== tagToRemove));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSaveClick = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !slug.trim() || !content.trim()) {
       alert('Пожалуйста, заполните Название, Slug и Текст статьи.');
       return;
     }
+    if (isEditMode) {
+      setShowSaveModal(true);
+    } else {
+      submitForm();
+    }
+  };
 
+  const submitForm = async () => {
     setIsSubmitting(true);
     const payload = {
       title,
@@ -112,8 +120,8 @@ export default function Editor() {
       source_url: sourceUrl || null,
       sync_interval: syncInterval,
       ...(isEditMode && {
-        change_description: changeDescription || undefined,
-        editor_comment: editorComment || undefined,
+        change_description: changeDescription.trim() || 'Обновлено содержание статьи',
+        editor_comment: editorComment.trim() || 'Редактирование статьи',
       }),
     };
 
@@ -125,6 +133,7 @@ export default function Editor() {
       }
       // Remove autosave copies from local storage on successful save
       localStorage.removeItem(`wiki_autosave_${id || 'new'}`);
+      setShowSaveModal(false);
       navigate('/admin');
     } catch (err: any) {
       console.error(err);
@@ -159,7 +168,7 @@ export default function Editor() {
         </Link>
 
         <button
-          onClick={handleSubmit}
+          onClick={handleSaveClick}
           disabled={isSubmitting}
           className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 transition-all cursor-pointer"
         >
@@ -258,37 +267,7 @@ export default function Editor() {
               )}
             </div>
 
-            {isEditMode && (
-              <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-3">
-                <h4 className="font-outfit text-xs font-bold text-neutral-900 dark:text-neutral-100">
-                  Журнал изменений статьи
-                </h4>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">
-                    Описание изменений (что нового?)
-                  </label>
-                  <textarea
-                    value={changeDescription}
-                    onChange={(e) => setChangeDescription(e.target.value)}
-                    placeholder="Например: Добавлен раздел по Docker, обновлены настройки окружения"
-                    rows={2}
-                    className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 resize-none placeholder-neutral-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">
-                    Комментарий редактора (внутренний)
-                  </label>
-                  <input
-                    type="text"
-                    value={editorComment}
-                    onChange={(e) => setEditorComment(e.target.value)}
-                    placeholder="Например: Исправление критической уязвимости"
-                    className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 placeholder-neutral-400"
-                  />
-                </div>
-              </div>
-            )}
+
 
             <div className="flex items-center justify-between pt-2">
               <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">Опубликовать статью</span>
@@ -332,6 +311,82 @@ export default function Editor() {
             />
           </div>
         </div>
+      {/* Save Prompt Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/40 dark:bg-neutral-950/60 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-md p-6 border border-neutral-200/50 dark:border-neutral-800 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md rounded-2xl shadow-2xl animate-scaleUp">
+            <button
+              onClick={() => setShowSaveModal(false)}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <h3 className="font-outfit text-base font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2 mb-2">
+              <Sparkles className="w-5 h-5 text-indigo-500" />
+              Что изменено в статье?
+            </h3>
+            
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
+              Пожалуйста, кратко опишите внесенные изменения. Это поможет другим пользователям понять историю обновлений.
+            </p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">
+                  Описание изменений <span className="text-red-500 font-bold">*</span>
+                </label>
+                <textarea
+                  value={changeDescription}
+                  onChange={(e) => setChangeDescription(e.target.value)}
+                  placeholder="Например: обновлен классификатор автомобилей, добавлены тарифы, исправлены опечатки..."
+                  rows={4}
+                  required
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 resize-none placeholder-neutral-400"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">
+                  Комментарий редактора <span className="text-neutral-400 font-normal">(необязательно)</span>
+                </label>
+                <input
+                  type="text"
+                  value={editorComment}
+                  onChange={(e) => setEditorComment(e.target.value)}
+                  placeholder="Например: Исправление критической уязвимости"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 placeholder-neutral-400"
+                />
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-end gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setShowSaveModal(false)}
+                className="px-4 py-2 border border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 rounded-lg text-xs font-semibold transition-colors"
+              >
+                Отмена
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  if (!changeDescription.trim()) {
+                    alert('Пожалуйста, укажите описание изменений.');
+                    return;
+                  }
+                  submitForm();
+                }}
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-md shadow-indigo-600/10 transition-colors"
+              >
+                {isSubmitting ? 'Сохранение...' : 'Подтвердить и сохранить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
