@@ -5,8 +5,9 @@ RUN apk add --no-cache curl libc6-compat
 
 WORKDIR /app
 
-# Download Meilisearch binary
-RUN curl -L https://install.meilisearch.com | sh
+# Download Meilisearch binary directly from GitHub releases to bypass rate-limiting
+RUN curl -L https://github.com/meilisearch/meilisearch/releases/download/v1.11.0/meilisearch-linux-amd64 -o meilisearch && \
+    chmod +x meilisearch
 
 COPY package*.json ./
 
