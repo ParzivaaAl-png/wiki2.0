@@ -62,8 +62,8 @@ app.get('/health/search', async (req, res) => {
 const startServer = async () => {
   console.log('Starting Wiki 2.0 Backend Server...');
 
-  // 1. Verify DB is running
-  const dbConnected = await checkDatabaseConnection();
+  // 1. Verify DB is running (retry for up to 3.3 minutes to allow new Render DB provisioning)
+  const dbConnected = await checkDatabaseConnection(40, 5000);
   if (!dbConnected) {
     console.error('CRITICAL: PostgreSQL database is unreachable. Exiting.');
     process.exit(1);
