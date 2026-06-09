@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
-# Install curl to download Meilisearch binary
-RUN apk add --no-cache curl
+# Install curl and glibc compatibility for Meilisearch binary
+RUN apk add --no-cache curl libc6-compat
 
 WORKDIR /app
 
