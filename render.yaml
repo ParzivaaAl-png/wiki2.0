@@ -1,28 +1,7 @@
 services:
-  # 1. Meilisearch Web Service (Docker container)
+  # Express Backend + Meilisearch Web Service (Docker container)
   - type: web
-    name: wiki-search
-    region: frankfurt
-    env: docker
-    dockerfilePath: meilisearch/Dockerfile
-    dockerContext: meilisearch
-    plan: free
-    healthCheckPath: /health
-    envVars:
-      - key: PORT
-        value: "7700" # Explicitly instruct Render to route to port 7700
-      - key: MEILI_HTTP_ADDR
-        value: "0.0.0.0:7700" # Bind Meilisearch to all interfaces on 7700
-      - key: MEILI_HOST
-        value: "0.0.0.0"
-      - key: MEILI_NO_ANALYTICS
-        value: "true"
-      - key: MEILI_MASTER_KEY
-        value: "superSecretMeilisearchMasterKey2026" # Production-ready key (>= 16 bytes)
-
-  # 2. Express Backend Web Service
-  - type: web
-    name: wiki-backend
+    name: wiki-backend-combined
     region: frankfurt
     env: docker
     dockerfilePath: backend/Dockerfile
@@ -39,12 +18,11 @@ services:
           name: wiki-db
           property: connectionString
       - key: MEILI_HOST
-        fromService:
-          type: web
-          name: wiki-search
-          property: hostport
+        value: "http://localhost:7700"
       - key: MEILI_MASTER_KEY
         value: "superSecretMeilisearchMasterKey2026"
+      - key: JWT_SECRET
+        generateValue: true
 
 databases:
   - name: wiki-db
