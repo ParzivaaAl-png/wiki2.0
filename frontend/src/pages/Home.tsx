@@ -417,7 +417,7 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
             {/* Left Block: Продолжить чтение */}
-            <div className="lg:col-span-5 flex">
+            <div className="lg:col-span-7 flex">
               <div className="w-full p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3 mb-4">
@@ -441,8 +441,8 @@ export default function Home() {
                       <span>Здесь будут отображаться последние прочитанные вами статьи.</span>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {readingHistory.slice(0, 3).map((art) => (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {readingHistory.slice(0, 4).map((art) => (
                         <Link
                           key={art.id}
                           to={`/articles/${art.slug}`}
@@ -470,8 +470,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Middle Block: Избранное */}
-            <div className="lg:col-span-7 flex">
+            {/* Right Block: Избранное */}
+            <div className="lg:col-span-5 flex">
               <div className="w-full p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3 mb-4 gap-2">
