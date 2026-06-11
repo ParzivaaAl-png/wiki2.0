@@ -41,6 +41,10 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api', apiRouter);
 
 // Health Check
+app.get('/', (req, res) => {
+  res.json({ status: 'OK', message: 'Wiki 2.0 Backend is running', timestamp: new Date() });
+});
+
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date() });
 });
