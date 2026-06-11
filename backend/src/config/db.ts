@@ -275,6 +275,34 @@ export const initializeDatabase = async () => {
     await pool.query('ALTER TABLE news_images ALTER COLUMN image_url TYPE TEXT');
     await pool.query('ALTER TABLE news_attachments ALTER COLUMN file_url TYPE TEXT');
 
+    // Sync sequences automatically to avoid "duplicate key value violates unique constraint" errors after migrations
+    console.log('Synchronizing auto-increment database sequences...');
+    await pool.query(`
+      DO $$
+      DECLARE
+          r RECORD;
+          max_id INT;
+          seq_name TEXT;
+      BEGIN
+          FOR r IN 
+              SELECT table_name, column_name
+              FROM information_schema.columns 
+              WHERE table_schema = 'public' 
+                AND column_default LIKE 'nextval(%'
+          LOOP
+              seq_name := pg_get_serial_sequence(r.table_name, r.column_name);
+              IF seq_name IS NOT NULL THEN
+                  EXECUTE format('SELECT COALESCE(MAX(%I), 0) FROM %I', r.column_name, r.table_name) INTO max_id;
+                  IF max_id > 0 THEN
+                      EXECUTE format('SELECT setval(%L, %s, true)', seq_name, max_id);
+                  ELSE
+                      EXECUTE format('SELECT setval(%L, 1, false)', seq_name);
+                  END IF;
+              END IF;
+          END LOOP;
+      END $$;
+    `);
+
     console.log('Database tables and indexes verified/created successfully.');
   } catch (error) {
     console.error('Failed to initialize database tables:', error);
