@@ -48,7 +48,7 @@ CREATE TABLE user_audit_logs (
 
 -- Seed Default Admin User (username: Sherzad, password: Xwz247Agd)
 INSERT INTO users (username, password_hash, name, role) VALUES
-('Sherzad', '$2b$10$GTO8CPoU.eFIPYDlZawNQeL8t1IiRppBLnR0WRHoVbkJbceWnNmS2', 'Администратор Sherzad', 'Admin');
+('Sherzad', '$2b$10$GTO8CPoU.eFIPYDlZawNQeL8t1IiRppBLnR0WRHoVbkJbceWnNmS2', 'Администратор Sherzad', 'Администратор Wiki');
 
 -- Create Categories Table
 CREATE TABLE categories (

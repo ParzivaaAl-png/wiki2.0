@@ -18,7 +18,7 @@ import EditorPage from './pages/Editor';
 import LoginPage from './pages/Login';
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode; allowedRoles?: ('Admin' | 'Editor' | 'User')[] }) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isAdmin, isEditor, isUser } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -33,23 +33,32 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return (
-      <div className="max-w-md mx-auto my-20 p-6 text-center border border-red-500/10 dark:border-red-500/20 bg-red-500/5 rounded-xl shadow-lg">
-        <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <h2 className="text-lg font-bold text-neutral-900 dark:text-white">Доступ ограничен</h2>
-        <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-2">
-          У вашей учетной записи ({user.role}) недостаточно прав для просмотра этой страницы.
-        </p>
-      </div>
-    );
+  if (allowedRoles) {
+    const hasRole = allowedRoles.some(role => {
+      if (role === 'Admin') return isAdmin;
+      if (role === 'Editor') return isEditor;
+      if (role === 'User') return isUser;
+      return false;
+    });
+
+    if (!hasRole) {
+      return (
+        <div className="max-w-md mx-auto my-20 p-6 text-center border border-red-500/10 dark:border-red-500/20 bg-red-500/5 rounded-xl shadow-lg">
+          <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-lg font-bold text-neutral-900 dark:text-white">Доступ ограничен</h2>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-2">
+            У вашей учетной записи ({user.role}) недостаточно прав для просмотра этой страницы.
+          </p>
+        </div>
+      );
+    }
   }
 
   return <>{children}</>;
 }
 
 function Header() {
-  const { user, logout } = useAuth();
+  const { user, logout, isStaff } = useAuth();
   const location = useLocation();
 
   return (
@@ -72,7 +81,7 @@ function Header() {
           
           {user ? (
             <div className="flex items-center gap-1.5 sm:gap-3">
-              {user.role !== 'User' && (
+              {isStaff && (
                 <Link 
                   to="/admin" 
                   className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shadow-sm"
@@ -81,7 +90,7 @@ function Header() {
                   Админ-панель
                 </Link>
               )}
-              {user.role !== 'User' && (
+              {isStaff && (
                 <Link 
                   to="/admin" 
                   className="sm:hidden p-2 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors"
@@ -92,7 +101,7 @@ function Header() {
               
               <div className="hidden md:flex flex-col text-right">
                 <span className="text-xs font-bold text-neutral-950 dark:text-neutral-100">{user.name}</span>
-                <span className="text-[9px] text-neutral-400 uppercase font-bold tracking-wider">{user.role === 'Admin' ? 'Админ' : user.role === 'Editor' ? 'Редактор' : 'Пользователь'}</span>
+                <span className="text-[9px] text-neutral-400 uppercase font-bold tracking-wider">{user.role}</span>
               </div>
  
               <button 
@@ -137,7 +146,7 @@ function AnimatedPage({ children }: { children: React.ReactNode }) {
 
 function AppContent() {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, isUser } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -146,7 +155,7 @@ function AppContent() {
 
   // Effect to disable context menu, copy, print, and developer hotkeys for regular users (role === 'User')
   React.useEffect(() => {
-    if (user?.role !== 'User') return;
+    if (!isUser) return;
 
     const preventDefault = (e: Event) => e.preventDefault();
 
@@ -186,7 +195,7 @@ function AppContent() {
   }, [user]);
 
   return (
-    <div className={`flex flex-col min-h-screen bg-background text-foreground transition-all duration-300 ${user ? 'lg:pl-[56px] pl-0' : ''} ${user?.role === 'User' ? 'select-none' : ''}`}>
+    <div className={`flex flex-col min-h-screen bg-background text-foreground transition-all duration-300 ${user ? 'lg:pl-[56px] pl-0' : ''} ${isUser ? 'select-none' : ''}`}>
       <Header />
       {user && (
         <BookSidebar 

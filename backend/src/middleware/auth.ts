@@ -72,7 +72,26 @@ export const requireRole = (allowedRoles: string[]) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    const mappedRoles = new Set<string>();
+    allowedRoles.forEach((r) => {
+      if (r === 'Admin') {
+        mappedRoles.add('Администратор Wiki');
+      } else if (r === 'Editor') {
+        mappedRoles.add('Администратор Wiki');
+        mappedRoles.add('Коммерческий директор');
+        mappedRoles.add('Руководитель группы');
+        mappedRoles.add('Супервайзер');
+        mappedRoles.add('HR-менеджер');
+        mappedRoles.add('IT-специалист');
+        mappedRoles.add('Бухгалтер');
+      } else if (r === 'User') {
+        mappedRoles.add('Оператор');
+      } else {
+        mappedRoles.add(r);
+      }
+    });
+
+    if (!mappedRoles.has(req.user.role)) {
       return res.status(403).json({ error: 'Forbidden: Insufficient permissions' });
     }
 

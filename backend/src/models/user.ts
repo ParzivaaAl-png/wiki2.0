@@ -15,7 +15,7 @@ export const createUser = async (
   username: string,
   passwordHash: string,
   name: string,
-  role: string = 'User'
+  role: string = 'Оператор'
 ): Promise<User> => {
   const query = `
     INSERT INTO users (username, password_hash, name, role)

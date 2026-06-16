@@ -64,7 +64,7 @@ export const getUserAllowedSections = async (
   userId?: number
 ): Promise<number[]> => {
   // 1. Администратор видит все разделы
-  if (userRole === 'Admin') {
+  if (userRole === 'Администратор Wiki' || userRole === 'Admin') {
     const { rows } = await pool.query('SELECT id FROM sections WHERE status = \'Active\'');
     return rows.map((r) => r.id);
   }
@@ -147,7 +147,12 @@ export const getUserAllowedSections = async (
 
   // 4. Дополнительные правила (Special Overrides)
   // IT-специалисты / Системный администратор имеют доступ ко всей IT-документации
-  if (positionName.toLowerCase().includes('системный администратор') || departmentName.toLowerCase().includes('it')) {
+  if (
+    positionName.toLowerCase().includes('системный администратор') || 
+    positionName.toLowerCase().includes('it-специалист') ||
+    departmentName.toLowerCase().includes('it') ||
+    userRole === 'IT-специалист'
+  ) {
     const itSectionsQuery = `
       SELECT s.id 
       FROM sections s
@@ -160,7 +165,11 @@ export const getUserAllowedSections = async (
   }
 
   // Бухгалтеры имеют доступ ко всей финансовой документации
-  if (positionName.toLowerCase().includes('бухгалтер') || departmentName.toLowerCase().includes('бухгалтер')) {
+  if (
+    positionName.toLowerCase().includes('бухгалтер') || 
+    departmentName.toLowerCase().includes('бухгалтер') ||
+    userRole === 'Бухгалтер'
+  ) {
     const accSectionsQuery = `
       SELECT s.id 
       FROM sections s
@@ -172,14 +181,18 @@ export const getUserAllowedSections = async (
     accRes.rows.forEach((r) => allowedSectionIds.add(r.id));
   }
 
-  // HR-менеджеры имеют доступ к HR-документации
-  if (positionName.toLowerCase().includes('hr') || departmentName.toLowerCase().includes('hr')) {
+  // HR-менеджеры имеют доступ к HR-документации + раздел Оператор для онбординга
+  if (
+    positionName.toLowerCase().includes('hr') || 
+    departmentName.toLowerCase().includes('hr') ||
+    userRole === 'HR-менеджер'
+  ) {
     const hrSectionsQuery = `
       SELECT s.id 
       FROM sections s
       JOIN spaces sp ON s.space_id = sp.id
       JOIN departments d ON sp.department_id = d.id
-      WHERE d.name = 'HR' AND s.status = 'Active'
+      WHERE (d.name = 'HR' OR s.name = 'Оператор' OR s.position_id = 4) AND s.status = 'Active'
     `;
     const hrRes = await pool.query(hrSectionsQuery);
     hrRes.rows.forEach((r) => allowedSectionIds.add(r.id));

@@ -37,7 +37,7 @@ export const register = async (req: Request, res: Response) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await UserModel.createUser(username, passwordHash, name, 'User');
+    const user = await UserModel.createUser(username, passwordHash, name, 'Оператор');
     
     const { accessToken, refreshToken } = generateTokens(user.id);
     
@@ -201,7 +201,7 @@ export const createUserByAdmin = async (req: AuthenticatedRequest, res: Response
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await UserModel.createUser(username, passwordHash, name, role || 'User');
+    const user = await UserModel.createUser(username, passwordHash, name, role || 'Оператор');
     res.status(201).json(user);
   } catch (error: any) {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
@@ -231,8 +231,18 @@ export const changeRole = async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
     const { role } = req.body;
 
-    if (!role || !['Admin', 'Editor', 'User'].includes(role)) {
-      return res.status(400).json({ error: 'Invalid role type. Must be Admin, Editor, or User.' });
+    const VALID_ROLES = [
+      'Коммерческий директор',
+      'Руководитель группы',
+      'Супервайзер',
+      'Оператор',
+      'HR-менеджер',
+      'Бухгалтер',
+      'IT-специалист',
+      'Администратор Wiki'
+    ];
+    if (!role || !VALID_ROLES.includes(role)) {
+      return res.status(400).json({ error: 'Некорректная роль. Роль должна быть одной из списка системных ролей.' });
     }
 
     if (req.user?.id === Number(id)) {

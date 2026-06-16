@@ -29,14 +29,14 @@ const line3Variants = {
 export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isStaff } = useAuth();
   
   const [spaces, setSpaces] = React.useState<Space[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [expandedKeys, setExpandedKeys] = React.useState<Record<string, boolean>>({});
 
-  const canEdit = !!(user && (user.role === 'Admin' || user.role === 'Editor'));
+  const canEdit = isStaff;
 
   const loadData = React.useCallback(async () => {
     try {
@@ -390,7 +390,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                 </div>
                 <span className="font-semibold">Главная</span>
               </Link>
-              {user && user.role !== 'User' && (
+              {isStaff && (
                 <Link
                   to="/admin"
                   onClick={onClose}

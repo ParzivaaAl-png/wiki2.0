@@ -8,6 +8,10 @@ interface AuthContextType {
   register: (email: string, name: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  isAdmin: boolean;
+  isEditor: boolean;
+  isUser: boolean;
+  isStaff: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -82,8 +86,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const isAdmin = user ? (user.role === 'Администратор Wiki' || user.role === 'Admin') : false;
+  const isEditor = user ? ['Администратор Wiki', 'Admin', 'Коммерческий директор', 'Руководитель группы', 'Супервайзер', 'HR-менеджер', 'IT-специалист', 'Бухгалтер', 'Editor'].includes(user.role) : false;
+  const isUser = user ? (user.role === 'Оператор' || user.role === 'User') : false;
+  const isStaff = isEditor;
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, refreshUser, isAdmin, isEditor, isUser, isStaff }}>
       {children}
     </AuthContext.Provider>
   );

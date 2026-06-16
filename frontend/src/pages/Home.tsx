@@ -20,7 +20,7 @@ const PRESET_COLORS = ['#6366f1', '#8b5cf6', '#7c3aed', '#10b981', '#f43f5e', '#
 const PRESET_ICONS = ['file-text', 'book', 'layers', 'layout', 'database', 'settings', 'cpu', 'terminal', 'search'];
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, isStaff } = useAuth();
   const [allArticles, setAllArticles] = React.useState<Article[]>([]);
   const [trendingArticles, setTrendingArticles] = React.useState<Article[]>([]);
   const [recommendedArticles, setRecommendedArticles] = React.useState<Article[]>([]);
@@ -45,8 +45,6 @@ export default function Home() {
 
   const loadData = React.useCallback(async () => {
     try {
-      const isStaff = user && (user.role === 'Admin' || user.role === 'Editor');
-      
       // Load all lists in parallel safely using Promise.allSettled
       const [artsResult, trendingArtsResult, recommendedArtsResult] = await Promise.allSettled([
         fetchArticles({ all: isStaff ? true : false }),
@@ -78,7 +76,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, isStaff]);
 
   React.useEffect(() => {
     loadData();
@@ -338,7 +336,7 @@ export default function Home() {
     show: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 120 } },
   };
 
-  const isStaff = user && (user.role === 'Admin' || user.role === 'Editor');
+
 
   if (isLoading) {
     return (

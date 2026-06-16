@@ -460,7 +460,7 @@ export const initializeDatabase = async () => {
         [2, 'Руководитель группы', 1, 1, 2],
         [3, 'Супервайзер', 1, 2, 3],
         [4, 'Оператор', 1, 3, 4],
-        [5, 'Системный администратор', 2, null, 1],
+        [5, 'IT-специалист', 2, null, 1],
         [6, 'Бухгалтер', 3, null, 1],
         [7, 'HR-менеджер', 4, null, 1],
         [8, 'Общий сотрудник', 5, null, 1]
@@ -475,7 +475,7 @@ export const initializeDatabase = async () => {
         [2, 'Иван Петров (Руководитель группы)', 'lead_group@icore.ru', 2, 1, 1],
         [3, 'Анна Сидорова (Супервайзер)', 'supervisor@icore.ru', 3, 1, 2],
         [4, 'Сергей Васильев (Оператор)', 'operator@icore.ru', 4, 1, 3],
-        [5, 'Алексей Смирнов (Системный администратор)', 'sysadmin@icore.ru', 5, 2, null],
+        [5, 'Алексей Смирнов (IT-специалист)', 'sysadmin@icore.ru', 5, 2, null],
         [6, 'Ольга Кузнецова (Бухгалтер)', 'accountant@icore.ru', 6, 3, null],
         [7, 'Мария Иванова (HR-менеджер)', 'hr_manager@icore.ru', 7, 4, null]
       ];
@@ -486,13 +486,13 @@ export const initializeDatabase = async () => {
       // 4. Create User Accounts (password hash for: 'iCorePass2026')
       const passHash = '$2b$10$L2Wsx716QB3pBnyjmZ/iTOEckyRfPT40JI1UOihEnNhcequpJAZGm';
       const users = [
-        ['dir_comm', 'dir_comm@icore.ru', 'Хайрихан Шерзад', 'Editor', 1],
-        ['lead_group', 'lead_group@icore.ru', 'Иван Петров', 'Editor', 2],
-        ['supervisor', 'supervisor@icore.ru', 'Анна Сидорова', 'Editor', 3],
-        ['operator', 'operator@icore.ru', 'Сергей Васильев', 'User', 4],
-        ['sysadmin', 'sysadmin@icore.ru', 'Алексей Смирнов', 'Editor', 5],
-        ['accountant', 'accountant@icore.ru', 'Ольга Кузнецова', 'User', 6],
-        ['hr_manager', 'hr_manager@icore.ru', 'Мария Иванова', 'Editor', 7]
+        ['dir_comm', 'dir_comm@icore.ru', 'Хайрихан Шерзад', 'Коммерческий директор', 1],
+        ['lead_group', 'lead_group@icore.ru', 'Иван Петров', 'Руководитель группы', 2],
+        ['supervisor', 'supervisor@icore.ru', 'Анна Сидорова', 'Супервайзер', 3],
+        ['operator', 'operator@icore.ru', 'Сергей Васильев', 'Оператор', 4],
+        ['sysadmin', 'sysadmin@icore.ru', 'Алексей Смирнов', 'IT-специалист', 5],
+        ['accountant', 'accountant@icore.ru', 'Ольга Кузнецова', 'Бухгалтер', 6],
+        ['hr_manager', 'hr_manager@icore.ru', 'Мария Иванова', 'HR-менеджер', 7]
       ];
       for (const [username, email, name, role, empId] of users) {
         await pool.query('INSERT INTO users (username, password_hash, name, role, employee_id) VALUES ($1, $2, $3, $4, $5)', [username, passHash, name, role, empId]);

@@ -36,7 +36,7 @@ export default function UserManagement() {
   const [newUsername, setNewUsername] = React.useState('');
   const [newName, setNewName] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
-  const [newRole, setNewRole] = React.useState<'Admin' | 'Editor' | 'User'>('User');
+  const [newRole, setNewRole] = React.useState<string>('Оператор');
   const [createError, setCreateError] = React.useState<string | null>(null);
 
   // Edit User Modal State
@@ -86,13 +86,13 @@ export default function UserManagement() {
       setNewUsername('');
       setNewName('');
       setNewPassword('');
-      setNewRole('User');
+      setNewRole('Оператор');
     } catch (err: any) {
       setCreateError(err.message || 'Ошибка создания пользователя.');
     }
   };
 
-  const handleChangeRole = async (userId: number, role: 'Admin' | 'Editor' | 'User') => {
+  const handleChangeRole = async (userId: number, role: string) => {
     try {
       await adminChangeRole(userId, role);
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
@@ -281,12 +281,17 @@ export default function UserManagement() {
                 <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Роль</label>
                 <select
                   value={newRole}
-                  onChange={(e) => setNewRole(e.target.value as any)}
+                  onChange={(e) => setNewRole(e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-lg text-neutral-700 dark:text-neutral-300 outline-none focus:border-indigo-500"
                 >
-                  <option value="User">User (Читатель)</option>
-                  <option value="Editor">Editor (Редактор)</option>
-                  <option value="Admin">Admin (Администратор)</option>
+                  <option value="Оператор">Оператор</option>
+                  <option value="Коммерческий директор">Коммерческий директор</option>
+                  <option value="Руководитель группы">Руководитель группы</option>
+                  <option value="Супервайзер">Супервайзер</option>
+                  <option value="HR-менеджер">HR-менеджер</option>
+                  <option value="Бухгалтер">Бухгалтер</option>
+                  <option value="IT-специалист">IT-специалист</option>
+                  <option value="Администратор Wiki">Администратор Wiki</option>
                 </select>
               </div>
 
@@ -463,12 +468,17 @@ export default function UserManagement() {
                         ) : (
                           <select
                              value={u.role}
-                             onChange={(e) => handleChangeRole(u.id, e.target.value as any)}
+                             onChange={(e) => handleChangeRole(u.id, e.target.value)}
                              className="text-xs border border-neutral-200 dark:border-neutral-800 rounded-lg px-2 py-1 bg-neutral-50 dark:bg-neutral-950 text-neutral-700 dark:text-neutral-300 outline-none focus:border-indigo-500"
                           >
-                            <option value="User">User</option>
-                            <option value="Editor">Editor</option>
-                            <option value="Admin">Admin</option>
+                            <option value="Оператор">Оператор</option>
+                            <option value="Коммерческий директор">Коммерческий директор</option>
+                            <option value="Руководитель группы">Руководитель группы</option>
+                            <option value="Супервайзер">Супервайзер</option>
+                            <option value="HR-менеджер">HR-менеджер</option>
+                            <option value="Бухгалтер">Бухгалтер</option>
+                            <option value="IT-специалист">IT-специалист</option>
+                            <option value="Администратор Wiki">Администратор Wiki</option>
                           </select>
                         )}
                       </td>

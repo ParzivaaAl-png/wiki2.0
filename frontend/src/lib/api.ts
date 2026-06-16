@@ -61,7 +61,7 @@ export interface User {
   id: number;
   username: string;
   name: string;
-  role: 'Admin' | 'Editor' | 'User';
+  role: string;
   is_blocked: boolean;
   employee_id?: number | null;
   created_at?: string;
@@ -474,7 +474,7 @@ export async function adminCreateUser(data: Omit<User, 'id' | 'is_blocked'> & { 
   });
 }
 
-export async function adminChangeRole(userId: number, role: 'Admin' | 'Editor' | 'User'): Promise<{ message: string }> {
+export async function adminChangeRole(userId: number, role: string): Promise<{ message: string }> {
   clearApiCache();
   return apiCall<{ message: string }>(`/admin/users/${userId}/role`, {
     method: 'PUT',

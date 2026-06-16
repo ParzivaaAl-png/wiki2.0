@@ -56,7 +56,7 @@ export default function ArticlePage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  const { user } = useAuth();
+  const { user, isAdmin, isEditor, isStaff } = useAuth();
   const [isFavorited, setIsFavorited] = React.useState(false);
   const [isFavoriteLoading, setIsFavoriteLoading] = React.useState(false);
   const [isChangesModalOpen, setIsChangesModalOpen] = React.useState(false);
@@ -511,7 +511,7 @@ export default function ArticlePage() {
                 История изменений
               </button>
 
-              {user && (user.role === 'Admin' || user.role === 'Editor') && (
+              {isStaff && (
                 <Link
                   to={`/admin/editor/${article.id}`}
                   className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shrink-0 shadow-sm"
@@ -670,7 +670,7 @@ export default function ArticlePage() {
             <h3 className="text-sm font-bold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider flex items-center gap-2 font-outfit">
               🔗 Связанные статьи
             </h3>
-            {user && (user.role === 'Admin' || user.role === 'Editor') && (
+            {isStaff && (
               <button
                 onClick={() => setIsAddLinkModalOpen(true)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/25 text-indigo-650 dark:text-indigo-400 rounded-lg text-xs font-bold uppercase transition-all cursor-pointer shadow-sm select-none"
@@ -706,7 +706,7 @@ export default function ArticlePage() {
                       </div>
                     )}
                   </Link>
-                  {user && (user.role === 'Admin' || user.role === 'Editor') && (
+                  {isStaff && (
                     <button
                       onClick={() => handleDeleteLink(link.id)}
                       className="opacity-0 group-hover:opacity-100 p-1 hover:bg-rose-500/10 text-neutral-450 hover:text-rose-550 rounded-md transition-all shrink-0 ml-2 cursor-pointer"
@@ -809,14 +809,14 @@ export default function ArticlePage() {
                         <div>
                           <div className="font-bold text-neutral-950 dark:text-white">
                             Автор: {selectedChange.user_name || 'Система'} 
-                            {selectedChange.user_role && ` (${selectedChange.user_role === 'Admin' ? 'Администратор' : selectedChange.user_role === 'Editor' ? 'Редактор' : 'Пользователь'})`}
+                            {selectedChange.user_role && ` (${selectedChange.user_role})`}
                           </div>
                           <div className="text-neutral-400 text-[10px] mt-0.5">
                             Дата правки: {new Date(selectedChange.changed_at).toLocaleString('ru-RU')}
                           </div>
                         </div>
 
-                        {user?.role === 'Admin' && (
+                        {isAdmin && (
                           <button
                             onClick={() => handleRestoreVersion(selectedChange.id)}
                             disabled={isRestoring}

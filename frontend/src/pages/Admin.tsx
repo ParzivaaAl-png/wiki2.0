@@ -53,7 +53,7 @@ import GuestManagement from '../components/guest-management';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export default function Admin() {
-  const { user } = useAuth();
+  const { user, isAdmin, isEditor, isStaff } = useAuth();
   const navigate = useNavigate();
   const [articles, setArticles] = React.useState<Article[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -75,14 +75,14 @@ export default function Admin() {
   const [selectedHistoryItem, setSelectedHistoryItem] = React.useState<ArticleSyncLog | null>(null);
 
   const loadNotifications = React.useCallback(async () => {
-    if (user?.role !== 'Admin' && user?.role !== 'Editor') return;
+    if (!isStaff) return;
     try {
       const data = await fetchNotifications();
       setNotifications(data);
     } catch (err) {
       console.error('Failed to load notifications:', err);
     }
-  }, [user]);
+  }, [isStaff]);
 
   React.useEffect(() => {
     loadNotifications();
@@ -373,7 +373,7 @@ export default function Admin() {
           </button>
 
           {/* Notifications Bell */}
-          {(user?.role === 'Admin' || user?.role === 'Editor') && (
+          {isStaff && (
             <button
               onClick={() => {
                 setIsNotificationsDrawerOpen(true);
@@ -398,7 +398,7 @@ export default function Admin() {
       </div>
 
       {/* Tabs Switcher for Admin & Editor roles */}
-      {(user?.role === 'Admin' || user?.role === 'Editor') && (
+      {isStaff && (
         <div className="flex border-b border-neutral-200 dark:border-neutral-800 mb-8 gap-6 overflow-x-auto scrollbar-none">
           <button
             onClick={() => setActiveTab('articles')}
@@ -420,7 +420,7 @@ export default function Admin() {
                 : 'border-transparent text-neutral-500 hover:text-neutral-950 dark:hover:text-white'
             }`}
           >
-            <Trash2 className="w-4 h-4 text-neutral-400" />
+            <Trash2 className="w-4 h-4 text-neutral-450" />
             Архив статей
           </button>
 
@@ -436,7 +436,7 @@ export default function Admin() {
             Новости
           </button>
           
-          {user?.role === 'Admin' && (
+          {isAdmin && (
             <>
               <button
                 onClick={() => setActiveTab('users')}
@@ -502,23 +502,23 @@ export default function Admin() {
         </div>
       )}
 
-      {activeTab === 'users' && user?.role === 'Admin' && (
+      {activeTab === 'users' && isAdmin && (
         <UserManagement />
       )}
 
-      {activeTab === 'sessions' && user?.role === 'Admin' && (
+      {activeTab === 'sessions' && isAdmin && (
         <SessionManagement />
       )}
 
-      {activeTab === 'org' && user?.role === 'Admin' && (
+      {activeTab === 'org' && isAdmin && (
         <OrgManagement />
       )}
 
-      {activeTab === 'wiki' && user?.role === 'Admin' && (
+      {activeTab === 'wiki' && isAdmin && (
         <WikiManagement />
       )}
 
-      {activeTab === 'guest' && user?.role === 'Admin' && (
+      {activeTab === 'guest' && isAdmin && (
         <GuestManagement />
       )}
 
@@ -819,7 +819,7 @@ export default function Admin() {
                             >
                               Изменить
                             </button>
-                            {user?.role === 'Admin' && (
+                            {isAdmin && (
                               <button
                                 onClick={() => handleDeleteForever(art.id, art.title)}
                                 className="px-2.5 py-1 text-[10px] font-bold text-red-600 bg-red-500/10 hover:bg-red-500/20 rounded-md transition-colors cursor-pointer"
