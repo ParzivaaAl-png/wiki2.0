@@ -48,18 +48,6 @@ export const requireAuth = async (
       return res.status(403).json({ error: 'User account is blocked' });
     }
 
-    // IP restriction for User role (89.107.98.195)
-    if (user.role === 'User') {
-      const rawIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
-      const ipAddress = rawIp.split(',')[0].trim();
-      const isAllowed = ipAddress === '89.107.98.195' || 
-                        ipAddress === '127.0.0.1' || 
-                        ipAddress === '::1' || 
-                        ipAddress === '::ffff:127.0.0.1';
-      if (!isAllowed) {
-        return res.status(403).json({ error: 'Доступ ограничен: Вход разрешен только с определенного IP адреса.' });
-      }
-    }
 
     req.user = {
       id: user.id,
@@ -110,25 +98,13 @@ export const optionalAuth = async (
       const decoded = jwt.verify(token, JWT_SECRET) as any;
       const user = await getUserById(decoded.id);
       if (user && !user.is_blocked) {
-        let isAllowed = true;
-        if (user.role === 'User') {
-          const rawIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
-          const ipAddress = rawIp.split(',')[0].trim();
-          isAllowed = ipAddress === '89.107.98.195' || 
-                      ipAddress === '127.0.0.1' || 
-                      ipAddress === '::1' || 
-                      ipAddress === '::ffff:127.0.0.1';
-        }
-
-        if (isAllowed) {
-          req.user = {
-            id: user.id,
-            username: user.username,
-            name: user.name,
-            role: user.role,
-            employee_id: (user as any).employee_id,
-          };
-        }
+        req.user = {
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          role: user.role,
+          employee_id: (user as any).employee_id,
+        };
       }
     }
   } catch (error) {

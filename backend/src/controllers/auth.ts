@@ -82,18 +82,6 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Неверное имя пользователя или пароль.' });
     }
 
-    // IP restriction for User role (89.107.98.195)
-    if (user.role === 'User') {
-      const rawIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
-      const ipAddress = rawIp.split(',')[0].trim();
-      const isAllowed = ipAddress === '89.107.98.195' || 
-                        ipAddress === '127.0.0.1' || 
-                        ipAddress === '::1' || 
-                        ipAddress === '::ffff:127.0.0.1';
-      if (!isAllowed) {
-        return res.status(403).json({ error: 'Доступ ограничен: Вход разрешен только с определенного IP адреса.' });
-      }
-    }
 
     const { accessToken, refreshToken } = generateTokens(user.id);
     
@@ -163,18 +151,6 @@ export const refresh = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid user session or user is blocked.' });
     }
 
-    // IP restriction for User role (89.107.98.195)
-    if (user.role === 'User') {
-      const rawIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
-      const ipAddress = rawIp.split(',')[0].trim();
-      const isAllowed = ipAddress === '89.107.98.195' || 
-                        ipAddress === '127.0.0.1' || 
-                        ipAddress === '::1' || 
-                        ipAddress === '::ffff:127.0.0.1';
-      if (!isAllowed) {
-        return res.status(403).json({ error: 'Доступ ограничен: Вход разрешен только с определенного IP адреса.' });
-      }
-    }
 
     const tokens = generateTokens(user.id);
     
