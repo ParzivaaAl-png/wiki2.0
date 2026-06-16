@@ -7,6 +7,8 @@ import rateLimit from 'express-rate-limit';
 import * as articlesController from '../controllers/articles';
 import * as authController from '../controllers/auth';
 import * as newsController from '../controllers/news';
+import * as orgStructureController from '../controllers/orgStructure';
+import * as guestAccessController from '../controllers/guestAccess';
 import { requireAuth, requireRole, optionalAuth } from '../middleware/auth';
 
 // Ensure uploads folder exists
@@ -113,7 +115,7 @@ router.post('/upload', requireAuth, requireRole(['Admin', 'Editor']), upload.sin
 router.post('/articles/import', requireAuth, requireRole(['Admin', 'Editor']), upload.single('file'), articlesController.importArticle);
 
 // Admin User Management Routes
-router.get('/admin/users', requireAuth, requireRole(['Admin']), authController.getUsersList);
+router.get('/admin/users', requireAuth, requireRole(['Admin', 'Editor']), authController.getUsersList);
 router.post('/admin/users', requireAuth, requireRole(['Admin']), authController.createUserByAdmin);
 router.put('/admin/users/:id/role', requireAuth, requireRole(['Admin']), authController.changeRole);
 router.put('/admin/users/:id/block', requireAuth, requireRole(['Admin']), authController.toggleBlockUser);
@@ -126,5 +128,48 @@ router.delete('/admin/sessions/:id', requireAuth, requireRole(['Admin']), authCo
 router.put('/admin/users/:id', requireAuth, requireRole(['Admin']), authController.updateUserByAdmin);
 router.get('/admin/users/:id/history', requireAuth, requireRole(['Admin']), authController.getUserHistory);
 router.post('/admin/clear-cache', requireAuth, requireRole(['Admin']), articlesController.reindexAndClearCache);
+
+// Org Structure CRUD Routes (Admin only)
+router.get('/departments', requireAuth, orgStructureController.getDepartments);
+router.post('/departments', requireAuth, requireRole(['Admin']), orgStructureController.createDepartment);
+router.patch('/departments/:id', requireAuth, requireRole(['Admin']), orgStructureController.updateDepartment);
+router.delete('/departments/:id', requireAuth, requireRole(['Admin']), orgStructureController.deleteDepartment);
+
+router.get('/positions', requireAuth, orgStructureController.getPositions);
+router.post('/positions', requireAuth, requireRole(['Admin']), orgStructureController.createPosition);
+router.patch('/positions/:id', requireAuth, requireRole(['Admin']), orgStructureController.updatePosition);
+router.delete('/positions/:id', requireAuth, requireRole(['Admin']), orgStructureController.deletePosition);
+
+router.get('/employees', requireAuth, orgStructureController.getEmployees);
+router.post('/employees', requireAuth, requireRole(['Admin']), orgStructureController.createEmployee);
+router.patch('/employees/:id', requireAuth, requireRole(['Admin']), orgStructureController.updateEmployee);
+router.delete('/employees/:id', requireAuth, requireRole(['Admin']), orgStructureController.deleteEmployee);
+
+// Wiki structure CRUD Routes (Admin only)
+router.get('/wiki/spaces', requireAuth, orgStructureController.getSpaces);
+router.post('/wiki/spaces', requireAuth, requireRole(['Admin']), orgStructureController.createSpace);
+router.patch('/wiki/spaces/:id', requireAuth, requireRole(['Admin']), orgStructureController.updateSpace);
+router.delete('/wiki/spaces/:id', requireAuth, requireRole(['Admin']), orgStructureController.deleteSpace);
+
+router.get('/wiki/sections', requireAuth, orgStructureController.getSections);
+router.post('/wiki/sections', requireAuth, requireRole(['Admin']), orgStructureController.createSection);
+router.patch('/wiki/sections/:id', requireAuth, requireRole(['Admin']), orgStructureController.updateSection);
+router.delete('/wiki/sections/:id', requireAuth, requireRole(['Admin']), orgStructureController.deleteSection);
+
+// Org structure manual sync route
+router.post('/wiki/sync/org-structure', requireAuth, requireRole(['Admin']), orgStructureController.syncOrgStructure);
+
+// Guest Access Routes
+router.get('/wiki/access/guest', requireAuth, requireRole(['Admin']), guestAccessController.getGuestAccessList);
+router.post('/wiki/access/guest', requireAuth, requireRole(['Admin']), guestAccessController.createGuestAccess);
+router.delete('/wiki/access/guest/:id', requireAuth, requireRole(['Admin']), guestAccessController.deleteGuestAccess);
+
+// Access check
+router.get('/wiki/access/check', requireAuth, articlesController.checkAccess);
+
+// Article Links Routes
+router.get('/articles/:id/links', requireAuth, articlesController.getArticleLinks);
+router.post('/articles/:id/links', requireAuth, requireRole(['Admin', 'Editor']), articlesController.createArticleLink);
+router.delete('/articles/:id/links/:linkId', requireAuth, requireRole(['Admin', 'Editor']), articlesController.deleteArticleLink);
 
 export default router;

@@ -13,7 +13,8 @@ import {
   History,
   X,
   ShieldAlert,
-  Loader2
+  Loader2,
+  Plus
 } from 'lucide-react';
 import { 
   fetchArticle, 
@@ -23,7 +24,12 @@ import {
   fetchFavoriteArticles,
   fetchArticleChanges,
   ArticleChangeLog,
-  restoreArticleVersion
+  restoreArticleVersion,
+  fetchArticles,
+  fetchArticleLinks,
+  createArticleLink,
+  deleteArticleLink,
+  ArticleLink
 } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -58,6 +64,116 @@ export default function ArticlePage() {
   const [isChangesLoading, setIsChangesLoading] = React.useState(false);
   const [selectedChange, setSelectedChange] = React.useState<ArticleChangeLog | null>(null);
   const [isRestoring, setIsRestoring] = React.useState(false);
+
+  // Link state
+  const [links, setLinks] = React.useState<ArticleLink[]>([]);
+  const [isLinksLoading, setIsLinksLoading] = React.useState(false);
+  const [allArticles, setAllArticles] = React.useState<ArticleType[]>([]);
+  const [isAddLinkModalOpen, setIsAddLinkModalOpen] = React.useState(false);
+  const [targetArticleId, setTargetArticleId] = React.useState<number | ''>( '');
+  const [linkText, setLinkText] = React.useState('');
+  const [isCreatingLink, setIsCreatingLink] = React.useState(false);
+
+  // Fetch article links when article is loaded
+  React.useEffect(() => {
+    async function loadLinks() {
+      if (!article) return;
+      setIsLinksLoading(true);
+      try {
+        const data = await fetchArticleLinks(article.id);
+        setLinks(data);
+      } catch (err) {
+        console.error('Failed to fetch article links:', err);
+      } finally {
+        setIsLinksLoading(false);
+      }
+    }
+    loadLinks();
+  }, [article]);
+
+  // Load all articles for dropdown selection when modal opens
+  React.useEffect(() => {
+    if (!isAddLinkModalOpen) return;
+    async function loadAllArticles() {
+      try {
+        const data = await fetchArticles({ all: true });
+        // Filter out current article
+        setAllArticles(data.filter(a => a.id !== article?.id));
+      } catch (err) {
+        console.error('Failed to load articles list for linking:', err);
+      }
+    }
+    loadAllArticles();
+  }, [isAddLinkModalOpen, article?.id]);
+
+  const handleCreateLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!article || !targetArticleId) return;
+    setIsCreatingLink(true);
+    try {
+      const newLink = await createArticleLink(article.id, {
+        target_article_id: Number(targetArticleId),
+        link_text: linkText.trim() || undefined
+      });
+      setLinks(prev => [...prev, newLink]);
+      setIsAddLinkModalOpen(false);
+      setTargetArticleId('');
+      setLinkText('');
+    } catch (err: any) {
+      console.error('Failed to create article link:', err);
+      alert('Ошибка при создании связи: ' + err.message);
+    } finally {
+      setIsCreatingLink(false);
+    }
+  };
+
+  const handleDeleteLink = async (linkId: number) => {
+    if (!article) return;
+    if (!window.confirm('Вы уверены, что хотите удалить эту связь между статьями?')) return;
+    try {
+      await deleteArticleLink(article.id, linkId);
+      setLinks(prev => prev.filter(l => l.id !== linkId));
+    } catch (err: any) {
+      console.error('Failed to delete article link:', err);
+      alert('Ошибка при удалении связи: ' + err.message);
+    }
+  };
+
+  const getArticleTypeBadge = (type: string) => {
+    switch (type) {
+      case 'job_description':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/10 text-indigo-650 dark:text-indigo-400 border border-indigo-500/20 shadow-sm">
+            📋 Должностная инструкция
+          </span>
+        );
+      case 'regulation':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-500/10 text-purple-650 dark:text-purple-400 border border-purple-500/20 shadow-sm">
+            📜 Регламент
+          </span>
+        );
+      case 'instruction':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 shadow-sm">
+            📖 Инструкция
+          </span>
+        );
+      case 'tool_description':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shadow-sm">
+            🛠️ Описание инструмента
+          </span>
+        );
+      case 'general':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral-500/10 text-neutral-600 dark:text-neutral-400 border border-neutral-500/20 shadow-sm">
+            📝 Общая статья
+          </span>
+        );
+    }
+  };
 
   // Fetch article data on slug change
   React.useEffect(() => {
@@ -370,6 +486,7 @@ export default function ArticlePage() {
               {/* Badges & Date Info */}
               <div className="flex flex-wrap items-center gap-3">
                 {getStatusBadge(article.status || 'published')}
+                {getArticleTypeBadge(article.article_type || 'general')}
                 
                 <span className="flex items-center gap-1.5 text-xs text-neutral-400 dark:text-neutral-500 font-medium">
                   <Calendar className="w-3.5 h-3.5" />
@@ -405,6 +522,36 @@ export default function ArticlePage() {
               )}
             </div>
           </div>
+
+          {/* Process Governance Details (Owner & Approver) */}
+          {(article.owner_name || article.approver_name) && (
+            <div className="mb-6 p-5 rounded-2xl border border-teal-150 dark:border-teal-950/60 bg-teal-50/10 dark:bg-teal-950/5 shadow-premium dark:shadow-premium-dark space-y-3">
+              <div className="flex items-center gap-2 text-teal-650 dark:text-teal-400 font-bold text-xs uppercase tracking-wider">
+                <span>🛡️ Владение и согласование процесса</span>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                {article.owner_name && (
+                  <div className="p-3 bg-white/60 dark:bg-neutral-900/60 rounded-xl border border-neutral-200/50 dark:border-neutral-850/50">
+                    <div className="text-neutral-450 dark:text-neutral-550 mb-1 font-medium">Владелец бизнес-процесса:</div>
+                    <div className="font-semibold text-neutral-850 dark:text-neutral-205 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                      {article.owner_name}
+                    </div>
+                  </div>
+                )}
+                {article.approver_name && (
+                  <div className="p-3 bg-white/60 dark:bg-neutral-900/60 rounded-xl border border-neutral-200/50 dark:border-neutral-850/50">
+                    <div className="text-neutral-450 dark:text-neutral-550 mb-1 font-medium">Согласующий:</div>
+                    <div className="font-semibold text-neutral-850 dark:text-neutral-205 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                      {article.approver_name}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Latest change details */}
           {article.latest_change && (
@@ -516,6 +663,63 @@ export default function ArticlePage() {
             );
           })()}
         </article>
+
+        {/* Related Articles (Links) */}
+        <div className="mt-8 pt-6 border-t border-neutral-200/60 dark:border-neutral-800/60">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider flex items-center gap-2 font-outfit">
+              🔗 Связанные статьи
+            </h3>
+            {user && (user.role === 'Admin' || user.role === 'Editor') && (
+              <button
+                onClick={() => setIsAddLinkModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/25 text-indigo-650 dark:text-indigo-400 rounded-lg text-xs font-bold uppercase transition-all cursor-pointer shadow-sm select-none"
+              >
+                <Plus className="w-3.5 h-3.5" /> Добавить связь
+              </button>
+            )}
+          </div>
+
+          {isLinksLoading ? (
+            <div className="flex items-center gap-2 text-xs text-neutral-400">
+              <Loader2 className="w-4 h-4 animate-spin text-indigo-500" /> Загрузка связей...
+            </div>
+          ) : links.length === 0 ? (
+            <p className="text-xs text-neutral-400 italic">Связанных статей пока нет.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {links.map((link) => (
+                <div
+                  key={link.id}
+                  className="group flex items-center justify-between p-3 rounded-xl border border-neutral-200/50 dark:border-neutral-850/50 bg-neutral-50/50 dark:bg-neutral-900/30 hover:border-indigo-500/30 hover:bg-white dark:hover:bg-neutral-950/20 transition-all shadow-sm"
+                >
+                  <Link
+                    to={`/articles/${link.target_slug}`}
+                    className="flex-1 min-w-0"
+                  >
+                    <div className="font-semibold text-xs text-neutral-850 dark:text-neutral-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                      {link.target_title}
+                    </div>
+                    {link.link_text && (
+                      <div className="text-[10px] text-neutral-400 dark:text-neutral-550 truncate mt-0.5">
+                        Контекст: {link.link_text}
+                      </div>
+                    )}
+                  </Link>
+                  {user && (user.role === 'Admin' || user.role === 'Editor') && (
+                    <button
+                      onClick={() => handleDeleteLink(link.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-rose-500/10 text-neutral-450 hover:text-rose-550 rounded-md transition-all shrink-0 ml-2 cursor-pointer"
+                      title="Удалить связь"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Right ToC Sidebar */}
@@ -724,6 +928,104 @@ export default function ArticlePage() {
                   </div>
                 )}
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Link Modal */}
+      <AnimatePresence>
+        {isAddLinkModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setIsAddLinkModalOpen(false);
+                setTargetArticleId('');
+                setLinkText('');
+              }}
+              className="absolute inset-0 bg-neutral-950/40 backdrop-blur-sm"
+            />
+            {/* Modal Content */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-md border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl shadow-premium dark:shadow-premium-dark flex flex-col overflow-hidden"
+            >
+              <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-800">
+                <h3 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+                  🔗 Добавить связь со статьей
+                </h3>
+                <button
+                  onClick={() => {
+                    setIsAddLinkModalOpen(false);
+                    setTargetArticleId('');
+                    setLinkText('');
+                  }}
+                  className="p-1 rounded-md text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateLink} className="p-4 space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-450 dark:text-neutral-500">
+                    Выберите целевую статью
+                  </label>
+                  <select
+                    required
+                    value={targetArticleId}
+                    onChange={(e) => setTargetArticleId(e.target.value ? Number(e.target.value) : '')}
+                    className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-neutral-800 dark:text-neutral-100"
+                  >
+                    <option value="">-- Выберите статью --</option>
+                    {allArticles.map(art => (
+                      <option key={art.id} value={art.id}>
+                        {art.title} {art.status === 'draft' ? '(Черновик)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-450 dark:text-neutral-500">
+                    Текст связи / Описание контекста (необязательно)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Например: Ссылка на должностную инструкцию"
+                    value={linkText}
+                    onChange={(e) => setLinkText(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-neutral-800 dark:text-neutral-100"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-900">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddLinkModalOpen(false);
+                      setTargetArticleId('');
+                      setLinkText('');
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 text-neutral-700 dark:text-neutral-300 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCreatingLink || !targetArticleId}
+                    className="inline-flex items-center gap-1 px-4 py-1.5 bg-indigo-650 hover:bg-indigo-750 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-md shadow-indigo-650/15 transition-all cursor-pointer"
+                  >
+                    {isCreatingLink ? 'Сохранение...' : 'Создать связь'}
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}

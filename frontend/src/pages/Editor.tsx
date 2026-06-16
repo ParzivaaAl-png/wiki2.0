@@ -7,7 +7,7 @@ import {
   X,
   Sparkles
 } from 'lucide-react';
-import { fetchArticle, createArticle, updateArticle, fetchNavigationTree } from '../lib/api';
+import { fetchArticle, createArticle, updateArticle, fetchNavigationTree, adminFetchUsers, User } from '../lib/api';
 import WYSIWYGEditor from '../components/wysiwyg-editor';
 
 export default function Editor() {
@@ -31,6 +31,12 @@ export default function Editor() {
   const [position, setPosition] = React.useState<number>(0);
   const [sourceUrl, setSourceUrl] = React.useState('');
   const [syncInterval, setSyncInterval] = React.useState('manual');
+  
+  // Custom metadata states
+  const [articleType, setArticleType] = React.useState('general');
+  const [ownerId, setOwnerId] = React.useState<number | ''>('');
+  const [approverId, setApproverId] = React.useState<number | ''>('');
+  const [users, setUsers] = React.useState<User[]>([]);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [changeDescription, setChangeDescription] = React.useState('');
@@ -46,6 +52,14 @@ export default function Editor() {
         const tree = await fetchNavigationTree();
         setSpaces(tree);
 
+        // 1.5. Загружаем список пользователей
+        try {
+          const userList = await adminFetchUsers();
+          setUsers(userList);
+        } catch (uErr) {
+          console.error('Failed to load users list in editor:', uErr);
+        }
+
         // 2. Если режим редактирования, загружаем данные статьи
         if (isEditMode && id) {
           const article = await fetchArticle(id);
@@ -60,6 +74,9 @@ export default function Editor() {
           setPosition(article.position || 0);
           setSourceUrl(article.source_url || '');
           setSyncInterval(article.sync_interval || 'manual');
+          setArticleType(article.article_type || 'general');
+          setOwnerId(article.owner_id || '');
+          setApproverId(article.approver_id || '');
         } else {
           // Если новая статья, проверяем, передан ли в URL раздел по умолчанию
           const queryParams = new URLSearchParams(window.location.search);
@@ -141,6 +158,9 @@ export default function Editor() {
       position,
       source_url: sourceUrl || null,
       sync_interval: syncInterval,
+      article_type: articleType,
+      owner_id: ownerId ? Number(ownerId) : null,
+      approver_id: approverId ? Number(approverId) : null,
       ...(isEditMode && {
         change_description: changeDescription.trim() || 'Обновлено содержание статьи',
         editor_comment: editorComment.trim() || 'Редактирование статьи',
@@ -251,6 +271,56 @@ export default function Editor() {
                 <option value="requires_verification">⚠️ Требует проверки (Requires verification)</option>
                 <option value="archived">📦 В архиве (Archived)</option>
                 <option value="expired">⌛ Срок истек (Expired)</option>
+              </select>
+            </div>
+
+            {/* Тип статьи */}
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Тип статьи</label>
+              <select
+                value={articleType}
+                onChange={(e) => setArticleType(e.target.value)}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="general">📝 Общая статья</option>
+                <option value="job_description">📋 Должностная инструкция</option>
+                <option value="regulation">📜 Регламент</option>
+                <option value="instruction">📖 Инструкция</option>
+                <option value="tool_description">🛠️ Описание инструмента</option>
+              </select>
+            </div>
+
+            {/* Владелец процесса */}
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Владелец процесса</label>
+              <select
+                value={ownerId}
+                onChange={(e) => setOwnerId(e.target.value ? Number(e.target.value) : '')}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="">-- Не назначен --</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.username})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Согласующий */}
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Согласующий</label>
+              <select
+                value={approverId}
+                onChange={(e) => setApproverId(e.target.value ? Number(e.target.value) : '')}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="">-- Не назначен --</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.username})
+                  </option>
+                ))}
               </select>
             </div>
 

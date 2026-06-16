@@ -18,6 +18,11 @@ export interface Article {
   updated_at: Date;
   tags: string[];
   section_ids: number[];
+  article_type?: string;
+  owner_id?: number | null;
+  owner_name?: string;
+  approver_id?: number | null;
+  approver_name?: string;
   source_url?: string | null;
   sync_interval?: string;
   last_sync_at?: Date | null;
@@ -38,44 +43,55 @@ export const getAllArticles = async (options: {
 
   let sql = `
     SELECT a.*, u.name as author_name,
+           uo.name as owner_name,
+           ua.name as approver_name,
            COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
            COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
     FROM articles a
     LEFT JOIN users u ON a.author_id = u.id
+    LEFT JOIN users uo ON a.owner_id = uo.id
+    LEFT JOIN users ua ON a.approver_id = ua.id
     LEFT JOIN article_tags t ON a.id = t.article_id
     LEFT JOIN article_sections axs ON a.id = axs.article_id
   `;
 
-  const whereClauses: string[] = [];
+  const conditions: string[] = [];
 
-  if (!options.all) {
-    whereClauses.push(`a.is_visible = true`);
+  if (options.publishedOnly) {
+    conditions.push(`a.published = true`);
   }
 
-  // Фильтр по разрешенным разделам (если передан массив)
-  if (options.allowedSectionIds) {
-    params.push(options.allowedSectionIds);
-    whereClauses.push(`axs.section_id = ANY($${paramIndex++})`);
+  if (options.authorId) {
+    conditions.push(`a.author_id = $${paramIndex++}`);
+    params.push(options.authorId);
   }
 
-  // Фильтрация по статусам и автору (для черновиков)
-  if (options.allowedStatuses) {
+  if (options.allowedStatuses && options.allowedStatuses.length > 0) {
+    conditions.push(`a.status = ANY($${paramIndex++})`);
     params.push(options.allowedStatuses);
-    const statusClause = `a.status = ANY($${paramIndex++})`;
-    if (options.authorId) {
-      params.push(options.authorId);
-      whereClauses.push(`(${statusClause} OR a.author_id = $${paramIndex++})`);
+  }
+
+  if (options.allowedSectionIds) {
+    if (options.allowedSectionIds.length > 0) {
+      conditions.push(`(
+        axs.section_id = ANY($${paramIndex++}) OR 
+        NOT EXISTS (SELECT 1 FROM article_sections WHERE article_id = a.id)
+      )`);
+      params.push(options.allowedSectionIds);
     } else {
-      whereClauses.push(statusClause);
+      conditions.push(`NOT EXISTS (SELECT 1 FROM article_sections WHERE article_id = a.id)`);
     }
   }
 
-  if (whereClauses.length > 0) {
-    sql += ` WHERE ${whereClauses.join(' AND ')}`;
+  if (!options.all) {
+    conditions.push(`a.is_visible = true`);
   }
 
-  sql += ` GROUP BY a.id, u.name`;
-  sql += ` ORDER BY a.position ASC, a.created_at DESC`;
+  if (conditions.length > 0) {
+    sql += ` WHERE ` + conditions.join(' AND ');
+  }
+
+  sql += ` GROUP BY a.id, u.name, uo.name, ua.name ORDER BY a.position ASC, a.created_at DESC`;
 
   const res = await query(sql, params);
   let articles = res.rows as Article[];
@@ -90,14 +106,18 @@ export const getAllArticles = async (options: {
 export const getArticleById = async (id: number): Promise<Article | null> => {
   const sql = `
     SELECT a.*, u.name as author_name,
+           uo.name as owner_name,
+           ua.name as approver_name,
            COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
            COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
     FROM articles a
     LEFT JOIN users u ON a.author_id = u.id
+    LEFT JOIN users uo ON a.owner_id = uo.id
+    LEFT JOIN users ua ON a.approver_id = ua.id
     LEFT JOIN article_tags t ON a.id = t.article_id
     LEFT JOIN article_sections axs ON a.id = axs.article_id
     WHERE a.id = $1
-    GROUP BY a.id, u.name
+    GROUP BY a.id, u.name, uo.name, ua.name
   `;
   const res = await query(sql, [id]);
   return res.rows.length ? res.rows[0] : null;
@@ -106,14 +126,18 @@ export const getArticleById = async (id: number): Promise<Article | null> => {
 export const getArticleBySlug = async (slug: string): Promise<Article | null> => {
   const sql = `
     SELECT a.*, u.name as author_name,
+           uo.name as owner_name,
+           ua.name as approver_name,
            COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
            COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
     FROM articles a
     LEFT JOIN users u ON a.author_id = u.id
+    LEFT JOIN users uo ON a.owner_id = uo.id
+    LEFT JOIN users ua ON a.approver_id = ua.id
     LEFT JOIN article_tags t ON a.id = t.article_id
     LEFT JOIN article_sections axs ON a.id = axs.article_id
     WHERE a.slug = $1
-    GROUP BY a.id, u.name
+    GROUP BY a.id, u.name, uo.name, ua.name
   `;
   const res = await query(sql, [slug]);
   return res.rows.length ? res.rows[0] : null;
@@ -135,6 +159,9 @@ export const createArticle = async (data: {
   source_url?: string | null;
   sync_interval?: string;
   structured_data?: any | null;
+  article_type?: string;
+  owner_id?: number | null;
+  approver_id?: number | null;
 }): Promise<Article> => {
   const client = await pool.connect();
   try {
@@ -142,8 +169,8 @@ export const createArticle = async (data: {
     
     // Insert Article
     const artSql = `
-      INSERT INTO articles (title, slug, content, summary, category_id, author_id, published, position, is_visible, status, source_url, sync_interval, structured_data)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      INSERT INTO articles (title, slug, content, summary, category_id, author_id, published, position, is_visible, status, source_url, sync_interval, structured_data, article_type, owner_id, approver_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *
     `;
     const artRes = await client.query(artSql, [
@@ -160,6 +187,9 @@ export const createArticle = async (data: {
       data.source_url || null,
       data.sync_interval || 'manual',
       data.structured_data ? JSON.stringify(data.structured_data) : null,
+      data.article_type || 'general',
+      data.owner_id || null,
+      data.approver_id || null,
     ]);
     const article = artRes.rows[0];
 
@@ -211,6 +241,9 @@ export const updateArticle = async (
     source_url?: string | null;
     sync_interval?: string;
     structured_data?: any | null;
+    article_type?: string;
+    owner_id?: number | null;
+    approver_id?: number | null;
   }
 ): Promise<Article | null> => {
   const client = await pool.connect();
@@ -220,8 +253,8 @@ export const updateArticle = async (
     // Update Article
     const artSql = `
       UPDATE articles
-      SET title = $1, slug = $2, content = $3, summary = $4, category_id = $5, published = $6, position = $7, is_visible = $8, status = $9, source_url = $10, sync_interval = $11, structured_data = $12, updated_at = NOW()
-      WHERE id = $13
+      SET title = $1, slug = $2, content = $3, summary = $4, category_id = $5, published = $6, position = $7, is_visible = $8, status = $9, source_url = $10, sync_interval = $11, structured_data = $12, article_type = $13, owner_id = $14, approver_id = $15, updated_at = NOW()
+      WHERE id = $16
       RETURNING *
     `;
     const artRes = await client.query(artSql, [
@@ -237,6 +270,9 @@ export const updateArticle = async (
       data.source_url || null,
       data.sync_interval || 'manual',
       data.structured_data ? JSON.stringify(data.structured_data) : null,
+      data.article_type || 'general',
+      data.owner_id || null,
+      data.approver_id || null,
       id,
     ]);
 

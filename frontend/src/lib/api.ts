@@ -101,6 +101,11 @@ export interface Article {
   updated_at: string;
   tags: string[];
   section_ids?: number[];
+  article_type?: string;
+  owner_id?: number | null;
+  owner_name?: string;
+  approver_id?: number | null;
+  approver_name?: string;
   highlights?: string[];
   score?: number;
   source_url?: string | null;
@@ -790,6 +795,7 @@ export interface Space {
   name: string;
   description: string;
   department_id: number | null;
+  status?: string;
   sections: Section[];
 }
 
@@ -797,19 +803,206 @@ export interface Section {
   id: number;
   name: string;
   description: string;
-  position_id: number;
+  position_id: number | null;
   articles: {
     id: number;
     title: string;
     slug: string;
     status: string;
     position: number;
+    article_type?: string;
   }[];
   subsections: Section[];
+  owner_id?: number | null;
+  parent_section_id?: number | null;
+  space_id?: number;
+  status?: string;
 }
 
 export async function fetchNavigationTree(): Promise<Space[]> {
   return apiCall<Space[]>('/navigation', { cache: 'no-store' });
+}
+
+export interface Department {
+  id: number;
+  name: string;
+  description: string | null;
+  parent_department_id: number | null;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Position {
+  id: number;
+  name: string;
+  department_id: number;
+  parent_position_id: number | null;
+  hierarchy_level: number;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Employee {
+  id: number;
+  full_name: string;
+  email: string;
+  position_id: number | null;
+  department_id: number | null;
+  manager_id: number | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface GuestAccess {
+  id: number;
+  user_id: number;
+  article_id: number | null;
+  section_id: number | null;
+  granted_by: number | null;
+  expires_at: string;
+  created_at: string;
+  status: string;
+  user_name?: string;
+  user_full_name?: string;
+  article_title?: string;
+  section_name?: string;
+  granted_by_name?: string;
+}
+
+export interface ArticleLink {
+  id: number;
+  source_article_id: number;
+  target_article_id: number;
+  link_text: string;
+  created_at?: string;
+  target_title?: string;
+  target_slug?: string;
+}
+
+// DEPARTMENTS
+export async function fetchDepartments(): Promise<Department[]> {
+  return apiCall<Department[]>('/departments');
+}
+export async function createDepartment(data: Omit<Department, 'id'>): Promise<Department> {
+  clearApiCache();
+  return apiCall<Department>('/departments', { method: 'POST', body: JSON.stringify(data) });
+}
+export async function updateDepartment(id: number, data: Omit<Department, 'id'>): Promise<Department> {
+  clearApiCache();
+  return apiCall<Department>(`/departments/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+export async function deleteDepartment(id: number): Promise<void> {
+  clearApiCache();
+  return apiCall<void>(`/departments/${id}`, { method: 'DELETE' });
+}
+
+// POSITIONS
+export async function fetchPositions(): Promise<Position[]> {
+  return apiCall<Position[]>('/positions');
+}
+export async function createPosition(data: Omit<Position, 'id'>): Promise<Position> {
+  clearApiCache();
+  return apiCall<Position>('/positions', { method: 'POST', body: JSON.stringify(data) });
+}
+export async function updatePosition(id: number, data: Omit<Position, 'id'>): Promise<Position> {
+  clearApiCache();
+  return apiCall<Position>(`/positions/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+export async function deletePosition(id: number): Promise<void> {
+  clearApiCache();
+  return apiCall<void>(`/positions/${id}`, { method: 'DELETE' });
+}
+
+// EMPLOYEES
+export async function fetchEmployees(): Promise<Employee[]> {
+  return apiCall<Employee[]>('/employees');
+}
+export async function createEmployee(data: Omit<Employee, 'id'>): Promise<Employee> {
+  clearApiCache();
+  return apiCall<Employee>('/employees', { method: 'POST', body: JSON.stringify(data) });
+}
+export async function updateEmployee(id: number, data: Omit<Employee, 'id'>): Promise<Employee> {
+  clearApiCache();
+  return apiCall<Employee>(`/employees/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+export async function deleteEmployee(id: number): Promise<void> {
+  clearApiCache();
+  return apiCall<void>(`/employees/${id}`, { method: 'DELETE' });
+}
+
+// SPACES
+export async function fetchSpaces(): Promise<Space[]> {
+  return apiCall<Space[]>('/wiki/spaces');
+}
+export async function createSpace(data: Omit<Space, 'id' | 'sections'>): Promise<Space> {
+  clearApiCache();
+  return apiCall<Space>('/wiki/spaces', { method: 'POST', body: JSON.stringify(data) });
+}
+export async function updateSpace(id: number, data: Omit<Space, 'id' | 'sections'>): Promise<Space> {
+  clearApiCache();
+  return apiCall<Space>(`/wiki/spaces/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+export async function deleteSpace(id: number): Promise<void> {
+  clearApiCache();
+  return apiCall<void>(`/wiki/spaces/${id}`, { method: 'DELETE' });
+}
+
+// SECTIONS
+export async function fetchSections(): Promise<Section[]> {
+  return apiCall<Section[]>('/wiki/sections');
+}
+export async function createSection(data: Omit<Section, 'id' | 'articles' | 'subsections'>): Promise<Section> {
+  clearApiCache();
+  return apiCall<Section>('/wiki/sections', { method: 'POST', body: JSON.stringify(data) });
+}
+export async function updateSection(id: number, data: Omit<Section, 'id' | 'articles' | 'subsections'>): Promise<Section> {
+  clearApiCache();
+  return apiCall<Section>(`/wiki/sections/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+export async function deleteSection(id: number): Promise<void> {
+  clearApiCache();
+  return apiCall<void>(`/wiki/sections/${id}`, { method: 'DELETE' });
+}
+
+// SYNC
+export async function triggerOrgStructureSync(): Promise<{ message: string; details: any }> {
+  clearApiCache();
+  return apiCall<{ message: string; details: any }>('/wiki/sync/org-structure', { method: 'POST' });
+}
+
+// GUEST ACCESS
+export async function fetchGuestAccessList(): Promise<GuestAccess[]> {
+  return apiCall<GuestAccess[]>('/wiki/access/guest');
+}
+export async function createGuestAccess(data: { user_id: number; article_id?: number | null; section_id?: number | null; expires_at: string }): Promise<GuestAccess> {
+  clearApiCache();
+  return apiCall<GuestAccess>('/wiki/access/guest', { method: 'POST', body: JSON.stringify(data) });
+}
+export async function deleteGuestAccess(id: number): Promise<void> {
+  clearApiCache();
+  return apiCall<void>(`/wiki/access/guest/${id}`, { method: 'DELETE' });
+}
+
+// ACCESS CHECK
+export async function checkAccess(params: { sectionId?: number; articleId?: number }): Promise<{ hasAccess: boolean }> {
+  const q = new URLSearchParams();
+  if (params.sectionId) q.set('sectionId', String(params.sectionId));
+  if (params.articleId) q.set('articleId', String(params.articleId));
+  return apiCall<{ hasAccess: boolean }>(`/wiki/access/check?${q.toString()}`);
+}
+
+// ARTICLE LINKS
+export async function fetchArticleLinks(articleId: number): Promise<ArticleLink[]> {
+  return apiCall<ArticleLink[]>(`/articles/${articleId}/links`);
+}
+export async function createArticleLink(articleId: number, data: { target_article_id: number; link_text?: string }): Promise<ArticleLink> {
+  return apiCall<ArticleLink>(`/articles/${articleId}/links`, { method: 'POST', body: JSON.stringify(data) });
+}
+export async function deleteArticleLink(articleId: number, linkId: number): Promise<void> {
+  return apiCall<void>(`/articles/${articleId}/links/${linkId}`, { method: 'DELETE' });
 }
 
 

@@ -208,6 +208,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
               const isDraft = art.status === 'draft';
               const isPending = art.status === 'on_approval';
               const isWarning = art.status === 'requires_verification';
+              const isJobDescription = art.article_type === 'job_description';
 
               return (
                 <div key={art.id} style={{ paddingLeft: `${(depth + 1) * 12 + 12}px` }}>
@@ -217,11 +218,17 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                     className={`group flex items-center justify-between py-1.5 px-2 rounded-lg text-xs transition-all border ${
                       isActive
                         ? 'bg-indigo-500/10 dark:bg-indigo-500/10 border-indigo-500/20 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-semibold shadow-sm'
-                        : 'text-neutral-600 dark:text-neutral-400 hover:bg-white/60 dark:hover:bg-neutral-950/20 hover:text-neutral-900 dark:hover:text-neutral-200 border-transparent hover:translate-x-0.5'
+                        : isJobDescription
+                          ? 'text-indigo-650 dark:text-indigo-400 bg-indigo-500/5 dark:bg-indigo-500/5 hover:bg-indigo-500/10 dark:hover:bg-indigo-500/10 border-indigo-550/10 hover:translate-x-0.5 font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]'
+                          : 'text-neutral-600 dark:text-neutral-400 hover:bg-white/60 dark:hover:bg-neutral-950/20 hover:text-neutral-900 dark:hover:text-neutral-200 border-transparent hover:translate-x-0.5'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <FileText className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-500' : 'text-neutral-400'}`} />
+                      {isJobDescription ? (
+                        <ClipboardList className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-600' : 'text-indigo-500'}`} />
+                      ) : (
+                        <FileText className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-500' : 'text-neutral-400'}`} />
+                      )}
                       <span className="truncate">{art.title}</span>
                     </div>
 

@@ -60,7 +60,8 @@ export interface Section {
  */
 export const getUserAllowedSections = async (
   employeeId: number | null | undefined,
-  userRole: string
+  userRole: string,
+  userId?: number
 ): Promise<number[]> => {
   // 1. Администратор видит все разделы
   if (userRole === 'Admin') {
@@ -81,7 +82,25 @@ export const getUserAllowedSections = async (
   const commonRes = await pool.query(commonSectionsQuery);
   commonRes.rows.forEach((r) => allowedSectionIds.add(r.id));
 
-  // Если нет привязанного сотрудника, возвращаем только общие разделы
+  // 2b. Добавляем разделы, к которым выдан активный гостевой доступ
+  let resolvedUserId = userId;
+  if (!resolvedUserId && employeeId) {
+    const userRes = await pool.query('SELECT id FROM users WHERE employee_id = $1', [employeeId]);
+    if (userRes.rows.length > 0) {
+      resolvedUserId = userRes.rows[0].id;
+    }
+  }
+
+  if (resolvedUserId) {
+    const guestRes = await pool.query(
+      `SELECT section_id FROM guest_access 
+       WHERE user_id = $1 AND section_id IS NOT NULL AND status = 'Active' AND expires_at > NOW()`,
+      [resolvedUserId]
+    );
+    guestRes.rows.forEach((r) => allowedSectionIds.add(r.section_id));
+  }
+
+  // Если нет привязанного сотрудника, возвращаем только общие + гостевые разделы
   if (!employeeId) {
     return Array.from(allowedSectionIds);
   }

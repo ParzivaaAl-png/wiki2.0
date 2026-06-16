@@ -573,6 +573,79 @@ export const initializeDatabase = async () => {
       await pool.query("SELECT setval('articles_id_seq', (SELECT MAX(id) FROM articles))");
     }
 
+    // Apply Stage 1 Extended migrations
+    console.log('Running Stage 1 Extended migrations...');
+    await pool.query(`
+      ALTER TABLE departments ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Active';
+      
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS article_type VARCHAR(50) DEFAULT 'general';
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS owner_id INT REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS approver_id INT REFERENCES users(id) ON DELETE SET NULL;
+      
+      ALTER TABLE sections ADD COLUMN IF NOT EXISTS owner_id INT REFERENCES users(id) ON DELETE SET NULL;
+    `);
+
+    // Safe adjustment of section position_id foreign key constraint to ON DELETE SET NULL
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 
+          FROM information_schema.table_constraints 
+          WHERE constraint_name = 'sections_position_id_fkey' 
+            AND table_name = 'sections'
+        ) THEN
+          ALTER TABLE sections DROP CONSTRAINT sections_position_id_fkey;
+        END IF;
+      END $$;
+      
+      ALTER TABLE sections ADD CONSTRAINT sections_position_id_fkey 
+      FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE SET NULL;
+    `);
+
+    // Create article_links
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS article_links (
+        id SERIAL PRIMARY KEY,
+        source_article_id INT REFERENCES articles(id) ON DELETE CASCADE,
+        target_article_id INT REFERENCES articles(id) ON DELETE CASCADE,
+        link_text VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(source_article_id, target_article_id)
+      );
+    `);
+
+    // Create guest_access
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS guest_access (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        article_id INT REFERENCES articles(id) ON DELETE CASCADE,
+        section_id INT REFERENCES sections(id) ON DELETE CASCADE,
+        granted_by INT REFERENCES users(id) ON DELETE SET NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(50) DEFAULT 'Active'
+      );
+    `);
+
+    // Create trigger for position delete to archive section
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION archive_section_on_delete_position() RETURNS TRIGGER AS $$
+      BEGIN
+        UPDATE sections SET status = 'Archived', position_id = NULL WHERE position_id = OLD.id;
+        RETURN OLD;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
+    await pool.query(`
+      DROP TRIGGER IF EXISTS trg_archive_section_on_delete_position ON positions;
+      CREATE TRIGGER trg_archive_section_on_delete_position
+      BEFORE DELETE ON positions
+      FOR EACH ROW EXECUTE FUNCTION archive_section_on_delete_position();
+    `);
+
     // Sync sequences automatically to avoid "duplicate key value violates unique constraint" errors after migrations
     console.log('Synchronizing auto-increment database sequences...');
     await pool.query(`

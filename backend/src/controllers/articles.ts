@@ -12,7 +12,8 @@ const getAllowedSectionsForRequest = async (req: Request): Promise<number[]> => 
   const authReq = req as AuthenticatedRequest;
   const employeeId = authReq.user ? authReq.user.employee_id : null;
   const role = authReq.user ? authReq.user.role : '';
-  return getUserAllowedSections(employeeId, role);
+  const userId = authReq.user ? authReq.user.id : undefined;
+  return getUserAllowedSections(employeeId, role, userId);
 };
 
 export const getArticles = async (req: Request, res: Response) => {
@@ -23,7 +24,7 @@ export const getArticles = async (req: Request, res: Response) => {
     const userId = authReq.user ? authReq.user.id : 0;
     const employeeId = authReq.user ? authReq.user.employee_id : null;
 
-    const allowedSectionIds = await getUserAllowedSections(employeeId, role);
+    const allowedSectionIds = await getUserAllowedSections(employeeId, role, userId);
 
     let allowedStatuses = ['published', 'requires_verification'];
     if (role === 'Admin') {
@@ -142,10 +143,23 @@ export const getArticle = async (req: Request, res: Response) => {
 
     // Проверка доступа к разделам и статусу статьи
     if (role !== 'Admin') {
-      const allowedSections = await getUserAllowedSections(employeeId, role);
+      const allowedSections = await getUserAllowedSections(employeeId, role, userId);
       const hasSectionAccess = article.section_ids.some(id => allowedSections.includes(id));
       
-      if (!hasSectionAccess && article.section_ids.length > 0) {
+      let hasGuestAccess = false;
+      if (userId) {
+        const guestAccessRes = await query(
+          `SELECT id FROM guest_access 
+           WHERE user_id = $1 
+             AND (article_id = $2 OR section_id = ANY($3::int[])) 
+             AND status = 'Active' 
+             AND expires_at > CURRENT_TIMESTAMP`,
+          [userId, article.id, article.section_ids]
+        );
+        hasGuestAccess = (guestAccessRes.rowCount ?? 0) > 0;
+      }
+      
+      if (!hasSectionAccess && !hasGuestAccess && article.section_ids.length > 0) {
         return res.status(403).json({ error: 'Доступ ограничен: У вас нет прав на просмотр этой статьи.' });
       }
 
@@ -883,7 +897,7 @@ export const getNavigationTree = async (req: Request, res: Response) => {
     const userId = authReq.user ? authReq.user.id : 0;
     const employeeId = authReq.user ? authReq.user.employee_id : null;
 
-    const allowedSectionIds = await getUserAllowedSections(employeeId, role);
+    const allowedSectionIds = await getUserAllowedSections(employeeId, role, userId);
 
     if (allowedSectionIds.length === 0) {
       return res.json([]);
@@ -924,13 +938,13 @@ export const getNavigationTree = async (req: Request, res: Response) => {
     }
 
     const articlesRes = await query(
-      `SELECT a.id, a.title, a.slug, a.status, a.position, axs.section_id
+      `SELECT a.id, a.title, a.slug, a.status, a.position, a.article_type, axs.section_id
        FROM articles a
        JOIN article_sections axs ON a.id = axs.article_id
        WHERE axs.section_id = ANY($1::int[]) 
          AND a.is_visible = true
          AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
-       ORDER BY a.position ASC, a.created_at DESC`,
+       ORDER BY (CASE WHEN a.article_type = 'job_description' THEN 0 ELSE 1 END) ASC, a.position ASC, a.created_at DESC`,
       [allowedSectionIds, allowedStatuses, userId]
     );
     const articles = articlesRes.rows;
@@ -946,7 +960,8 @@ export const getNavigationTree = async (req: Request, res: Response) => {
         title: art.title,
         slug: art.slug,
         status: art.status,
-        position: art.position
+        position: art.position,
+        article_type: art.article_type
       });
     });
 
@@ -1005,3 +1020,108 @@ export const getNavigationTree = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 };
+
+// CHECK ACCESS ENDPOINT
+export const checkAccess = async (req: Request, res: Response) => {
+  try {
+    const { sectionId, articleId } = req.query;
+    const authReq = req as AuthenticatedRequest;
+    const userId = authReq.user ? authReq.user.id : 0;
+    const role = authReq.user ? authReq.user.role : '';
+    const employeeId = authReq.user ? authReq.user.employee_id : null;
+
+    if (role === 'Admin') {
+      return res.json({ hasAccess: true });
+    }
+
+    if (articleId) {
+      const article = await ArticleModel.getArticleById(Number(articleId));
+      if (!article) return res.status(404).json({ error: 'Article not found' });
+      
+      const allowedSections = await getUserAllowedSections(employeeId, role, userId);
+      const hasSectionAccess = article.section_ids.some(id => allowedSections.includes(id));
+      
+      let hasGuestAccess = false;
+      if (userId) {
+        const guestAccessRes = await query(
+          `SELECT id FROM guest_access 
+           WHERE user_id = $1 
+             AND (article_id = $2 OR section_id = ANY($3::int[])) 
+             AND status = 'Active' 
+             AND expires_at > CURRENT_TIMESTAMP`,
+          [userId, article.id, article.section_ids]
+        );
+        hasGuestAccess = (guestAccessRes.rowCount ?? 0) > 0;
+      }
+      
+      return res.json({ hasAccess: hasSectionAccess || hasGuestAccess });
+    }
+
+    if (sectionId) {
+      const allowedSections = await getUserAllowedSections(employeeId, role, userId);
+      const hasAccess = allowedSections.includes(Number(sectionId));
+      return res.json({ hasAccess });
+    }
+
+    return res.status(400).json({ error: 'sectionId or articleId required' });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+// ARTICLE LINKS ENDPOINTS
+export const getArticleLinks = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      `SELECT al.*, a.title as target_title, a.slug as target_slug 
+       FROM article_links al
+       JOIN articles a ON al.target_article_id = a.id
+       WHERE al.source_article_id = $1`,
+      [id]
+    );
+    res.json(result.rows);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const createArticleLink = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { target_article_id, link_text } = req.body;
+    
+    if (!target_article_id) {
+      return res.status(400).json({ error: 'target_article_id is required' });
+    }
+
+    const result = await query(
+      `INSERT INTO article_links (source_article_id, target_article_id, link_text)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (source_article_id, target_article_id) 
+       DO UPDATE SET link_text = EXCLUDED.link_text
+       RETURNING *`,
+      [id, target_article_id, link_text || '']
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const deleteArticleLink = async (req: Request, res: Response) => {
+  try {
+    const { id, linkId } = req.params;
+    const result = await query(
+      'DELETE FROM article_links WHERE id = $1 AND source_article_id = $2',
+      [linkId, id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Link not found' });
+    }
+    res.json({ message: 'Link deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
