@@ -547,7 +547,8 @@ export const initializeDatabase = async () => {
         [30, 'Настройка почтового клиента', 'nastrojka-pochtovogo-klienta', 'Корпоративная электронная почта', '<p>Инструкция по конфигурации почтовых клиентов Outlook / Thunderbird.</p>', 8]
       ];
 
-      for (const [id, title, slug, summary, content, sectionId] of demoArticles) {
+      for (const [rawId, title, slug, summary, content, sectionId] of demoArticles) {
+        const id = (rawId as number) + 1000;
         // Create article
         await pool.query(
           `INSERT INTO articles (id, title, slug, summary, content, published, is_visible, status) 
