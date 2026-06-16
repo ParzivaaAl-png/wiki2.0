@@ -11,11 +11,13 @@ export interface Article {
   author_name?: string;
   published: boolean;
   is_visible: boolean;
+  status: string;
   views: number;
   position: number;
   created_at: Date;
   updated_at: Date;
   tags: string[];
+  section_ids: number[];
   source_url?: string | null;
   sync_interval?: string;
   last_sync_at?: Date | null;
@@ -27,16 +29,21 @@ export const getAllArticles = async (options: {
   publishedOnly?: boolean;
   tag?: string;
   all?: boolean; // If true, include archived (is_visible=false)
+  allowedSectionIds?: number[];
+  allowedStatuses?: string[];
+  authorId?: number;
 } = {}): Promise<Article[]> => {
   const params: any[] = [];
   let paramIndex = 1;
 
   let sql = `
     SELECT a.*, u.name as author_name,
-           COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+           COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
+           COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
     FROM articles a
     LEFT JOIN users u ON a.author_id = u.id
     LEFT JOIN article_tags t ON a.id = t.article_id
+    LEFT JOIN article_sections axs ON a.id = axs.article_id
   `;
 
   const whereClauses: string[] = [];
@@ -45,26 +52,30 @@ export const getAllArticles = async (options: {
     whereClauses.push(`a.is_visible = true`);
   }
 
-  if (options.publishedOnly !== false) {
-    whereClauses.push(`a.published = true`);
+  // Фильтр по разрешенным разделам (если передан массив)
+  if (options.allowedSectionIds) {
+    params.push(options.allowedSectionIds);
+    whereClauses.push(`axs.section_id = ANY($${paramIndex++})`);
+  }
+
+  // Фильтрация по статусам и автору (для черновиков)
+  if (options.allowedStatuses) {
+    params.push(options.allowedStatuses);
+    const statusClause = `a.status = ANY($${paramIndex++})`;
+    if (options.authorId) {
+      params.push(options.authorId);
+      whereClauses.push(`(${statusClause} OR a.author_id = $${paramIndex++})`);
+    } else {
+      whereClauses.push(statusClause);
+    }
+  }
+
+  if (whereClauses.length > 0) {
+    sql += ` WHERE ${whereClauses.join(' AND ')}`;
   }
 
   sql += ` GROUP BY a.id, u.name`;
-
-  if (whereClauses.length > 0) {
-    sql = `
-      SELECT a.*, u.name as author_name,
-             COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
-      FROM articles a
-      LEFT JOIN users u ON a.author_id = u.id
-      LEFT JOIN article_tags t ON a.id = t.article_id
-      WHERE ${whereClauses.join(' AND ')}
-      GROUP BY a.id, u.name
-      ORDER BY a.position ASC, a.created_at DESC
-    `;
-  } else {
-    sql += ` ORDER BY a.position ASC, a.created_at DESC`;
-  }
+  sql += ` ORDER BY a.position ASC, a.created_at DESC`;
 
   const res = await query(sql, params);
   let articles = res.rows as Article[];
@@ -79,10 +90,12 @@ export const getAllArticles = async (options: {
 export const getArticleById = async (id: number): Promise<Article | null> => {
   const sql = `
     SELECT a.*, u.name as author_name,
-           COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+           COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
+           COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
     FROM articles a
     LEFT JOIN users u ON a.author_id = u.id
     LEFT JOIN article_tags t ON a.id = t.article_id
+    LEFT JOIN article_sections axs ON a.id = axs.article_id
     WHERE a.id = $1
     GROUP BY a.id, u.name
   `;
@@ -93,10 +106,12 @@ export const getArticleById = async (id: number): Promise<Article | null> => {
 export const getArticleBySlug = async (slug: string): Promise<Article | null> => {
   const sql = `
     SELECT a.*, u.name as author_name,
-           COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+           COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
+           COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
     FROM articles a
     LEFT JOIN users u ON a.author_id = u.id
     LEFT JOIN article_tags t ON a.id = t.article_id
+    LEFT JOIN article_sections axs ON a.id = axs.article_id
     WHERE a.slug = $1
     GROUP BY a.id, u.name
   `;
@@ -113,7 +128,9 @@ export const createArticle = async (data: {
   author_id?: number | null;
   published: boolean;
   is_visible?: boolean;
+  status?: string;
   tags: string[];
+  section_ids?: number[];
   position?: number;
   source_url?: string | null;
   sync_interval?: string;
@@ -125,8 +142,8 @@ export const createArticle = async (data: {
     
     // Insert Article
     const artSql = `
-      INSERT INTO articles (title, slug, content, summary, category_id, author_id, published, position, is_visible, source_url, sync_interval, structured_data)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      INSERT INTO articles (title, slug, content, summary, category_id, author_id, published, position, is_visible, status, source_url, sync_interval, structured_data)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *
     `;
     const artRes = await client.query(artSql, [
@@ -139,6 +156,7 @@ export const createArticle = async (data: {
       data.published,
       data.position || 0,
       data.is_visible !== undefined ? data.is_visible : true,
+      data.status || 'draft',
       data.source_url || null,
       data.sync_interval || 'manual',
       data.structured_data ? JSON.stringify(data.structured_data) : null,
@@ -152,6 +170,15 @@ export const createArticle = async (data: {
         VALUES ${data.tags.map((_, i) => `($1, $${i + 2})`).join(', ')}
       `;
       await client.query(tagSql, [article.id, ...data.tags]);
+    }
+
+    // Insert Sections
+    if (data.section_ids && data.section_ids.length > 0) {
+      const sectionSql = `
+        INSERT INTO article_sections (article_id, section_id)
+        VALUES ${data.section_ids.map((_, i) => `($1, $${i + 2})`).join(', ')}
+      `;
+      await client.query(sectionSql, [article.id, ...data.section_ids]);
     }
 
     await client.query('COMMIT');
@@ -177,7 +204,9 @@ export const updateArticle = async (
     category_id: number | null;
     published: boolean;
     is_visible?: boolean;
+    status?: string;
     tags: string[];
+    section_ids?: number[];
     position?: number;
     source_url?: string | null;
     sync_interval?: string;
@@ -191,8 +220,8 @@ export const updateArticle = async (
     // Update Article
     const artSql = `
       UPDATE articles
-      SET title = $1, slug = $2, content = $3, summary = $4, category_id = $5, published = $6, position = $7, is_visible = $8, source_url = $9, sync_interval = $10, structured_data = $11, updated_at = NOW()
-      WHERE id = $12
+      SET title = $1, slug = $2, content = $3, summary = $4, category_id = $5, published = $6, position = $7, is_visible = $8, status = $9, source_url = $10, sync_interval = $11, structured_data = $12, updated_at = NOW()
+      WHERE id = $13
       RETURNING *
     `;
     const artRes = await client.query(artSql, [
@@ -204,6 +233,7 @@ export const updateArticle = async (
       data.published,
       data.position || 0,
       data.is_visible !== undefined ? data.is_visible : true,
+      data.status || 'draft',
       data.source_url || null,
       data.sync_interval || 'manual',
       data.structured_data ? JSON.stringify(data.structured_data) : null,
@@ -225,6 +255,18 @@ export const updateArticle = async (
         VALUES ${data.tags.map((_, i) => `($1, $${i + 2})`).join(', ')}
       `;
       await client.query(tagSql, [id, ...data.tags]);
+    }
+
+    // Delete Old Section Mappings
+    await client.query('DELETE FROM article_sections WHERE article_id = $1', [id]);
+
+    // Insert New Section Mappings
+    if (data.section_ids && data.section_ids.length > 0) {
+      const sectionSql = `
+        INSERT INTO article_sections (article_id, section_id)
+        VALUES ${data.section_ids.map((_, i) => `($1, $${i + 2})`).join(', ')}
+      `;
+      await client.query(sectionSql, [id, ...data.section_ids]);
     }
 
     await client.query('COMMIT');

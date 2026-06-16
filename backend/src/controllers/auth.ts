@@ -116,6 +116,7 @@ export const login = async (req: Request, res: Response) => {
       name: user.name,
       role: user.role,
       is_blocked: user.is_blocked,
+      employee_id: (user as any).employee_id,
     };
 
     res.json({ user: userResponse, accessToken });

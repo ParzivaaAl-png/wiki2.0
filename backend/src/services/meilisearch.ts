@@ -45,6 +45,7 @@ export interface ArticleDocument {
   tags: string[];
   published: boolean;
   createdAt: string;
+  section_ids?: number[];
 
   // Дополнительные поисковые поля
   title_latin?: string;
@@ -135,6 +136,7 @@ export const initializeMeilisearch = async () => {
         'published',
         'categoryName',
         'tags',
+        'section_ids',
       ],
       sortableAttributes: [
         'createdAt',
@@ -325,6 +327,7 @@ export const syncIfNeeded = async () => {
           tags: art.tags,
           published: art.published,
           createdAt: art.created_at instanceof Date ? art.created_at.toISOString() : new Date(art.created_at).toISOString(),
+          section_ids: art.section_ids,
         }));
         await bulkSyncArticles(docs);
         console.log('Bulk sync completed successfully.');
@@ -353,6 +356,7 @@ export const triggerFullSync = async () => {
       tags: art.tags,
       published: art.published,
       createdAt: art.created_at instanceof Date ? art.created_at.toISOString() : new Date(art.created_at).toISOString(),
+      section_ids: art.section_ids,
     }));
 
     await msClient.index(INDEX_NAME).deleteAllDocuments();
@@ -458,7 +462,8 @@ function getRelevanceRank(hit: any, queryText: string): number {
 export const searchArticles = async (
   queryText: string,
   categorySlug?: string,
-  tagName?: string
+  tagName?: string,
+  allowedSectionIds?: number[]
 ) => {
   await syncIfNeeded();
   try {
@@ -470,6 +475,12 @@ export const searchArticles = async (
 
     if (tagName) {
       filterArray.push(`tags = "${tagName}"`);
+    }
+
+    if (allowedSectionIds && allowedSectionIds.length > 0) {
+      filterArray.push(`section_ids IN [${allowedSectionIds.join(', ')}]`);
+    } else if (allowedSectionIds) {
+      filterArray.push(`section_ids = -1`);
     }
 
     const searchParams: any = {
@@ -582,15 +593,22 @@ export const searchArticles = async (
 /**
  * Auto-completion suggestions provider.
  */
-export const suggestArticles = async (queryText: string) => {
+export const suggestArticles = async (queryText: string, allowedSectionIds?: number[]) => {
   await syncIfNeeded();
   try {
     if (!queryText || queryText.trim().length === 0) return [];
 
+    const filterArray = ['published = true'];
+    if (allowedSectionIds && allowedSectionIds.length > 0) {
+      filterArray.push(`section_ids IN [${allowedSectionIds.join(', ')}]`);
+    } else if (allowedSectionIds) {
+      filterArray.push(`section_ids = -1`);
+    }
+
     const variants = getQueryVariants(queryText);
     const searchPromises = variants.map(variant =>
       msClient.index(INDEX_NAME).search(variant, {
-        filter: ['published = true'],
+        filter: filterArray,
         attributesToRetrieve: ['id', 'title', 'slug', 'categoryName'],
         limit: 5,
       })

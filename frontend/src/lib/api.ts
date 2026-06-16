@@ -63,6 +63,7 @@ export interface User {
   name: string;
   role: 'Admin' | 'Editor' | 'User';
   is_blocked: boolean;
+  employee_id?: number | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -93,11 +94,13 @@ export interface Article {
   author_name?: string;
   published: boolean;
   is_visible?: boolean;
+  status?: string;
   views: number;
   position: number;
   created_at: string;
   updated_at: string;
   tags: string[];
+  section_ids?: number[];
   highlights?: string[];
   score?: number;
   source_url?: string | null;
@@ -780,6 +783,33 @@ export async function restoreArticleVersion(id: number, changeId: number): Promi
   return apiCall<Article>(`/articles/${id}/restore/${changeId}`, {
     method: 'POST',
   });
+}
+
+export interface Space {
+  id: number;
+  name: string;
+  description: string;
+  department_id: number | null;
+  sections: Section[];
+}
+
+export interface Section {
+  id: number;
+  name: string;
+  description: string;
+  position_id: number;
+  articles: {
+    id: number;
+    title: string;
+    slug: string;
+    status: string;
+    position: number;
+  }[];
+  subsections: Section[];
+}
+
+export async function fetchNavigationTree(): Promise<Space[]> {
+  return apiCall<Space[]>('/navigation', { cache: 'no-store' });
 }
 
 

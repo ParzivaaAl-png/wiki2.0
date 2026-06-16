@@ -5,74 +5,102 @@ import * as msService from '../services/meilisearch';
 import { parseDocument } from '../services/parser';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { query } from '../config/db';
+import { getUserAllowedSections } from '../models/orgStructure';
+
+// Получение списка разрешенных разделов для запроса
+const getAllowedSectionsForRequest = async (req: Request): Promise<number[]> => {
+  const authReq = req as AuthenticatedRequest;
+  const employeeId = authReq.user ? authReq.user.employee_id : null;
+  const role = authReq.user ? authReq.user.role : '';
+  return getUserAllowedSections(employeeId, role);
+};
 
 export const getArticles = async (req: Request, res: Response) => {
   try {
     const { tag, all, filter } = req.query;
-    
+    const authReq = req as AuthenticatedRequest;
+    const role = authReq.user ? authReq.user.role : '';
+    const userId = authReq.user ? authReq.user.id : 0;
+    const employeeId = authReq.user ? authReq.user.employee_id : null;
+
+    const allowedSectionIds = await getUserAllowedSections(employeeId, role);
+
+    let allowedStatuses = ['published', 'requires_verification'];
+    if (role === 'Admin') {
+      allowedStatuses = ['draft', 'on_approval', 'published', 'requires_verification', 'archived', 'expired'];
+    } else if (role === 'Editor') {
+      allowedStatuses = ['published', 'requires_verification', 'archived', 'expired'];
+    }
+
     let articles = [];
     if (filter === 'new') {
       const resData = await query(
         `SELECT a.*, u.name as author_name,
-                COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+                COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
+                COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
          FROM articles a
          LEFT JOIN users u ON a.author_id = u.id
          LEFT JOIN article_tags t ON a.id = t.article_id
-         WHERE a.published = true AND a.is_visible = true
+         LEFT JOIN article_sections axs ON a.id = axs.article_id
+         WHERE a.is_visible = true 
+           AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
+           AND axs.section_id = ANY($1::int[])
          GROUP BY a.id, u.name
-         ORDER BY a.created_at DESC`
+         ORDER BY a.created_at DESC`,
+        [allowedSectionIds, allowedStatuses, userId]
       );
       articles = resData.rows;
     } else if (filter === 'popular') {
       const resData = await query(
         `SELECT a.*, u.name as author_name,
-                COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+                COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
+                COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
          FROM articles a
          LEFT JOIN users u ON a.author_id = u.id
          LEFT JOIN article_tags t ON a.id = t.article_id
-         WHERE a.published = true AND a.is_visible = true
+         LEFT JOIN article_sections axs ON a.id = axs.article_id
+         WHERE a.is_visible = true
+           AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
+           AND axs.section_id = ANY($1::int[])
          GROUP BY a.id, u.name
-         ORDER BY a.views DESC, a.created_at DESC`
+         ORDER BY a.views DESC, a.created_at DESC`,
+        [allowedSectionIds, allowedStatuses, userId]
       );
       articles = resData.rows;
-    } else if (filter === 'actual') {
-      // Актуальные: трендовые по просмотрам за последние 7 дней, с флбэком на дату обновления
+    } else if (filter === 'actual' || filter === 'trending') {
       const resData = await query(
         `SELECT a.*, COUNT(DISTINCT COALESCE(vl.user_id::text, vl.ip_address)) as trending_views, u.name as author_name,
-                COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+                COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
+                COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
          FROM articles a
          LEFT JOIN users u ON a.author_id = u.id
          LEFT JOIN article_tags t ON a.id = t.article_id
+         LEFT JOIN article_sections axs ON a.id = axs.article_id
          LEFT JOIN article_views_log vl ON a.id = vl.article_id AND vl.viewed_at > NOW() - INTERVAL '7 days'
-         WHERE a.published = true AND a.is_visible = true
+         WHERE a.is_visible = true
+           AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
+           AND axs.section_id = ANY($1::int[])
          GROUP BY a.id, u.name
-         ORDER BY trending_views DESC, a.views DESC, a.created_at DESC`
-      );
-      articles = resData.rows;
-    } else if (filter === 'trending') {
-      const resData = await query(
-        `SELECT a.*, COUNT(DISTINCT COALESCE(vl.user_id::text, vl.ip_address)) as trending_views, u.name as author_name,
-                COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
-         FROM articles a
-         LEFT JOIN users u ON a.author_id = u.id
-         LEFT JOIN article_tags t ON a.id = t.article_id
-         LEFT JOIN article_views_log vl ON a.id = vl.article_id AND vl.viewed_at > NOW() - INTERVAL '7 days'
-         WHERE a.published = true AND a.is_visible = true
-         GROUP BY a.id, u.name
-         ORDER BY trending_views DESC, a.views DESC, a.created_at DESC`
+         ORDER BY trending_views DESC, a.views DESC, a.created_at DESC`,
+        [allowedSectionIds, allowedStatuses, userId]
       );
       articles = resData.rows;
     } else if (filter === 'recommended') {
       const resData = await query(
         `SELECT a.*, COUNT(fa.user_id) as favorites_count, u.name as author_name,
-                COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+                COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
+                COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
          FROM articles a
          LEFT JOIN users u ON a.author_id = u.id
          LEFT JOIN article_tags t ON a.id = t.article_id
+         LEFT JOIN article_sections axs ON a.id = axs.article_id
          LEFT JOIN user_favorite_articles fa ON a.id = fa.article_id
-         WHERE a.published = true AND a.is_visible = true
+         WHERE a.is_visible = true
+           AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
+           AND axs.section_id = ANY($1::int[])
          GROUP BY a.id, u.name
-         ORDER BY favorites_count DESC, a.views DESC, a.created_at DESC`
+         ORDER BY favorites_count DESC, a.views DESC, a.created_at DESC`,
+        [allowedSectionIds, allowedStatuses, userId]
       );
       articles = resData.rows;
     } else {
@@ -80,6 +108,9 @@ export const getArticles = async (req: Request, res: Response) => {
         publishedOnly: all === 'true' ? false : true,
         tag: tag as string,
         all: all === 'true',
+        allowedSectionIds,
+        allowedStatuses,
+        authorId: userId
       });
     }
     
@@ -94,8 +125,11 @@ export const getArticle = async (req: Request, res: Response) => {
   try {
     const { slugOrId } = req.params;
     const authReq = req as AuthenticatedRequest;
-    let article = null;
+    const role = authReq.user ? authReq.user.role : '';
+    const userId = authReq.user ? authReq.user.id : 0;
+    const employeeId = authReq.user ? authReq.user.employee_id : null;
     
+    let article = null;
     if (isNaN(Number(slugOrId))) {
       article = await ArticleModel.getArticleBySlug(slugOrId);
     } else {
@@ -106,10 +140,30 @@ export const getArticle = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Article not found' });
     }
 
+    // Проверка доступа к разделам и статусу статьи
+    if (role !== 'Admin') {
+      const allowedSections = await getUserAllowedSections(employeeId, role);
+      const hasSectionAccess = article.section_ids.some(id => allowedSections.includes(id));
+      
+      if (!hasSectionAccess && article.section_ids.length > 0) {
+        return res.status(403).json({ error: 'Доступ ограничен: У вас нет прав на просмотр этой статьи.' });
+      }
+
+      const isAuthor = article.author_id === userId;
+      if (article.status === 'draft' || article.status === 'on_approval') {
+        if (!isAuthor) {
+          return res.status(403).json({ error: 'Доступ ограничен: Черновики и статьи на согласовании видны только авторам.' });
+        }
+      } else if (article.status === 'archived' || article.status === 'expired') {
+        if (role !== 'Editor' && !isAuthor) {
+          return res.status(403).json({ error: 'Доступ ограничен: Архивные статьи доступны только редакторам и авторам.' });
+        }
+      }
+    }
+
     // Запись детального просмотра с IP и User ID в фоновом режиме
     const rawIp = (authReq.headers['x-forwarded-for'] as string) || authReq.socket.remoteAddress || authReq.ip || '';
     const ip = rawIp.split(',')[0].trim();
-    const userId = authReq.user ? authReq.user.id : null;
     
     ArticleModel.incrementArticleViews(article.id, userId, ip).catch(err => 
       console.error(`Failed to increment views for article ${article?.id}:`, err)
@@ -157,11 +211,14 @@ export const getArticle = async (req: Request, res: Response) => {
 
 export const createArticle = async (req: Request, res: Response) => {
   try {
-    const { title, slug, content, summary, published, tags, position, is_visible, source_url, sync_interval } = req.body;
+    const authReq = req as AuthenticatedRequest;
+    const { title, slug, content, summary, published, tags, position, is_visible, source_url, sync_interval, section_ids, status } = req.body;
     
     if (!title || !slug || !content) {
       return res.status(400).json({ error: 'Title, slug, and content are required fields.' });
     }
+
+    const authorId = authReq.user ? authReq.user.id : null;
 
     const article = await ArticleModel.createArticle({
       title,
@@ -169,16 +226,19 @@ export const createArticle = async (req: Request, res: Response) => {
       content,
       summary: summary || '',
       category_id: null,
+      author_id: authorId,
       published: published === undefined ? true : !!published,
       is_visible: is_visible === undefined ? true : !!is_visible,
+      status: status || 'draft',
       tags: tags || [],
+      section_ids: section_ids || [],
       position: position !== undefined ? Number(position) : 0,
       source_url: source_url || null,
       sync_interval: sync_interval || 'manual',
     });
 
     // Auto-index to Meilisearch
-    if (article.published && article.is_visible) {
+    if (article.published && article.is_visible && article.status === 'published') {
       const doc: msService.ArticleDocument = {
         id: article.id,
         title: article.title,
@@ -190,7 +250,6 @@ export const createArticle = async (req: Request, res: Response) => {
         published: article.published,
         createdAt: article.created_at.toISOString(),
       };
-      // Meilisearch operation runs in background so as to not block client response
       msService.indexArticle(doc).catch(err => 
         console.error('Failed to auto-index new article to Meilisearch:', err)
       );
@@ -206,7 +265,7 @@ export const createArticle = async (req: Request, res: Response) => {
 export const updateArticle = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, slug, content, summary, published, tags, position, is_visible, source_url, sync_interval, change_description, editor_comment } = req.body;
+    const { title, slug, content, summary, published, tags, position, is_visible, source_url, sync_interval, section_ids, status, change_description, editor_comment } = req.body;
 
     if (!title || !slug || !content) {
       return res.status(400).json({ error: 'Title, slug, and content are required.' });
@@ -226,7 +285,9 @@ export const updateArticle = async (req: Request, res: Response) => {
       category_id: null,
       published: published === undefined ? true : !!published,
       is_visible: is_visible === undefined ? true : !!is_visible,
+      status: status || 'draft',
       tags: tags || [],
+      section_ids: section_ids || [],
       position: position !== undefined ? Number(position) : 0,
       source_url: source_url || null,
       sync_interval: sync_interval || 'manual',
@@ -276,7 +337,7 @@ export const updateArticle = async (req: Request, res: Response) => {
     }
 
     // Auto-index or delete from Meilisearch depending on published and visible status
-    if (article.published && article.is_visible) {
+    if (article.published && article.is_visible && article.status === 'published') {
       const doc: msService.ArticleDocument = {
         id: article.id,
         title: article.title,
@@ -307,13 +368,17 @@ export const updateArticle = async (req: Request, res: Response) => {
 
 export const getRecentChanges = async (req: Request, res: Response) => {
   try {
+    const allowedSectionIds = await getAllowedSectionsForRequest(req);
     const result = await query(
       `SELECT cl.*, a.title as article_title, a.slug as article_slug, u.name as user_name, u.role as user_role
        FROM article_changes_log cl
        INNER JOIN articles a ON cl.article_id = a.id
        LEFT JOIN users u ON cl.user_id = u.id
+       LEFT JOIN article_sections axs ON a.id = axs.article_id
+       WHERE axs.section_id = ANY($1::int[]) AND a.is_visible = true
        ORDER BY cl.changed_at DESC
-       LIMIT 5`
+       LIMIT 5`,
+      [allowedSectionIds]
     );
     res.json(result.rows);
   } catch (error: any) {
@@ -356,7 +421,9 @@ export const restoreArticleVersion = async (req: Request, res: Response) => {
       category_id: currentArticle.category_id,
       published: currentArticle.published,
       is_visible: currentArticle.is_visible,
+      status: currentArticle.status,
       tags: currentArticle.tags || [],
+      section_ids: currentArticle.section_ids,
       position: currentArticle.position,
       source_url: currentArticle.source_url || null,
       sync_interval: currentArticle.sync_interval || 'manual',
@@ -394,7 +461,7 @@ export const restoreArticleVersion = async (req: Request, res: Response) => {
       ]
     );
 
-    if (updatedArticle.published && updatedArticle.is_visible) {
+    if (updatedArticle.published && updatedArticle.is_visible && updatedArticle.status === 'published') {
       const doc: msService.ArticleDocument = {
         id: updatedArticle.id,
         title: updatedArticle.title,
@@ -443,12 +510,40 @@ export const deleteArticle = async (req: Request, res: Response) => {
 export const searchArticles = async (req: Request, res: Response) => {
   try {
     const { q, category, tag } = req.query;
+    const allowedSectionIds = await getAllowedSectionsForRequest(req);
     
-    const results = await msService.searchArticles(
+    let results = await msService.searchArticles(
       (q as string) || '',
       category as string,
-      tag as string
+      tag as string,
+      allowedSectionIds
     );
+
+    // Дополнительная фильтрация результатов Meilisearch по разрешенным разделам на бэкенде (как fallback и для точности)
+    // В Meilisearch мы также добавим фильтрацию. Но на бэкенде мы перепроверим:
+    // Каждая статья из результатов должна содержать хотя бы одну секцию из allowedSectionIds
+    // Но Meilisearch возвращает документы. Сначала найдем в бд секции для найденных статей
+    if (results && results.length > 0) {
+      const articleIds = results.map(r => r.id);
+      const secMapRes = await query(
+        'SELECT article_id, section_id FROM article_sections WHERE article_id = ANY($1::int[])',
+        [articleIds]
+      );
+      const articleToSections: Record<number, number[]> = {};
+      secMapRes.rows.forEach(row => {
+        if (!articleToSections[row.article_id]) {
+          articleToSections[row.article_id] = [];
+        }
+        articleToSections[row.article_id].push(row.section_id);
+      });
+
+      results = results.filter(art => {
+        const sections = articleToSections[art.id] || [];
+        // Если статья не привязана к секциям, обычные пользователи не видят её
+        if (sections.length === 0) return false;
+        return sections.some(id => allowedSectionIds.includes(id));
+      });
+    }
     
     res.json(results);
   } catch (error: any) {
@@ -460,9 +555,31 @@ export const searchArticles = async (req: Request, res: Response) => {
 export const suggestArticles = async (req: Request, res: Response) => {
   try {
     const { q } = req.query;
+    const allowedSectionIds = await getAllowedSectionsForRequest(req);
     
-    const results = await msService.suggestArticles((q as string) || '');
+    let results = await msService.suggestArticles((q as string) || '', allowedSectionIds);
     
+    if (results && results.length > 0) {
+      const articleIds = results.map(r => r.id);
+      const secMapRes = await query(
+        'SELECT article_id, section_id FROM article_sections WHERE article_id = ANY($1::int[])',
+        [articleIds]
+      );
+      const articleToSections: Record<number, number[]> = {};
+      secMapRes.rows.forEach(row => {
+        if (!articleToSections[row.article_id]) {
+          articleToSections[row.article_id] = [];
+        }
+        articleToSections[row.article_id].push(row.section_id);
+      });
+
+      results = results.filter(art => {
+        const sections = articleToSections[art.id] || [];
+        if (sections.length === 0) return false;
+        return sections.some(id => allowedSectionIds.includes(id));
+      });
+    }
+
     res.json(results);
   } catch (error: any) {
     console.error('Meilisearch suggestions request failed:', error);
@@ -530,6 +647,7 @@ export const importArticle = async (req: AuthenticatedRequest, res: Response) =>
       category_id: null,
       author_id: authorId,
       published: true,
+      status: 'published',
       tags: [],
     });
 
@@ -692,16 +810,19 @@ export const getArticleChanges = async (req: Request, res: Response) => {
 
 export const getPopularArticles = async (req: Request, res: Response) => {
   try {
+    const allowedSectionIds = await getAllowedSectionsForRequest(req);
     const result = await query(
       `SELECT a.*, u.name as author_name,
-              COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+              COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
        FROM articles a
        LEFT JOIN users u ON a.author_id = u.id
        LEFT JOIN article_tags t ON a.id = t.article_id
-       WHERE a.published = true AND a.is_visible = true
+       LEFT JOIN article_sections axs ON a.id = axs.article_id
+       WHERE a.published = true AND a.is_visible = true AND axs.section_id = ANY($1::int[])
        GROUP BY a.id, u.name
        ORDER BY a.views DESC, a.created_at DESC
-       LIMIT 10`
+       LIMIT 10`,
+      [allowedSectionIds]
     );
     res.json(result.rows);
   } catch (error: any) {
@@ -711,17 +832,20 @@ export const getPopularArticles = async (req: Request, res: Response) => {
 
 export const getTrendingArticles = async (req: Request, res: Response) => {
   try {
+    const allowedSectionIds = await getAllowedSectionsForRequest(req);
     const result = await query(
       `SELECT a.*, COUNT(DISTINCT COALESCE(vl.user_id::text, vl.ip_address)) as trending_views, u.name as author_name,
-              COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+              COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
        FROM articles a
        LEFT JOIN users u ON a.author_id = u.id
        LEFT JOIN article_tags t ON a.id = t.article_id
+       LEFT JOIN article_sections axs ON a.id = axs.article_id
        LEFT JOIN article_views_log vl ON a.id = vl.article_id AND vl.viewed_at > NOW() - INTERVAL '7 days'
-       WHERE a.published = true AND a.is_visible = true
+       WHERE a.published = true AND a.is_visible = true AND axs.section_id = ANY($1::int[])
        GROUP BY a.id, u.name
        ORDER BY trending_views DESC, a.views DESC, a.created_at DESC
-       LIMIT 10`
+       LIMIT 10`,
+      [allowedSectionIds]
     );
     res.json(result.rows);
   } catch (error: any) {
@@ -731,20 +855,153 @@ export const getTrendingArticles = async (req: Request, res: Response) => {
 
 export const getRecommendedArticles = async (req: Request, res: Response) => {
   try {
+    const allowedSectionIds = await getAllowedSectionsForRequest(req);
     const result = await query(
       `SELECT a.*, COUNT(fa.user_id) as favorites_count, u.name as author_name,
-              COALESCE(array_agg(t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+              COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
        FROM articles a
        LEFT JOIN users u ON a.author_id = u.id
        LEFT JOIN article_tags t ON a.id = t.article_id
+       LEFT JOIN article_sections axs ON a.id = axs.article_id
        LEFT JOIN user_favorite_articles fa ON a.id = fa.article_id
-       WHERE a.published = true AND a.is_visible = true
+       WHERE a.published = true AND a.is_visible = true AND axs.section_id = ANY($1::int[])
        GROUP BY a.id, u.name
        ORDER BY favorites_count DESC, a.views DESC, a.created_at DESC
-       LIMIT 10`
+       LIMIT 10`,
+      [allowedSectionIds]
     );
     res.json(result.rows);
   } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const getNavigationTree = async (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const role = authReq.user ? authReq.user.role : '';
+    const userId = authReq.user ? authReq.user.id : 0;
+    const employeeId = authReq.user ? authReq.user.employee_id : null;
+
+    const allowedSectionIds = await getUserAllowedSections(employeeId, role);
+
+    if (allowedSectionIds.length === 0) {
+      return res.json([]);
+    }
+
+    // 1. Получаем все разделы (sections), которые разрешены пользователю
+    const sectionsRes = await query(
+      `SELECT s.id, s.name, s.description, s.space_id, s.parent_section_id, s.position_id
+       FROM sections s
+       WHERE s.id = ANY($1::int[]) AND s.status = 'Active'
+       ORDER BY s.id ASC`,
+      [allowedSectionIds]
+    );
+    const sections = sectionsRes.rows;
+
+    const spaceIds = Array.from(new Set(sections.map(s => s.space_id)));
+
+    if (spaceIds.length === 0) {
+      return res.json([]);
+    }
+
+    // 2. Получаем все пространства (spaces) для этих разделов
+    const spacesRes = await query(
+      `SELECT sp.id, sp.name, sp.description, sp.department_id
+       FROM spaces sp
+       WHERE sp.id = ANY($1::int[]) AND sp.status = 'Active'
+       ORDER BY sp.name ASC`,
+      [spaceIds]
+    );
+    const spaces = spacesRes.rows;
+
+    // 3. Получаем все статьи (articles), привязанные к разрешенным разделам и удовлетворяющие статусу
+    let allowedStatuses = ['published', 'requires_verification'];
+    if (role === 'Admin') {
+      allowedStatuses = ['draft', 'on_approval', 'published', 'requires_verification', 'archived', 'expired'];
+    } else if (role === 'Editor') {
+      allowedStatuses = ['published', 'requires_verification', 'archived', 'expired'];
+    }
+
+    const articlesRes = await query(
+      `SELECT a.id, a.title, a.slug, a.status, a.position, axs.section_id
+       FROM articles a
+       JOIN article_sections axs ON a.id = axs.article_id
+       WHERE axs.section_id = ANY($1::int[]) 
+         AND a.is_visible = true
+         AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
+       ORDER BY a.position ASC, a.created_at DESC`,
+      [allowedSectionIds, allowedStatuses, userId]
+    );
+    const articles = articlesRes.rows;
+
+    // 4. Группируем статьи по разделам
+    const articlesBySection: Record<number, any[]> = {};
+    articles.forEach(art => {
+      if (!articlesBySection[art.section_id]) {
+        articlesBySection[art.section_id] = [];
+      }
+      articlesBySection[art.section_id].push({
+        id: art.id,
+        title: art.title,
+        slug: art.slug,
+        status: art.status,
+        position: art.position
+      });
+    });
+
+    // 5. Группируем разделы по пространствам и строим дерево вложенности
+    const buildSectionTree = (
+      allSections: any[],
+      parentId: number | null,
+      spaceId: number
+    ): any[] => {
+      return allSections
+        .filter(s => s.space_id === spaceId && s.parent_section_id === parentId)
+        .map(s => {
+          const children = buildSectionTree(allSections, s.id, spaceId);
+          return {
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            position_id: s.position_id,
+            articles: articlesBySection[s.id] || [],
+            subsections: children
+          };
+        });
+    };
+
+    const result = spaces.map(sp => {
+      const spaceSections = sections.filter(s => s.space_id === sp.id);
+      
+      const rootSections = spaceSections.filter(s => 
+        s.parent_section_id === null || !allowedSectionIds.includes(s.parent_section_id)
+      );
+
+      const sectionTree = rootSections.map(s => {
+        const children = buildSectionTree(spaceSections, s.id, sp.id);
+        return {
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          position_id: s.position_id,
+          articles: articlesBySection[s.id] || [],
+          subsections: children
+        };
+      });
+
+      return {
+        id: sp.id,
+        name: sp.name,
+        description: sp.description,
+        department_id: sp.department_id,
+        sections: sectionTree
+      };
+    });
+
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error fetching navigation tree:', error);
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 };

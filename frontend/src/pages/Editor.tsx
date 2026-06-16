@@ -7,7 +7,7 @@ import {
   X,
   Sparkles
 } from 'lucide-react';
-import { fetchArticle, createArticle, updateArticle } from '../lib/api';
+import { fetchArticle, createArticle, updateArticle, fetchNavigationTree } from '../lib/api';
 import WYSIWYGEditor from '../components/wysiwyg-editor';
 
 export default function Editor() {
@@ -23,7 +23,10 @@ export default function Editor() {
   const [summary, setSummary] = React.useState('');
   const [content, setContent] = React.useState('');
   const [published, setPublished] = React.useState(true);
+  const [status, setStatus] = React.useState('draft');
   const [tags, setTags] = React.useState<string[]>([]);
+  const [sectionIds, setSectionIds] = React.useState<number[]>([]);
+  const [spaces, setSpaces] = React.useState<any[]>([]);
   const [newTag, setNewTag] = React.useState('');
   const [position, setPosition] = React.useState<number>(0);
   const [sourceUrl, setSourceUrl] = React.useState('');
@@ -39,6 +42,11 @@ export default function Editor() {
     async function loadEditorData() {
       setIsLoading(true);
       try {
+        // 1. Загружаем дерево разделов
+        const tree = await fetchNavigationTree();
+        setSpaces(tree);
+
+        // 2. Если режим редактирования, загружаем данные статьи
         if (isEditMode && id) {
           const article = await fetchArticle(id);
           setTitle(article.title);
@@ -46,10 +54,19 @@ export default function Editor() {
           setSummary(article.summary || '');
           setContent(article.content);
           setPublished(article.published);
+          setStatus(article.status || 'draft');
           setTags(article.tags || []);
+          setSectionIds(article.section_ids || []);
           setPosition(article.position || 0);
           setSourceUrl(article.source_url || '');
           setSyncInterval(article.sync_interval || 'manual');
+        } else {
+          // Если новая статья, проверяем, передан ли в URL раздел по умолчанию
+          const queryParams = new URLSearchParams(window.location.search);
+          const preselectedSectionId = queryParams.get('sectionId');
+          if (preselectedSectionId) {
+            setSectionIds([Number(preselectedSectionId)]);
+          }
         }
       } catch (err) {
         console.error('Failed to load editor data:', err);
@@ -64,7 +81,6 @@ export default function Editor() {
   const handleTitleChange = (val: string) => {
     setTitle(val);
     if (!isEditMode) {
-      // Slugify with support for Cyrillic and special characters
       const slugified = val
         .toString()
         .toLowerCase()
@@ -99,6 +115,10 @@ export default function Editor() {
       alert('Пожалуйста, заполните Название, Slug и Текст статьи.');
       return;
     }
+    if (sectionIds.length === 0) {
+      alert('Пожалуйста, привяжите статью хотя бы к одному разделу оргструктуры.');
+      return;
+    }
     if (isEditMode) {
       setShowSaveModal(true);
     } else {
@@ -115,7 +135,9 @@ export default function Editor() {
       content,
       category_id: null,
       published,
+      status,
       tags,
+      section_ids: sectionIds,
       position,
       source_url: sourceUrl || null,
       sync_interval: syncInterval,
@@ -131,7 +153,6 @@ export default function Editor() {
       } else {
         await createArticle(payload);
       }
-      // Remove autosave copies from local storage on successful save
       localStorage.removeItem(`wiki_autosave_${id || 'new'}`);
       setShowSaveModal(false);
       navigate('/admin');
@@ -141,6 +162,35 @@ export default function Editor() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const renderSectionCheckbox = (sec: any, depth = 0) => {
+    const isChecked = sectionIds.includes(sec.id);
+    const handleCheckboxChange = (checked: boolean) => {
+      if (checked) {
+        setSectionIds(prev => [...prev, sec.id]);
+      } else {
+        setSectionIds(prev => prev.filter(id => id !== sec.id));
+      }
+    };
+
+    return (
+      <div key={sec.id} className="space-y-1 mt-1">
+        <label 
+          style={{ paddingLeft: `${depth * 12}px` }}
+          className="flex items-center gap-2 text-xs font-semibold text-neutral-700 dark:text-neutral-350 cursor-pointer select-none py-0.5 hover:text-indigo-500"
+        >
+          <input
+            type="checkbox"
+            checked={isChecked}
+            onChange={(e) => handleCheckboxChange(e.target.checked)}
+            className="rounded border-neutral-300 dark:border-neutral-800 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer"
+          />
+          <span>{sec.name}</span>
+        </label>
+        {sec.subsections && sec.subsections.map((sub: any) => renderSectionCheckbox(sub, depth + 1))}
+      </div>
+    );
   };
 
   if (isLoading) {
@@ -186,6 +236,40 @@ export default function Editor() {
               <Sparkles className="w-4.5 h-4.5 text-indigo-500" />
               Настройки и метаданные
             </h3>
+
+            {/* Статус статьи */}
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Статус статьи</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="draft">📝 Черновик (Draft)</option>
+                <option value="on_approval">⏳ На согласовании (On approval)</option>
+                <option value="published">✅ Опубликована (Published)</option>
+                <option value="requires_verification">⚠️ Требует проверки (Requires verification)</option>
+                <option value="archived">📦 В архиве (Archived)</option>
+                <option value="expired">⌛ Срок истек (Expired)</option>
+              </select>
+            </div>
+
+            {/* Выбор разделов оргструктуры */}
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1.5">Разделы оргструктуры</label>
+              <div className="max-h-52 overflow-y-auto border border-neutral-200 dark:border-neutral-800 rounded-lg p-2.5 space-y-3 bg-neutral-50/50 dark:bg-neutral-900/10">
+                {spaces.map(space => (
+                  <div key={space.id} className="space-y-1">
+                    <div className="text-[10px] font-extrabold uppercase text-indigo-500 flex items-center gap-1">
+                      <span>📁 {space.name}</span>
+                    </div>
+                    <div className="pl-2 space-y-1 border-l border-neutral-200/50 dark:border-neutral-850/50">
+                      {space.sections.map((sec: any) => renderSectionCheckbox(sec, 0))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             <div>
               <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Slug (путь URL)</label>
@@ -267,10 +351,8 @@ export default function Editor() {
               )}
             </div>
 
-
-
             <div className="flex items-center justify-between pt-2">
-              <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">Опубликовать статью</span>
+              <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">Отображать на главной</span>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"

@@ -10,6 +10,7 @@ export interface AuthenticatedRequest extends Request {
     username: string;
     name: string;
     role: string;
+    employee_id?: number | null;
   };
 }
 
@@ -65,6 +66,7 @@ export const requireAuth = async (
       username: user.username,
       name: user.name,
       role: user.role,
+      employee_id: (user as any).employee_id,
     };
 
     next();
@@ -124,6 +126,7 @@ export const optionalAuth = async (
             username: user.username,
             name: user.name,
             role: user.role,
+            employee_id: (user as any).employee_id,
           };
         }
       }

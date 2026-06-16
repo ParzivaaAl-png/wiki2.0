@@ -12,7 +12,7 @@ import {
   Star,
   History,
   X,
-  Info,
+  ShieldAlert,
   Loader2
 } from 'lucide-react';
 import { 
@@ -48,6 +48,7 @@ export default function ArticlePage() {
   const location = useLocation();
   const [article, setArticle] = React.useState<ArticleType | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
   const { user } = useAuth();
   const [isFavorited, setIsFavorited] = React.useState(false);
@@ -63,11 +64,13 @@ export default function ArticlePage() {
     async function loadArticleData() {
       if (!slug) return;
       setIsLoading(true);
+      setError(null);
       try {
         const artData = await fetchArticle(slug);
         setArticle(artData);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load article:', err);
+        setError(err.message || 'Произошла ошибка при загрузке статьи.');
       } finally {
         setIsLoading(false);
       }
@@ -162,33 +165,121 @@ export default function ArticlePage() {
   // Parse Headings for Table of Contents
   const headings = React.useMemo(() => {
     if (!article) return [];
-    const headingRegex = /^(#{2,3})\s+(.*)$/gm;
-    const list: { level: number; text: string; id: string }[] = [];
-    let match;
-    const cleanContent = article.content.replace(/```[\s\S]*?```/g, '');
     
-    while ((match = headingRegex.exec(cleanContent)) !== null) {
-      const level = match[1].length;
-      const text = match[2].replace(/\*|_|`/g, '').trim();
-      const id = text
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '');
-      list.push({ level, text, id });
+    const isHtml = /<[a-z][\s\S]*>/i.test(article.content);
+    
+    if (!isHtml) {
+      const headingRegex = /^(#{2,3})\s+(.*)$/gm;
+      const list: { level: number; text: string; id: string }[] = [];
+      let match;
+      const cleanContent = article.content.replace(/```[\s\S]*?```/g, '');
+      
+      while ((match = headingRegex.exec(cleanContent)) !== null) {
+        const level = match[1].length;
+        const text = match[2].replace(/\*|_|`/g, '').trim();
+        const id = text
+          .toLowerCase()
+          .replace(/[^a-z0-9а-яё\s-]+/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/(^-|-$)/g, '');
+        list.push({ level, text, id });
+      }
+      return list;
+    } else {
+      const headingRegex = /<h([1-4])[^>]*>([\s\S]*?)<\/h\1>/gi;
+      const list: { level: number; text: string; id: string }[] = [];
+      let match;
+      
+      while ((match = headingRegex.exec(article.content)) !== null) {
+        const level = parseInt(match[1], 10);
+        const text = match[2].replace(/<[^>]*>/g, '').trim();
+        const id = text
+          .toLowerCase()
+          .replace(/[^a-z0-9а-яё\s-]+/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/(^-|-$)/g, '');
+        list.push({ level, text, id });
+      }
+      return list;
     }
-    return list;
   }, [article]);
 
-  // Custom heading node hooks to link anchor tags
+  // Process HTML content to inject anchors/IDs dynamically
+  const processedContent = React.useMemo(() => {
+    if (!article) return '';
+    const isHtml = /<[a-z][\s\S]*>/i.test(article.content);
+    if (!isHtml) return article.content;
+
+    let html = article.content;
+    const headingRegex = /(<h([1-4]))([^>]*>)([\s\S]*?)(<\/h\2>)/gi;
+    
+    return html.replace(headingRegex, (m, openTag, level, attrs, text, closeTag) => {
+      if (attrs.includes('id=')) return m;
+      
+      const cleanText = text.replace(/<[^>]*>/g, '').trim();
+      const id = cleanText
+        .toLowerCase()
+        .replace(/[^a-z0-9а-яё\s-]+/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/(^-|-$)/g, '');
+        
+      return `${openTag} id="${id}"${attrs}${text}${closeTag}`;
+    });
+  }, [article]);
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'draft':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shadow-sm animate-pulse shrink-0">
+            📝 Черновик
+          </span>
+        );
+      case 'on_approval':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shadow-sm shrink-0">
+            ⏳ На согласовании
+          </span>
+        );
+      case 'published':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-sm shrink-0">
+            ✅ Опубликована
+          </span>
+        );
+      case 'requires_verification':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 shadow-sm animate-pulse shrink-0">
+            ⚠️ Требует проверки
+          </span>
+        );
+      case 'archived':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-neutral-500/10 text-neutral-600 dark:text-neutral-400 border border-neutral-500/20 shadow-sm shrink-0">
+            📦 В архиве
+          </span>
+        );
+      case 'expired':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-500/10 text-purple-650 dark:text-purple-400 border border-purple-500/20 shadow-sm shrink-0">
+            ⌛ Срок истек
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
+  // Custom markdown headings handler
   const MarkdownComponents = {
     h2: ({ node, children, ...props }: any) => {
       const text = React.Children.toArray(children).join('');
-      const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const id = text.toLowerCase().replace(/[^a-z0-9а-яё\s-]+/g, '').replace(/\s+/g, '-').replace(/(^-|-$)/g, '');
       return <h2 id={id} className="text-2xl font-bold mt-8 mb-4 border-b border-neutral-200 dark:border-neutral-800 pb-2" {...props}>{children}</h2>;
     },
     h3: ({ node, children, ...props }: any) => {
       const text = React.Children.toArray(children).join('');
-      const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const id = text.toLowerCase().replace(/[^a-z0-9а-яё\s-]+/g, '').replace(/\s+/g, '-').replace(/(^-|-$)/g, '');
       return <h3 id={id} className="text-xl font-semibold mt-6 mb-3" {...props}>{children}</h3>;
     },
   };
@@ -206,6 +297,24 @@ export default function ArticlePage() {
     );
   }
 
+  // Отображение заглушки при ограничении доступа по оргструктуре
+  if (error && (error.includes('Доступ ограничен') || error.includes('403') || error.includes('Forbidden'))) {
+    return (
+      <div className="max-w-md mx-auto py-20 text-center px-4">
+        <div className="w-16 h-16 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto mb-6 border border-rose-500/20">
+          <ShieldAlert className="w-8 h-8 animate-pulse" />
+        </div>
+        <h2 className="font-outfit text-xl font-bold text-neutral-900 dark:text-white">Доступ ограничен</h2>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-3 leading-relaxed">
+          У вас нет прав на просмотр этой статьи в соответствии с вашей должностью в организационной структуре компании.
+        </p>
+        <Link to="/" className="inline-flex items-center gap-1.5 mt-8 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-md transition-all">
+          <ArrowLeft className="w-3.5 h-3.5" /> Назад на главную
+        </Link>
+      </div>
+    );
+  }
+
   if (!article) {
     return (
       <div className="max-w-md mx-auto py-20 text-center">
@@ -219,28 +328,32 @@ export default function ArticlePage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-8 flex gap-8">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 flex gap-8">
       
-      {/* Content Columns */}
+      {/* Content Area */}
       <div className="flex-1 min-w-0 py-4 sm:py-8">
-        <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-neutral-400 dark:text-neutral-500 mb-4 sm:mb-6 font-medium overflow-x-auto whitespace-nowrap">
+        {/* Breadcrumbs */}
+        <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-neutral-400 dark:text-neutral-550 mb-4 sm:mb-6 font-medium overflow-x-auto whitespace-nowrap">
           <Link to="/" className="hover:text-indigo-500 transition-colors shrink-0">Главная</Link>
           <ChevronRight className="w-3 h-3 shrink-0" />
           <span className="text-neutral-600 dark:text-neutral-400 truncate max-w-[150px] sm:max-w-[200px]">{article.title}</span>
         </div>
 
         <article className="prose-custom">
+          {/* Header section with badges and buttons */}
           <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center justify-between gap-3 sm:gap-4 mb-6 border-b border-neutral-200/50 dark:border-neutral-800/80 pb-6">
-            <div className="w-full sm:w-auto flex-1">
-              <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <div className="w-full sm:w-auto flex-1 space-y-3">
+              <div className="flex items-start gap-3 flex-wrap">
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-white">
                   {article.title}
                 </h1>
+                
+                {/* Favorite Star Button */}
                 {user && (
                   <button
                     onClick={handleToggleFavorite}
                     disabled={isFavoriteLoading}
-                    className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors shadow-sm cursor-pointer select-none text-neutral-400 dark:text-neutral-500 hover:text-amber-500 dark:hover:text-amber-400"
+                    className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors shadow-sm cursor-pointer select-none text-neutral-400 dark:text-neutral-500 hover:text-amber-500 dark:hover:text-amber-400 shrink-0"
                     title={isFavorited ? "Удалить из избранного" : "Добавить в избранное"}
                   >
                     <Star
@@ -254,15 +367,24 @@ export default function ArticlePage() {
                 )}
               </div>
               
-              <div className="flex flex-wrap items-center gap-4 text-xs text-neutral-400 dark:text-neutral-500 font-medium">
-                <span className="flex items-center gap-1">
+              {/* Badges & Date Info */}
+              <div className="flex flex-wrap items-center gap-3">
+                {getStatusBadge(article.status || 'published')}
+                
+                <span className="flex items-center gap-1.5 text-xs text-neutral-400 dark:text-neutral-500 font-medium">
                   <Calendar className="w-3.5 h-3.5" />
                   {new Date(article.updated_at).toLocaleDateString()}
                 </span>
+                
+                {article.author_name && (
+                  <span className="text-xs text-neutral-400 dark:text-neutral-500 font-medium">
+                    Автор: <span className="font-semibold">{article.author_name}</span>
+                  </span>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
               <button
                 onClick={handleOpenChangesModal}
                 className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shrink-0 shadow-sm cursor-pointer"
@@ -272,16 +394,19 @@ export default function ArticlePage() {
                 История изменений
               </button>
 
-              <Link
-                to={`/admin/editor/${article.id}`}
-                className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shrink-0 shadow-sm"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
-                Редактировать
-              </Link>
+              {user && (user.role === 'Admin' || user.role === 'Editor') && (
+                <Link
+                  to={`/admin/editor/${article.id}`}
+                  className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shrink-0 shadow-sm"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
+                  Редактировать
+                </Link>
+              )}
             </div>
           </div>
 
+          {/* Latest change details */}
           {article.latest_change && (
             <div className="mb-6 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-950/60 bg-indigo-50/15 dark:bg-indigo-950/5 shadow-premium dark:shadow-premium-dark space-y-3">
               <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-sm">
@@ -319,17 +444,6 @@ export default function ArticlePage() {
                   </div>
                 )}
               </div>
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={handleOpenChangesModal}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-850 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shadow-sm cursor-pointer text-indigo-600 dark:text-indigo-400 bg-white dark:bg-neutral-950 select-none"
-                >
-                  <History className="w-3.5 h-3.5 text-indigo-500" />
-                  🕒 История изменений
-                </button>
-              </div>
             </div>
           )}
 
@@ -360,8 +474,8 @@ export default function ArticlePage() {
                     <a
                       key={heading.id}
                       href={`#${heading.id}`}
-                      className={`block text-xs text-neutral-600 dark:text-neutral-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors ${
-                        heading.level === 3 ? 'pl-3 text-[11px] text-neutral-500 dark:text-neutral-500' : 'font-medium'
+                      className={`block text-xs text-neutral-650 dark:text-neutral-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors ${
+                        heading.level >= 3 ? 'pl-3 text-[11px] text-neutral-500' : 'font-medium'
                       }`}
                     >
                       {heading.text}
@@ -372,6 +486,7 @@ export default function ArticlePage() {
             </div>
           )}
 
+          {/* Article content renderer */}
           {(() => {
             if (article.slug === 'auto-list') {
               return <TariffsClassifier />;
@@ -380,6 +495,17 @@ export default function ArticlePage() {
             if (tariffKey) {
               return <TariffDetails tariffKey={tariffKey} />;
             }
+            
+            const isHtml = /<[a-z][\s\S]*>/i.test(article.content);
+            if (isHtml) {
+              return (
+                <div 
+                  dangerouslySetInnerHTML={{ __html: processedContent }} 
+                  className="prose dark:prose-invert max-w-none prose-neutral dark:prose-neutral prose-headings:font-bold prose-h2:text-2xl prose-h2:border-b prose-h2:border-neutral-250/50 dark:prose-h2:border-neutral-800/50 prose-h2:pb-2 prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-3 prose-p:leading-relaxed prose-p:mb-4 prose-ul:list-disc prose-ul:pl-6 prose-ul:mb-4 prose-table:w-full prose-table:border-collapse prose-table:my-4 prose-td:border prose-td:border-neutral-200/50 dark:prose-td:border-neutral-800/50 prose-td:p-2 prose-th:bg-neutral-100 dark:prose-th:bg-neutral-900 prose-th:p-2 prose-th:font-semibold" 
+                />
+              );
+            }
+            
             return (
               <ReactMarkdown 
                 remarkPlugins={[remarkGfm]} 
@@ -394,7 +520,7 @@ export default function ArticlePage() {
 
       {/* Right ToC Sidebar */}
       {headings.length > 0 && (
-        <aside className="hidden xl:block w-56 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto py-8">
+        <aside className="hidden xl:block w-56 shrink-0 sticky top-20 h-[calc(100vh-6rem)] overflow-y-auto py-8">
           <div className="border-l border-neutral-200 dark:border-neutral-800 pl-4 space-y-4">
             <h4 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">
               На этой странице
@@ -405,7 +531,7 @@ export default function ArticlePage() {
                   key={heading.id}
                   href={`#${heading.id}`}
                   className={`block text-xs text-neutral-500 dark:text-neutral-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors ${
-                    heading.level === 3 ? 'pl-3 text-[11px] text-neutral-400 dark:text-neutral-500' : 'font-medium'
+                    heading.level >= 3 ? 'pl-3 text-[11px] text-neutral-400' : 'font-semibold'
                   }`}
                 >
                   {heading.text}
@@ -588,7 +714,7 @@ export default function ArticlePage() {
                             {log.change_description}
                           </div>
                           {log.editor_comment && (
-                            <div className="text-[11px] text-neutral-450 dark:text-neutral-500 italic pl-1.5 border-l-2 border-indigo-500/30">
+                            <div className="text-[11px] text-neutral-450 dark:text-neutral-550 italic pl-1.5 border-l-2 border-indigo-500/30">
                               "{log.editor_comment}"
                             </div>
                           )}
@@ -774,5 +900,3 @@ function formatRelativeTime(dateStr: string): string {
   if ([2, 3, 4].includes(diffDays % 10) && ![12, 13, 14].includes(diffDays)) return `${diffDays} дня назад`;
   return `${diffDays} дней назад`;
 }
-
-

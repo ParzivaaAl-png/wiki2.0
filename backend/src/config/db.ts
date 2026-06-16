@@ -275,6 +275,304 @@ export const initializeDatabase = async () => {
     await pool.query('ALTER TABLE news_images ALTER COLUMN image_url TYPE TEXT');
     await pool.query('ALTER TABLE news_attachments ALTER COLUMN file_url TYPE TEXT');
 
+    // ----------------------------------------------------
+    // STAGE 1 MVP DATABASE MIGRATIONS
+    // ----------------------------------------------------
+    console.log('Initializing Stage 1 MVP tables for org structure and permissions...');
+    
+    // Create departments
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS departments (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        parent_department_id INT REFERENCES departments(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create positions
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS positions (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        department_id INT REFERENCES departments(id) ON DELETE CASCADE,
+        parent_position_id INT REFERENCES positions(id) ON DELETE SET NULL,
+        hierarchy_level INT DEFAULT 1,
+        status VARCHAR(50) DEFAULT 'Active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(name, department_id)
+      );
+    `);
+
+    // Create employees
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS employees (
+        id SERIAL PRIMARY KEY,
+        full_name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        position_id INT REFERENCES positions(id) ON DELETE SET NULL,
+        department_id INT REFERENCES departments(id) ON DELETE SET NULL,
+        manager_id INT REFERENCES employees(id) ON DELETE SET NULL,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create spaces
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS spaces (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        department_id INT REFERENCES departments(id) ON DELETE SET NULL UNIQUE,
+        status VARCHAR(50) DEFAULT 'Active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create sections
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sections (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        space_id INT REFERENCES spaces(id) ON DELETE CASCADE,
+        position_id INT REFERENCES positions(id) ON DELETE CASCADE UNIQUE,
+        parent_section_id INT REFERENCES sections(id) ON DELETE SET NULL,
+        status VARCHAR(50) DEFAULT 'Active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Link users to employees
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_id INT REFERENCES employees(id) ON DELETE SET NULL');
+
+    // Add status column to articles for draft/approval workflow
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT \'published\'');
+
+    // Create article_sections mapping table (many-to-many)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS article_sections (
+        id SERIAL PRIMARY KEY,
+        article_id INT REFERENCES articles(id) ON DELETE CASCADE,
+        section_id INT REFERENCES sections(id) ON DELETE CASCADE,
+        UNIQUE(article_id, section_id)
+      );
+    `);
+
+    // Indexes
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_positions_department ON positions(department_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_employees_position ON employees(position_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_sections_space ON sections(space_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_article_sections_article ON article_sections(article_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_article_sections_section ON article_sections(section_id)');
+
+    // Trigger Functions for automatic space & section synchronization
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION sync_space_from_department() RETURNS TRIGGER AS $$
+      BEGIN
+        IF TG_OP = 'INSERT' THEN
+          INSERT INTO spaces (name, description, department_id, status)
+          VALUES (NEW.name, COALESCE(NEW.description, 'Пространство для отдела ' || NEW.name), NEW.id, 'Active')
+          ON CONFLICT (department_id) DO NOTHING;
+        ELSIF TG_OP = 'UPDATE' THEN
+          UPDATE spaces 
+          SET name = NEW.name, 
+              description = COALESCE(NEW.description, description)
+          WHERE department_id = NEW.id;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
+    await pool.query(`
+      DROP TRIGGER IF EXISTS trg_sync_space_from_department ON departments;
+      CREATE TRIGGER trg_sync_space_from_department
+      AFTER INSERT OR UPDATE ON departments
+      FOR EACH ROW EXECUTE FUNCTION sync_space_from_department();
+    `);
+
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION sync_section_from_position() RETURNS TRIGGER AS $$
+      DECLARE
+        var_space_id INT;
+        var_parent_section_id INT;
+      BEGIN
+        SELECT id INTO var_space_id FROM spaces WHERE department_id = NEW.department_id;
+        
+        IF NEW.parent_position_id IS NOT NULL THEN
+          SELECT id INTO var_parent_section_id FROM sections WHERE position_id = NEW.parent_position_id;
+        ELSE
+          var_parent_section_id := NULL;
+        END IF;
+
+        IF TG_OP = 'INSERT' THEN
+          INSERT INTO sections (name, description, space_id, position_id, parent_section_id, status)
+          VALUES (NEW.name, 'Раздел для должности ' || NEW.name, var_space_id, NEW.id, var_parent_section_id, NEW.status)
+          ON CONFLICT (position_id) DO NOTHING;
+        ELSIF TG_OP = 'UPDATE' THEN
+          UPDATE sections 
+          SET name = NEW.name, 
+              space_id = var_space_id,
+              parent_section_id = var_parent_section_id,
+              status = NEW.status
+          WHERE position_id = NEW.id;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
+    await pool.query(`
+      DROP TRIGGER IF EXISTS trg_sync_section_from_position ON positions;
+      CREATE TRIGGER trg_sync_section_from_position
+      AFTER INSERT OR UPDATE ON positions
+      FOR EACH ROW EXECUTE FUNCTION sync_section_from_position();
+    `);
+
+    // Seed Demo Org Structure & Accounts
+    const deptCheck = await pool.query('SELECT COUNT(*) FROM departments');
+    if (parseInt(deptCheck.rows[0].count, 10) === 0) {
+      console.log('Seeding MVP Demo Organizational Structure and Accounts...');
+      
+      // 1. Departments
+      const depts = [
+        [1, 'Коммерческий отдел', 'Продажи и обслуживание клиентов'],
+        [2, 'IT-отдел', 'Информационные технологии'],
+        [3, 'Бухгалтерия', 'Бухгалтерский учет и финансы'],
+        [4, 'HR', 'Управление персоналом'],
+        [5, 'Общий отдел', 'Общекорпоративные регламенты и инструкции']
+      ];
+      for (const [id, name, desc] of depts) {
+        await pool.query('INSERT INTO departments (id, name, description) VALUES ($1, $2, $3)', [id, name, desc]);
+      }
+
+      // 2. Positions
+      const positions = [
+        [1, 'Коммерческий директор', 1, null, 1],
+        [2, 'Руководитель группы', 1, 1, 2],
+        [3, 'Супервайзер', 1, 2, 3],
+        [4, 'Оператор', 1, 3, 4],
+        [5, 'Системный администратор', 2, null, 1],
+        [6, 'Бухгалтер', 3, null, 1],
+        [7, 'HR-менеджер', 4, null, 1],
+        [8, 'Общий сотрудник', 5, null, 1]
+      ];
+      for (const [id, name, deptId, parentPosId, level] of positions) {
+        await pool.query('INSERT INTO positions (id, name, department_id, parent_position_id, hierarchy_level) VALUES ($1, $2, $3, $4, $5)', [id, name, deptId, parentPosId, level]);
+      }
+
+      // 3. Employees
+      const employees = [
+        [1, 'Хайрихан Шерзад (Коммерческий директор)', 'dir_comm@icore.ru', 1, 1, null],
+        [2, 'Иван Петров (Руководитель группы)', 'lead_group@icore.ru', 2, 1, 1],
+        [3, 'Анна Сидорова (Супервайзер)', 'supervisor@icore.ru', 3, 1, 2],
+        [4, 'Сергей Васильев (Оператор)', 'operator@icore.ru', 4, 1, 3],
+        [5, 'Алексей Смирнов (Системный администратор)', 'sysadmin@icore.ru', 5, 2, null],
+        [6, 'Ольга Кузнецова (Бухгалтер)', 'accountant@icore.ru', 6, 3, null],
+        [7, 'Мария Иванова (HR-менеджер)', 'hr_manager@icore.ru', 7, 4, null]
+      ];
+      for (const [id, name, email, posId, deptId, managerId] of employees) {
+        await pool.query('INSERT INTO employees (id, full_name, email, position_id, department_id, manager_id) VALUES ($1, $2, $3, $4, $5, $6)', [id, name, email, posId, deptId, managerId]);
+      }
+
+      // 4. Create User Accounts (password hash for: 'iCorePass2026')
+      const passHash = '$2b$10$L2Wsx716QB3pBnyjmZ/iTOEckyRfPT40JI1UOihEnNhcequpJAZGm';
+      const users = [
+        ['dir_comm', 'dir_comm@icore.ru', 'Хайрихан Шерзад', 'Editor', 1],
+        ['lead_group', 'lead_group@icore.ru', 'Иван Петров', 'Editor', 2],
+        ['supervisor', 'supervisor@icore.ru', 'Анна Сидорова', 'Editor', 3],
+        ['operator', 'operator@icore.ru', 'Сергей Васильев', 'User', 4],
+        ['sysadmin', 'sysadmin@icore.ru', 'Алексей Смирнов', 'Editor', 5],
+        ['accountant', 'accountant@icore.ru', 'Ольга Кузнецова', 'User', 6],
+        ['hr_manager', 'hr_manager@icore.ru', 'Мария Иванова', 'Editor', 7]
+      ];
+      for (const [username, email, name, role, empId] of users) {
+        await pool.query('INSERT INTO users (username, password_hash, name, role, employee_id) VALUES ($1, $2, $3, $4, $5)', [username, passHash, name, role, empId]);
+      }
+
+      // 5. Seed Demo Articles & ArticleSections
+      const demoArticles = [
+        // Коммерческий директор
+        [1, 'Должностная инструкция Коммерческого директора', 'dolzhnostnaya-instrukciya-kommercheskogo-direktora', 'Должностная инструкция коммерческого директора', '<p>Это должностная инструкция коммерческого директора.</p><ul><li>Стратегическое планирование</li><li>Контроль KPI</li></ul>', 1],
+        [2, 'Стратегия коммерческого отдела', 'strategiya-kommercheskogo-otdela', 'Стратегический план развития продаж', '<p>Стратегия развития коммерческого отдела компании на 2026 год.</p>', 1],
+        [3, 'KPI коммерческого отдела', 'kpi-kommercheskogo-otdela', 'Показатели эффективности работы', '<p>Ключевые показатели эффективности (KPI) сотрудников коммерческого отдела.</p>', 1],
+        [4, 'Каналы коммуникации коммерческого отдела', 'kanaly-kommunikacii-kommercheskogo-otdela', 'Связь и каналы взаимодействия', '<p>Официальные каналы связи для общения внутри коммерческого отдела.</p>', 1],
+        [5, 'Работа с подрядчиками', 'rabota-s-podryadchikami', 'Регламент работы с внешними контрагентами', '<p>Инструкция по взаимодействию с аутсорсинговыми партнерами.</p>', 1],
+
+        // Руководитель группы
+        [6, 'Должностная инструкция Руководителя группы', 'dolzhnostnaya-instrukciya-rukovoditelya-gruppy', 'Должностная инструкция лидера группы', '<p>Обязанности и права руководителя группы.</p>', 2],
+        [7, 'Управление командой', 'upravlenie-komandoj', 'Методология работы с персоналом', '<p>Как правильно выстраивать работу в команде и мотивировать сотрудников.</p>', 2],
+        [8, 'Система грейдирования', 'sistema-grejdirovaniya', 'Сетка должностных окладов и карьерного роста', '<p>Описание уровней квалификации (грейдов) и условий повышения.</p>', 2],
+        [9, 'Обучение новых сотрудников', 'obuchenie-novyh-sotrudnikov', 'План адаптации новичков', '<p>Инструкция по вводу новых специалистов в должность.</p>', 2],
+
+        // Супервайзер
+        [10, 'Должностная инструкция Супервайзера', 'dolzhnostnaya-instrukciya-supervajzera', 'Обязанности супервайзера', '<p>Обязанности по контролю смены и качества работы операторов.</p>', 3],
+        [11, 'Прослушка и оценка звонков', 'proslushka-i-ocenka-zvonkov', 'Регламент прослушивания разговоров', '<p>Критерии оценки диалогов операторов с клиентами.</p>', 3],
+        [12, 'Постановка задач операторам', 'postanovka-zadach-operatoram', 'Организация сменного расписания', '<p>Порядок распределения нагрузки и задач на смене.</p>', 3],
+        [13, 'Отчётность супервайзера', 'otchyotnost-supervajzera', 'Шаблоны отчетов о работе смены', '<p>Инструкция по заполнению ежедневной отчетности.</p>', 3],
+
+        // Оператор
+        [14, 'Должностная инструкция Оператора', 'dolzhnostnaya-instrukciya-operatora', 'Обязанности оператора колл-центра', '<p>Должностная инструкция оператора контакт-центра.</p>', 4],
+        [15, 'Скрипты звонков', 'skripty-zvonkov', 'Скрипты входящих и исходящих линий', '<p>Шаблоны приветствия и ответы на частые вопросы клиентов.</p>', 4],
+        [16, 'Работа в CRM', 'rabota-v-crm', 'Инструкция по использованию системы', '<p>Как открывать карточки клиентов и вести статусы сделок.</p>', 4],
+        [17, 'Оформление заявки', 'oformlenie-zayavki', 'Порядок заполнения данных клиента', '<p>Инструкция по корректному заведению заявок в системе.</p>', 4],
+
+        // Системный администратор
+        [18, 'Должностная инструкция Системного администратора', 'dolzhnostnaya-instrukciya-sistemnogo-administratora', 'Обязанности сисадмина', '<p>Регламент технического обслуживания серверов и рабочих станций.</p>', 5],
+        [19, 'Управление инфраструктурой', 'upravlenie-infrastrukturoj', 'Администрирование локальной сети', '<p>Схема сетевой инфраструктуры офиса и правила доступа.</p>', 5],
+        [20, 'Информационная безопасность', 'informacionnaya-bezopasnost', 'Политика паролей и доступов', '<p>Инструкция по обеспечению безопасности данных.</p>', 5],
+
+        // Бухгалтер
+        [21, 'Должностная инструкция Бухгалтера', 'dolzhnostnaya-instrukciya-buhgaltera', 'Регламент работы бухгалтера', '<p>Права и обязанности бухгалтера по расчету зарплаты и налогов.</p>', 6],
+        [22, 'Работа в 1С', 'rabota-v-1s', 'Инструкция по работе с конфигурацией', '<p>Порядок проведения платежей и выписки счетов.</p>', 6],
+        [23, 'Расчёт зарплаты', 'raschyot-zarplaty', 'Методика начисления заработной платы', '<p>Формула расчета окладов, премий и больничных листов.</p>', 6],
+        [24, 'Закрытие периода', 'zakrytie-perioda', 'Сдача отчетности', '<p>Порядок действий бухгалтерии в конце отчетного квартала.</p>', 6],
+
+        // HR-менеджер
+        [25, 'Должностная инструкция HR-менеджера', 'dolzhnostnaya-instrukciya-hr-menedzhera', 'Обязанности HR', '<p>Должностная инструкция HR-менеджера по поиску и найму персонала.</p>', 7],
+        [26, 'Онбординг новых сотрудников', 'onbordign-novyh-sotrudnikov', 'Адаптационная программа', '<p>HR-регламент по ведению первого рабочего дня новичка.</p>', 7],
+
+        // Общие корпоративные и технические статьи (привязаны к общей секции 8)
+        [27, 'Правила внутреннего распорядка', 'pravila-vnutrennego-rasporyadka', 'Регламент рабочего дня компании', '<p>Официальные часы работы, регламент перерывов и праздничные дни.</p>', 8],
+        [28, 'Оформление отпуска и больничных', 'oformlenie-otpuska-i-bolnichnyh', 'Как уйти в отпуск или на больничный', '<p>Инструкция по заполнению заявлений и согласованию дней отдыха.</p>', 8],
+        [29, 'Инструкция по настройке VPN', 'instrukciya-po-nastrojke-vpn', 'Удаленный доступ к ресурсам', '<p>Инструкция по установке и авторизации в корпоративном VPN.</p>', 8],
+        [30, 'Настройка почтового клиента', 'nastrojka-pochtovogo-klienta', 'Корпоративная электронная почта', '<p>Инструкция по конфигурации почтовых клиентов Outlook / Thunderbird.</p>', 8]
+      ];
+
+      for (const [id, title, slug, summary, content, sectionId] of demoArticles) {
+        // Create article
+        await pool.query(
+          `INSERT INTO articles (id, title, slug, summary, content, published, is_visible, status) 
+           VALUES ($1, $2, $3, $4, $5, true, true, 'published')
+           ON CONFLICT (id) DO NOTHING`,
+          [id, title, slug, summary, content]
+        );
+        // Link to section
+        await pool.query(
+          `INSERT INTO article_sections (article_id, section_id) 
+           VALUES ($1, $2)
+           ON CONFLICT (article_id, section_id) DO NOTHING`,
+          [id, sectionId]
+        );
+      }
+      
+      // Sync sequences
+      await pool.query("SELECT setval('departments_id_seq', (SELECT MAX(id) FROM departments))");
+      await pool.query("SELECT setval('positions_id_seq', (SELECT MAX(id) FROM positions))");
+      await pool.query("SELECT setval('employees_id_seq', (SELECT MAX(id) FROM employees))");
+      await pool.query("SELECT setval('spaces_id_seq', (SELECT MAX(id) FROM spaces))");
+      await pool.query("SELECT setval('sections_id_seq', (SELECT MAX(id) FROM sections))");
+      await pool.query("SELECT setval('articles_id_seq', (SELECT MAX(id) FROM articles))");
+    }
+
     // Sync sequences automatically to avoid "duplicate key value violates unique constraint" errors after migrations
     console.log('Synchronizing auto-increment database sequences...');
     await pool.query(`
