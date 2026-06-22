@@ -95,7 +95,7 @@ export default function PreviewModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 sm:p-6 bg-neutral-950/70 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 sm:p-6 bg-neutral-950/80 animate-fade-in">
       
       {/* Outer Wrapper */}
       <div className="relative w-full max-w-6xl flex flex-col h-[90vh] rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 shadow-2xl overflow-hidden animate-scale-up">

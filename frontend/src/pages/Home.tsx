@@ -358,13 +358,6 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen pb-20 overflow-hidden">
-      
-      {/* Decorative Blurs */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[400px] pointer-events-none -z-10 opacity-70 dark:opacity-30">
-        <div className="absolute top-[-10%] left-[20%] w-[350px] h-[350px] rounded-full bg-indigo-400 dark:bg-indigo-900/40 blur-[120px]" />
-        <div className="absolute top-[10%] right-[20%] w-[300px] h-[300px] rounded-full bg-violet-400 dark:bg-violet-900/30 blur-[100px]" />
-      </div>
-
       {/* Hero Header */}
       <section className="max-w-4xl mx-auto px-3 sm:px-4 pt-10 sm:pt-16 pb-8 text-center">
         <motion.div
@@ -416,9 +409,9 @@ export default function Home() {
             
             {/* Left Block: Продолжить чтение */}
             <div className="lg:col-span-7 flex">
-              <div className="w-full p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark flex flex-col justify-between">
+              <div className="w-full p-5 rounded-xl border border-neutral-200/50 dark:border-border bg-white dark:bg-card shadow-premium dark:shadow-premium-dark flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3 mb-4">
+                  <div className="flex items-center justify-between border-b border-neutral-100 dark:border-border pb-3 mb-4">
                     <h3 className="font-outfit text-xs font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 uppercase tracking-wider select-none">
                       <Clock className="w-4 h-4 text-indigo-500" />
                       Продолжить чтение
@@ -444,7 +437,7 @@ export default function Home() {
                         <Link
                           key={art.id}
                           to={`/articles/${art.slug}`}
-                          className="flex items-start gap-3 p-3 rounded-lg border border-neutral-150 dark:border-neutral-900 hover:border-indigo-500/25 hover:bg-neutral-50/50 dark:hover:bg-neutral-900/10 transition-all group"
+                          className="flex items-start gap-3 p-3 rounded-lg border border-neutral-150 dark:border-border hover:border-indigo-500/25 hover:bg-neutral-50/50 dark:hover:bg-background transition-all group"
                         >
                           <div className="w-8 h-8 rounded-md bg-indigo-500/5 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5 font-bold text-xs">
                             🕒
@@ -470,9 +463,9 @@ export default function Home() {
 
             {/* Right Block: Избранное */}
             <div className="lg:col-span-5 flex">
-              <div className="w-full p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark flex flex-col justify-between">
+              <div className="w-full p-5 rounded-xl border border-neutral-200/50 dark:border-border bg-white dark:bg-card shadow-premium dark:shadow-premium-dark flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3 mb-4 gap-2">
+                  <div className="flex items-center justify-between border-b border-neutral-100 dark:border-border pb-3 mb-4 gap-2">
                     <h3 className="font-outfit text-xs font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 uppercase tracking-wider select-none">
                       <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
                       Избранное
@@ -484,7 +477,7 @@ export default function Home() {
                           placeholder="Поиск..."
                           value={searchFavQuery}
                           onChange={(e) => setSearchFavQuery(e.target.value)}
-                          className="text-[10px] px-2 py-0.5 border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/30 text-neutral-900 dark:text-white rounded outline-none focus:border-indigo-500 placeholder-neutral-455 w-16"
+                          className="text-[10px] px-2 py-0.5 border border-neutral-200 dark:border-border bg-neutral-50 dark:bg-background text-neutral-900 dark:text-white rounded outline-none focus:border-indigo-500 placeholder-neutral-455 w-16"
                         />
                       )}
                       <button
@@ -535,7 +528,7 @@ export default function Home() {
                             className={`group relative flex items-center justify-between p-2.5 rounded-lg border transition-all duration-300 ${
                               isConfigureMode 
                                 ? 'border-2 cursor-grab active:cursor-grabbing hover:scale-[1.01]' 
-                                : 'border-neutral-150 dark:border-neutral-900 hover:border-indigo-500/25 hover:bg-neutral-50/50 dark:hover:bg-neutral-900/10'
+                                : 'border-neutral-150 dark:border-border hover:border-indigo-500/25 hover:bg-neutral-50/50 dark:hover:bg-background'
                             } ${isBeingDragged ? 'opacity-40 border-dashed scale-95' : ''}`}
                           >
                             {isConfigureMode && (
@@ -624,11 +617,11 @@ export default function Home() {
         )}
 
         {/* ARTICLES CATALOG CARD */}
-        <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-premium dark:shadow-premium-dark space-y-4">
+        <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-border bg-white dark:bg-card shadow-premium dark:shadow-premium-dark space-y-4">
           
           {/* Header & Tabs */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-neutral-105 dark:border-neutral-900 pb-3 gap-3">
-            <div className="flex bg-neutral-100 dark:bg-neutral-900 p-1 rounded-xl border border-neutral-200/30 dark:border-neutral-800/30 shadow-inner gap-0.5 overflow-x-auto max-w-full select-none scrollbar-none shrink-0">
+          <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-neutral-105 dark:border-border pb-3 gap-3">
+            <div className="flex bg-neutral-100 dark:bg-muted p-1 rounded-xl border border-neutral-200/30 dark:border-border/50 shadow-inner gap-0.5 overflow-x-auto max-w-full select-none scrollbar-none shrink-0">
               <button
                 onClick={() => setFilterTab('all')}
                 className={`px-3.5 py-1.5 rounded-lg text-[10px] font-bold transition-all shrink-0 cursor-pointer ${
@@ -736,10 +729,10 @@ export default function Home() {
                     borderColor: isEditMode ? borderAccentColor : undefined,
                     boxShadow: isEditMode ? `0 0 10px ${borderAccentColor}18` : undefined
                   }}
-                  className={`group relative flex flex-col justify-between p-5 rounded-xl border bg-white dark:bg-neutral-950 transition-all duration-300 ${
+                  className={`group relative flex flex-col justify-between p-5 rounded-xl border bg-white dark:bg-card transition-all duration-300 ${
                     isEditMode 
                       ? 'border-2 cursor-grab active:cursor-grabbing hover:scale-[1.01]' 
-                      : 'border-neutral-200/60 dark:border-neutral-800 hover:border-indigo-500/25 dark:hover:border-indigo-500/25 hover:shadow-glow dark:hover:shadow-glow'
+                      : 'border-neutral-200/60 dark:border-border hover:border-indigo-500/25 dark:hover:border-indigo-500/25 hover:shadow-glow dark:hover:shadow-glow'
                   } ${isBeingDragged ? 'opacity-40 border-dashed scale-95' : ''} ${isHidden ? 'opacity-65' : ''} shadow-premium dark:shadow-premium-dark`}
                 >
                   {isEditMode && (
@@ -781,7 +774,7 @@ export default function Home() {
 
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex items-center gap-2 select-none">
-                      <span className="text-[8px] font-medium text-neutral-400 dark:text-neutral-500 uppercase tracking-wider bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded font-mono">
+                      <span className="text-[8px] font-medium text-neutral-400 dark:text-neutral-500 uppercase tracking-wider bg-neutral-100 dark:bg-muted px-1.5 py-0.5 rounded font-mono">
                         {art.views || 0} просм.
                       </span>
                       {isHidden && (
@@ -838,15 +831,15 @@ export default function Home() {
       {/* POPUP: Add to Favorites Search Dialog */}
       <AnimatePresence>
         {isAddFavModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/70">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="relative w-full max-w-lg overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950 shadow-2xl flex flex-col max-h-[80vh]"
+              className="relative w-full max-w-lg overflow-hidden rounded-xl border border-neutral-200 dark:border-border bg-white dark:bg-card shadow-2xl flex flex-col max-h-[80vh]"
             >
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 p-4 shrink-0">
+              <div className="flex items-center justify-between border-b border-neutral-100 dark:border-border p-4 shrink-0">
                 <h3 className="font-outfit text-base font-extrabold text-neutral-900 dark:text-white flex items-center gap-2">
                   <Star className="w-4 h-4 text-indigo-500" />
                   <span>Добавить статью в быстрый доступ</span>
@@ -860,21 +853,21 @@ export default function Home() {
               </div>
 
               {/* Search input */}
-              <div className="p-4 border-b border-neutral-150 dark:border-neutral-900 pl-5 shrink-0 bg-neutral-50/50 dark:bg-neutral-950/20">
+              <div className="p-4 border-b border-neutral-150 dark:border-border pl-5 shrink-0 bg-neutral-50/50 dark:bg-background/20">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-450" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-455" />
                   <input
                     type="text"
                     placeholder="Поиск по названию или содержимому..."
                     value={favSearchQuery}
                     onChange={(e) => setFavSearchQuery(e.target.value)}
-                    className="w-full text-xs pl-9 pr-4 py-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg outline-none focus:border-indigo-500"
+                    className="w-full text-xs pl-9 pr-4 py-2 bg-white dark:bg-background border border-neutral-200 dark:border-border rounded-lg outline-none focus:border-indigo-500 text-neutral-900 dark:text-white"
                   />
                 </div>
               </div>
 
               {/* Articles list */}
-              <div className="flex-1 overflow-y-auto p-4 max-h-[40vh] divide-y divide-neutral-100 dark:divide-neutral-900">
+              <div className="flex-1 overflow-y-auto p-4 max-h-[40vh] divide-y divide-neutral-100 dark:divide-border/40">
                 {searchResultsForFavs.length === 0 ? (
                   <div className="text-center py-10 text-xs text-neutral-400">
                     Статей для добавления не найдено.
@@ -884,7 +877,7 @@ export default function Home() {
                     <div 
                       key={art.id} 
                       onClick={() => handleAddToFavorites(art)}
-                      className="flex items-center justify-between py-2.5 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 px-2 rounded-lg transition-colors cursor-pointer group"
+                      className="flex items-center justify-between py-2.5 hover:bg-neutral-50 dark:hover:bg-muted/50 px-2 rounded-lg transition-colors cursor-pointer group"
                     >
                       <div className="min-w-0 pr-4">
                         <div className="text-xs font-bold text-neutral-800 dark:text-neutral-250 group-hover:text-indigo-500 transition-colors line-clamp-1">{art.title}</div>
@@ -901,10 +894,10 @@ export default function Home() {
               </div>
 
               {/* Footer */}
-              <div className="p-4 border-t border-neutral-100 dark:border-neutral-900 flex justify-end shrink-0 bg-neutral-50/50 dark:bg-neutral-950/20">
+              <div className="p-4 border-t border-neutral-100 dark:border-border flex justify-end shrink-0 bg-neutral-50/50 dark:bg-background/20">
                 <button
                   onClick={() => { setIsAddFavModalOpen(false); setFavSearchQuery(''); }}
-                  className="px-4 py-2 border border-neutral-200 dark:border-neutral-850 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-neutral-700 dark:text-neutral-300 rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                  className="px-4 py-2 border border-neutral-200 dark:border-border hover:bg-neutral-50 dark:hover:bg-muted text-neutral-700 dark:text-neutral-300 rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
                 >
                   Отмена
                 </button>
@@ -944,4 +937,3 @@ function formatRelativeTime(dateStr: string): string {
   if ([2, 3, 4].includes(diffDays % 10) && ![12, 13, 14].includes(diffDays)) return `${diffDays} дня назад`;
   return `${diffDays} дней назад`;
 }
-

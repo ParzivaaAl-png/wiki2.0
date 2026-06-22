@@ -4,40 +4,148 @@
 
 @layer base {
   :root {
-    --background: #fcfcfd;
-    --foreground: #18181b;
-    --border: #f1f1f4;
-    --card-bg: #ffffff;
-    --card-hover: #f9f9fb;
-    --selection-bg: #e0e7ff;
+    --background: 252 252 253;
+    --foreground: 24 24 27;
+    --card: 255 255 255;
+    --card-foreground: 24 24 27;
+    --popover: 255 255 255;
+    --popover-foreground: 24 24 27;
+    --sidebar-bg: 244 244 246;
+    --sidebar-foreground: 39 39 42;
+    --border: 228 228 231;
+    --input: 255 255 255;
+    --muted: 244 244 245;
+    --muted-foreground: 82 82 91;
+    --subtle-foreground: 113 113 122;
+    --primary: 79 70 229;
+    --primary-foreground: 255 255 255;
+    --secondary: 75 85 99;
+    --secondary-foreground: 255 255 255;
+    --accent: 99 102 241;
+    --accent-foreground: 255 255 255;
+    --ring: 99 102 241;
+    --card-hover: 249 249 251;
+    --selection-bg: 224 231 255;
+    --shadow-color: 24 24 27;
+
+    --neutral-50: 250 250 250;
+    --neutral-100: 244 244 245;
+    --neutral-105: 242 242 244;
+    --neutral-150: 238 238 240;
+    --neutral-200: 228 228 231;
+    --neutral-205: 224 224 227;
+    --neutral-250: 218 218 221;
+    --neutral-300: 212 212 216;
+    --neutral-350: 184 184 188;
+    --neutral-400: 161 161 170;
+    --neutral-405: 156 156 164;
+    --neutral-450: 139 139 144;
+    --neutral-455: 132 132 138;
+    --neutral-500: 113 113 122;
+    --neutral-550: 98 98 103;
+    --neutral-600: 82 82 91;
+    --neutral-650: 72 72 80;
+    --neutral-700: 63 63 70;
+    --neutral-750: 51 51 57;
+    --neutral-800: 39 39 42;
+    --neutral-850: 31 31 35;
+    --neutral-900: 24 24 27;
+    --neutral-950: 9 9 11;
   }
 
   .dark {
-    --background: #030303;
-    --foreground: #f4f4f5;
-    --border: #18181b;
-    --card-bg: #09090b;
-    --card-hover: #121215;
-    --selection-bg: #312e81;
+    --background: 11 13 16;
+    --foreground: 243 244 246;
+    --card: 22 26 34;
+    --card-foreground: 243 244 246;
+    --popover: 22 26 34;
+    --popover-foreground: 243 244 246;
+    --sidebar-bg: 17 19 24;
+    --sidebar-foreground: 229 231 235;
+    --border: 42 47 58;
+    --input: 26 31 43;
+    --muted: 26 29 36;
+    --muted-foreground: 156 163 175;
+    --subtle-foreground: 113 113 122;
+    --primary: 99 102 241;
+    --primary-foreground: 255 255 255;
+    --secondary: 161 161 170;
+    --secondary-foreground: 11 13 16;
+    --accent: 129 140 248;
+    --accent-foreground: 11 13 16;
+    --ring: 129 140 248;
+    --card-hover: 30 35 47;
+    --selection-bg: 49 46 129;
+    --shadow-color: 0 0 0;
+
+    --neutral-50: 250 250 250;
+    --neutral-100: 243 244 246;
+    --neutral-105: 239 241 244;
+    --neutral-150: 236 238 241;
+    --neutral-200: 229 231 235;
+    --neutral-205: 224 226 231;
+    --neutral-250: 219 222 227;
+    --neutral-300: 209 213 219;
+    --neutral-350: 195 199 206;
+    --neutral-400: 174 180 190;
+    --neutral-405: 168 174 184;
+    --neutral-450: 161 161 170;
+    --neutral-455: 156 163 175;
+    --neutral-500: 156 163 175;
+    --neutral-550: 133 133 143;
+    --neutral-600: 113 113 122;
+    --neutral-650: 91 100 114;
+    --neutral-700: 66 75 92;
+    --neutral-750: 56 65 80;
+    --neutral-800: 48 55 70;
+    --neutral-850: 42 47 58;
+    --neutral-900: 26 31 43;
+    --neutral-950: 22 26 34;
+  }
+
+  html {
+    color-scheme: light;
+    background-color: rgb(var(--background));
+  }
+
+  html.dark {
+    color-scheme: dark;
   }
 
   body {
-    background-color: var(--background);
-    color: var(--foreground);
+    min-width: 320px;
+    background-color: rgb(var(--background));
+    color: rgb(var(--foreground));
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  * {
+    border-color: rgb(var(--border));
+  }
+
+  ::selection {
+    background-color: rgb(var(--selection-bg));
+  }
+
+  :where(button, a, input, textarea, select):focus-visible {
+    outline: 2px solid rgb(var(--ring));
+    outline-offset: 2px;
+  }
+
+  .dark :where(input, textarea)::placeholder {
+    color: rgb(var(--muted-foreground) / 0.8) !important;
+  }
 }
 
-/* Glassmorphism Navigation */
+/* Solid navigation keeps page content sharp in both themes. */
 .glass-header {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  background-color: rgba(252, 252, 253, 0.75);
-}
-
-.dark .glass-header {
-  background-color: rgba(3, 3, 3, 0.7);
+  background-color: rgb(var(--background) / 0.96);
+  box-shadow: 0 1px 0 rgb(var(--border) / 0.45);
 }
 
 /* Custom Scrollbar for Notion-like clean UI */
@@ -51,20 +159,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #e4e4e7;
+  background: rgb(var(--border));
   border-radius: 4px;
 }
 
-.dark ::-webkit-scrollbar-thumb {
-  background: #27272a;
-}
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #d4d4d8;
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: rgb(var(--neutral-700) / 0.75);
 }
 
 /* Glow layout decorations */
@@ -204,10 +304,10 @@
   background: rgba(163, 163, 163, 0.45);
 }
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(82, 82, 82, 0.3);
+  background: rgb(var(--neutral-600) / 0.45);
 }
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(82, 82, 82, 0.5);
+  background: rgb(var(--neutral-500) / 0.65);
 }
 
 @keyframes fadeIn {
@@ -227,4 +327,3 @@
 .animate-scaleUp {
   animation: scaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-

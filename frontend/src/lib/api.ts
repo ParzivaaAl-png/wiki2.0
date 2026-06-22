@@ -120,6 +120,68 @@ export interface Article {
   favorites_count?: number | string;
 }
 
+export interface AnalyticsReport {
+  generatedAt: string;
+  periodDays: number;
+  staleDays: number;
+  overview: {
+    total_articles: number;
+    published_articles: number;
+    draft_articles: number;
+    archived_articles: number;
+    stale_articles: number;
+    updated_articles: number;
+    total_spaces: number;
+    total_sections: number;
+    total_users: number;
+    period_views: number;
+    active_users: number;
+  };
+  dailyViews: Array<{ day: string; views: number; unique_readers: number }>;
+  topArticles: Array<{
+    id: number;
+    title: string;
+    slug: string;
+    total_views: number;
+    period_views: number;
+    unique_readers: number;
+    favorites: number;
+  }>;
+  sectionStats: Array<{
+    id: number;
+    section_name: string;
+    space_name: string;
+    article_count: number;
+    period_views: number;
+    last_updated_at: string | null;
+  }>;
+  contributorStats: Array<{
+    id: number;
+    name: string;
+    role: string;
+    authored_articles: number;
+    period_edits: number;
+    last_edit_at: string | null;
+  }>;
+  userActivity: Array<{
+    id: number;
+    name: string;
+    role: string;
+    views: number;
+    unique_articles: number;
+    last_viewed_at: string | null;
+  }>;
+  staleArticles: Array<{
+    id: number;
+    title: string;
+    slug: string;
+    updated_at: string;
+    views: number;
+    owner_name: string | null;
+    days_without_update: number;
+  }>;
+}
+
 export interface SearchResult {
   id: number;
   title: string;
@@ -331,6 +393,11 @@ export async function fetchArticles(params?: {
   if (params?.filter) queryParams.set('filter', params.filter);
 
   return apiCallWithCache<Article[]>(`/articles?${queryParams.toString()}`, { cache: 'no-store' });
+}
+
+export async function fetchAnalyticsReport(days = 30, staleDays = 90): Promise<AnalyticsReport> {
+  const params = new URLSearchParams({ days: String(days), staleDays: String(staleDays) });
+  return apiCall<AnalyticsReport>(`/admin/analytics?${params.toString()}`, { cache: 'no-store' });
 }
 
 export async function fetchArticle(slugOrId: string | number): Promise<Article> {
@@ -1004,5 +1071,4 @@ export async function createArticleLink(articleId: number, data: { target_articl
 export async function deleteArticleLink(articleId: number, linkId: number): Promise<void> {
   return apiCall<void>(`/articles/${articleId}/links/${linkId}`, { method: 'DELETE' });
 }
-
 

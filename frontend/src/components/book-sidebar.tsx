@@ -37,6 +37,8 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
   const [expandedKeys, setExpandedKeys] = React.useState<Record<string, boolean>>({});
 
   const canEdit = isStaff;
+  const isHomeActive = location.pathname === '/';
+  const isAdminActive = location.pathname.startsWith('/admin');
 
   const loadData = React.useCallback(async () => {
     try {
@@ -220,7 +222,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                         ? 'bg-indigo-500/10 dark:bg-indigo-500/10 border-indigo-500/20 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-semibold shadow-sm'
                         : isJobDescription
                           ? 'text-indigo-650 dark:text-indigo-400 bg-indigo-500/5 dark:bg-indigo-500/5 hover:bg-indigo-500/10 dark:hover:bg-indigo-500/10 border-indigo-550/10 hover:translate-x-0.5 font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]'
-                          : 'text-neutral-600 dark:text-neutral-400 hover:bg-white/60 dark:hover:bg-neutral-950/20 hover:text-neutral-900 dark:hover:text-neutral-200 border-transparent hover:translate-x-0.5'
+                          : 'text-neutral-600 dark:text-neutral-400 hover:bg-white/60 dark:hover:bg-card/30 hover:text-neutral-900 dark:hover:text-neutral-200 border-transparent hover:translate-x-0.5'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -258,9 +260,11 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
     <>
       {/* Mobile Floating Menu Button */}
       <button
+        type="button"
         onClick={onToggle}
-        className="fixed left-3 top-3 z-50 flex lg:hidden w-8 h-8 items-center justify-center rounded-lg text-indigo-500 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200/60 dark:border-neutral-800/60 shadow-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all cursor-pointer"
-        aria-label="Toggle navigation menu"
+        className="fixed left-2.5 top-2.5 z-50 flex lg:hidden w-9 h-9 items-center justify-center rounded-lg text-indigo-500 bg-card border border-border shadow-sm hover:bg-muted transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-ring/40"
+        aria-label={isOpen ? 'Закрыть навигацию' : 'Открыть навигацию'}
+        title={isOpen ? 'Закрыть навигацию' : 'Открыть навигацию'}
       >
         <div className="w-5 h-[12px] relative flex items-center justify-center">
           <motion.span 
@@ -286,12 +290,14 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
 
       {/* 1. FIXED LEFT STRIP (56px) - Desktop only */}
       <div 
-        className="hidden lg:flex fixed left-0 top-0 h-screen w-14 bg-neutral-50 dark:bg-neutral-950 border-r border-neutral-200/50 dark:border-neutral-850/50 z-50 flex-col items-center py-4 shrink-0 shadow-sm"
+        className="hidden lg:flex fixed left-0 top-0 h-screen w-14 bg-neutral-50 dark:bg-sidebar-bg border-r border-neutral-200/50 dark:border-border z-50 flex-col items-center py-4 shrink-0 shadow-sm"
       >
         <button
+          type="button"
           onClick={onToggle}
           className="w-10 h-10 flex flex-col justify-center items-center rounded-xl text-indigo-500 bg-indigo-500/10 dark:bg-indigo-500/5 hover:bg-indigo-500/20 dark:hover:bg-indigo-500/15 border border-indigo-500/20 dark:border-indigo-500/10 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-sm relative group"
-          aria-label="Toggle navigation menu"
+          aria-label={isOpen ? 'Закрыть навигацию' : 'Открыть навигацию'}
+          title={isOpen ? 'Закрыть навигацию' : 'Открыть навигацию'}
         >
           <div className="w-5 h-[12px] relative flex items-center justify-center">
             <motion.span 
@@ -328,7 +334,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-neutral-950/20 dark:bg-black/40 backdrop-blur-sm z-30"
+            className="fixed inset-0 bg-neutral-950/30 dark:bg-black/50 lg:hidden z-30"
           />
         )}
       </AnimatePresence>
@@ -341,10 +347,10 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-            className="fixed lg:left-14 left-0 top-0 h-screen w-[300px] bg-neutral-100/90 dark:bg-neutral-900/90 backdrop-blur-xl border-r border-neutral-200/50 dark:border-neutral-800/55 shadow-2xl flex flex-col z-40 overflow-hidden"
+            className="fixed lg:left-14 left-0 top-0 h-screen w-[300px] bg-neutral-100/90 dark:bg-sidebar-bg border-r border-neutral-200/50 dark:border-border shadow-2xl flex flex-col z-40 overflow-hidden"
           >
             {/* Header */}
-            <div className="p-4 border-b border-neutral-200/40 dark:border-neutral-800/40 flex items-center justify-between lg:pl-6 pl-14 shrink-0">
+            <div className="p-4 border-b border-neutral-200/40 dark:border-border flex items-center justify-between lg:pl-6 pl-14 shrink-0">
               <div className="flex items-center gap-2 text-indigo-500 font-semibold tracking-tight text-sm uppercase">
                 <BookOpen className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
                 <span className="font-outfit font-bold text-neutral-800 dark:text-neutral-200">База Знаний</span>
@@ -373,7 +379,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                   placeholder="Поиск по оглавлению..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 text-xs bg-white/60 dark:bg-neutral-950/60 border border-neutral-200/60 dark:border-neutral-850 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder-neutral-400 dark:placeholder-neutral-500 text-neutral-800 dark:text-neutral-100"
+                  className="w-full pl-9 pr-4 py-2 text-xs bg-white/60 dark:bg-background/80 border border-neutral-200/60 dark:border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder-neutral-400 dark:placeholder-neutral-500 text-neutral-800 dark:text-neutral-100"
                 />
               </div>
             </div>
@@ -383,9 +389,18 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
               <Link
                 to="/"
                 onClick={onClose}
-                className="group flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs text-neutral-700 dark:text-neutral-300 hover:bg-white/50 dark:hover:bg-neutral-950/30 hover:text-neutral-950 dark:hover:text-white border border-transparent hover:translate-x-0.5 transition-all"
+                aria-current={isHomeActive ? 'page' : undefined}
+                className={`group flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs border transition-colors ${
+                  isHomeActive
+                    ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-700 dark:text-indigo-300'
+                    : 'text-neutral-700 dark:text-neutral-300 hover:bg-white/50 dark:hover:bg-card/70 hover:text-neutral-950 dark:hover:text-white border-transparent'
+                }`}
               >
-                <div className="w-6 h-6 rounded-lg bg-white/65 dark:bg-neutral-950/60 text-neutral-500 dark:text-neutral-400 group-hover:bg-indigo-500/10 group-hover:text-indigo-500 flex items-center justify-center transition-colors">
+                <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                  isHomeActive
+                    ? 'bg-indigo-500/15 text-indigo-500'
+                    : 'bg-white/65 dark:bg-card text-neutral-500 dark:text-neutral-400 group-hover:bg-indigo-500/10 group-hover:text-indigo-500'
+                }`}>
                   <Home className="w-3.5 h-3.5" />
                 </div>
                 <span className="font-semibold">Главная</span>
@@ -394,9 +409,18 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                 <Link
                   to="/admin"
                   onClick={onClose}
-                  className="group flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs text-neutral-700 dark:text-neutral-300 hover:bg-white/50 dark:hover:bg-neutral-950/30 hover:text-neutral-950 dark:hover:text-white border border-transparent hover:translate-x-0.5 transition-all"
+                  aria-current={isAdminActive ? 'page' : undefined}
+                  className={`group flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs border transition-colors ${
+                    isAdminActive
+                      ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-700 dark:text-indigo-300'
+                      : 'text-neutral-700 dark:text-neutral-300 hover:bg-white/50 dark:hover:bg-card/70 hover:text-neutral-950 dark:hover:text-white border-transparent'
+                  }`}
                 >
-                  <div className="w-6 h-6 rounded-lg bg-white/65 dark:bg-neutral-950/60 text-neutral-500 dark:text-neutral-400 group-hover:bg-indigo-500/10 group-hover:text-indigo-500 flex items-center justify-center transition-colors">
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                    isAdminActive
+                      ? 'bg-indigo-500/15 text-indigo-500'
+                      : 'bg-white/65 dark:bg-card text-neutral-500 dark:text-neutral-400 group-hover:bg-indigo-500/10 group-hover:text-indigo-500'
+                  }`}>
                     <ShieldAlert className="w-3.5 h-3.5" />
                   </div>
                   <span className="font-semibold">Администрирование</span>
@@ -415,7 +439,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                   ))}
                 </div>
               ) : filteredSpaces.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="flex flex-col items-center justify-center py-12 text-center select-none">
                   <Sparkles className="w-8 h-8 text-neutral-300 dark:text-neutral-700 mb-3 animate-pulse" />
                   <p className="text-xs font-medium text-neutral-400 dark:text-neutral-550">Ничего не найдено</p>
                 </div>
@@ -430,7 +454,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                       {/* Название Пространства (Отдела) */}
                       <div
                         onClick={(e) => hasSections && toggleExpand(spaceKey, e)}
-                        className="flex items-center justify-between px-2 py-2 rounded-xl bg-white/45 dark:bg-neutral-950/20 border border-neutral-200/40 dark:border-neutral-850/30 cursor-pointer hover:bg-white/80 dark:hover:bg-neutral-950/40 transition-all select-none"
+                        className="flex items-center justify-between px-2 py-2 rounded-xl bg-white/45 dark:bg-card/40 border border-neutral-200/40 dark:border-border/50 cursor-pointer hover:bg-white/80 dark:hover:bg-card/75 transition-all select-none"
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <Layers className="w-4 h-4 text-indigo-500 shrink-0" />
@@ -449,7 +473,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
 
                       {/* Разделы Пространства */}
                       {hasSections && isSpaceExpanded && (
-                        <div className="pl-1.5 mt-1 border-l border-neutral-250/30 dark:border-neutral-800/40 space-y-1">
+                        <div className="pl-1.5 mt-1 border-l border-neutral-250/30 dark:border-border/40 space-y-1">
                           {space.sections.map(sec => renderSectionNode(sec, 0))}
                         </div>
                       )}
@@ -460,7 +484,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
             </div>
 
             {/* Footer */}
-            <div className="p-4 pl-6 border-t border-neutral-200/40 dark:border-neutral-800/40 bg-neutral-200/20 dark:bg-neutral-950/20 text-center shrink-0">
+            <div className="p-4 pl-6 border-t border-neutral-200/40 dark:border-border bg-neutral-200/20 dark:bg-background/25 text-center shrink-0">
               <span className="text-[9px] text-neutral-405 dark:text-neutral-600 font-semibold tracking-wider">Wiki 2.0 • Оргструктура</span>
             </div>
           </motion.div>

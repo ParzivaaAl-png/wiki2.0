@@ -35,6 +35,8 @@ export const checkDatabaseConnection = async (retries = 5, delay = 3000): Promis
 
 export const initializeDatabase = async () => {
   try {
+    const shouldSeedDemoData = process.env.SEED_DEMO_DATA === 'true';
+
     // Check if the "articles" table exists
     const checkTableQuery = `
       SELECT EXISTS (
@@ -47,15 +49,16 @@ export const initializeDatabase = async () => {
     const tableExists = res.rows[0].exists;
 
     if (!tableExists) {
-      console.log('Database tables not found. Initializing from init.sql...');
-      const initSqlPath = path.join(__dirname, '../../init.sql');
+      const bootstrapFile = shouldSeedDemoData ? 'init.sql' : 'schema.sql';
+      console.log(`Database tables not found. Initializing from ${bootstrapFile}...`);
+      const initSqlPath = path.join(__dirname, `../../${bootstrapFile}`);
       if (fs.existsSync(initSqlPath)) {
         const sql = fs.readFileSync(initSqlPath, 'utf8');
-        // Execute the entire init.sql
+        // Execute the selected bootstrap schema.
         await pool.query(sql);
-        console.log('Database initialized successfully from init.sql!');
+        console.log(`Database initialized successfully from ${bootstrapFile}!`);
       } else {
-        console.error(`init.sql not found at ${initSqlPath}. Skipping database initialization.`);
+        console.error(`${bootstrapFile} not found at ${initSqlPath}. Skipping database initialization.`);
       }
     } else {
       console.log('Database tables already exist. Checking additional tables...');
@@ -148,7 +151,11 @@ export const initializeDatabase = async () => {
     // Add indexes for new tables
     await pool.query('CREATE INDEX IF NOT EXISTS idx_user_reading_history_user_id ON user_reading_history(user_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_article_views_log_article_id ON article_views_log(article_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_article_views_log_viewed_at ON article_views_log(viewed_at)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_article_views_log_user_viewed_at ON article_views_log(user_id, viewed_at)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_user_reading_history_viewed_at ON user_reading_history(viewed_at)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_article_changes_log_article_id ON article_changes_log(article_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_updated_at ON articles(updated_at)');
 
     // Create database indexes for performance speedup
     console.log('Creating database indexes for performance speedup...');
@@ -437,10 +444,11 @@ export const initializeDatabase = async () => {
       FOR EACH ROW EXECUTE FUNCTION sync_section_from_position();
     `);
 
-    // Seed Demo Org Structure & Accounts
-    const deptCheck = await pool.query('SELECT COUNT(*) FROM departments');
-    if (parseInt(deptCheck.rows[0].count, 10) === 0) {
-      console.log('Seeding MVP Demo Organizational Structure and Accounts...');
+    // Demo records are opt-in so a new iCore environment starts as an empty scaffold.
+    if (shouldSeedDemoData) {
+      const deptCheck = await pool.query('SELECT COUNT(*) FROM departments');
+      if (parseInt(deptCheck.rows[0].count, 10) === 0) {
+        console.log('Seeding MVP Demo Organizational Structure and Accounts...');
       
       // 1. Departments
       const depts = [
@@ -572,6 +580,9 @@ export const initializeDatabase = async () => {
       await pool.query("SELECT setval('spaces_id_seq', (SELECT MAX(id) FROM spaces))");
       await pool.query("SELECT setval('sections_id_seq', (SELECT MAX(id) FROM sections))");
       await pool.query("SELECT setval('articles_id_seq', (SELECT MAX(id) FROM articles))");
+      }
+    } else {
+      console.log('Demo data seeding is disabled. Set SEED_DEMO_DATA=true to enable it.');
     }
 
     // Apply Stage 1 Extended migrations

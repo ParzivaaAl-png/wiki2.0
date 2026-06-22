@@ -319,7 +319,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
     if (brandModels.length === 0) return null;
     return (
       <div className="mb-4">
-        <div className="px-3 py-1.5 text-xs font-bold text-neutral-450 dark:text-neutral-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-neutral-100 dark:border-neutral-900/60 pb-1 mb-2">
+        <div className="px-3 py-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 border-b border-border pb-1 mb-2">
           <Car className="w-3.5 h-3.5 text-indigo-500" />
           Модели {matchedBrand} в классификаторе
         </div>
@@ -336,7 +336,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                 className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
                   isSelected
                     ? 'bg-indigo-500/10 text-indigo-900 dark:text-indigo-200 font-bold'
-                    : 'hover:bg-neutral-50 dark:hover:bg-neutral-900/50 text-neutral-700 dark:text-neutral-350'
+                    : 'hover:bg-muted text-foreground'
                 }`}
               >
                 <span className="text-sm">{car.brand} {car.model}</span>
@@ -357,8 +357,8 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
     return (
       <>
         {results.length === 0 && brandModels.length === 0 && !isLoading && (
-          <div className="py-6 text-center text-neutral-400 text-sm">
-            Ничего не найдено по запросу &quot;<span className="text-neutral-900 dark:text-white font-semibold">{query}</span>&quot;.
+          <div className="py-6 text-center text-muted-foreground text-sm">
+            Ничего не найдено по запросу &quot;<span className="text-foreground font-semibold">{query}</span>&quot;.
           </div>
         )}
 
@@ -366,7 +366,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
 
         {matchedArticles.length > 0 && (
           <div className="mb-4">
-            <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+            <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Статьи
             </div>
             <ul className="space-y-0.5">
@@ -379,13 +379,13 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                     className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
                       isCurrent
                         ? 'bg-indigo-500/10 text-indigo-900 dark:text-indigo-200 font-medium'
-                        : 'hover:bg-neutral-50 dark:hover:bg-neutral-900/50 text-neutral-700 dark:text-neutral-300'
+                        : 'hover:bg-muted text-foreground'
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
                       <span className="text-sm truncate max-w-[280px]" dangerouslySetInnerHTML={{ __html: art.title }} />
-                      <span className="text-[9px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium shrink-0">
+                      <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded uppercase font-medium shrink-0">
                         {(art.categoryName || '').replace('-', ' ')}
                       </span>
                     </div>
@@ -399,7 +399,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
 
         {textMatches.length > 0 && (
           <div>
-            <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+            <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Совпадения в тексте
             </div>
             <ul className="space-y-1.5">
@@ -412,21 +412,21 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                     onMouseDown={() => handleSelect(match.slug, match.matchedWord)}
                     className={`p-2.5 rounded-lg cursor-pointer transition-colors border ${
                       isCurrent
-                        ? 'bg-indigo-500/5 border-indigo-500/20 text-neutral-900 dark:text-neutral-50'
-                        : 'hover:bg-neutral-50 dark:hover:bg-neutral-900/30 border-transparent text-neutral-700 dark:text-neutral-305'
+                        ? 'bg-indigo-500/5 border-indigo-500/20 text-foreground'
+                        : 'hover:bg-muted border-transparent text-foreground'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[11px] font-medium text-neutral-400 dark:text-neutral-500">
-                        из: <strong className="text-neutral-600 dark:text-neutral-300 font-semibold" dangerouslySetInnerHTML={{ __html: match.articleTitle }} />
+                      <span className="text-[11px] font-medium text-muted-foreground">
+                        из: <strong className="text-foreground font-semibold" dangerouslySetInnerHTML={{ __html: match.articleTitle }} />
                       </span>
-                      <span className="text-[9px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium">
+                      <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded uppercase font-medium">
                         {(match.categoryName || '').replace('-', ' ')}
                       </span>
                     </div>
                     
                     <p 
-                      className="text-[11px] text-neutral-550 dark:text-neutral-400 border-l-2 border-neutral-200 dark:border-neutral-800 pl-2 mt-1 italic font-light leading-relaxed line-clamp-2"
+                      className="text-[11px] text-muted-foreground border-l-2 border-border pl-2 mt-1 italic font-light leading-relaxed line-clamp-2"
                       dangerouslySetInnerHTML={{ __html: `... ${match.snippet} ...` }}
                     />
                   </li>
@@ -446,29 +446,29 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
     return (
       <div className="flex flex-col h-full justify-between">
         <div>
-          <div className="flex items-start gap-2 pb-3 border-b border-neutral-200 dark:border-neutral-800">
+          <div className="flex items-start gap-2 pb-3 border-b border-border">
             <div className="p-1.5 bg-indigo-500/10 rounded-lg text-indigo-500 shrink-0">
               <Car className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="text-xs font-bold text-neutral-900 dark:text-white leading-tight">
+              <h4 className="text-xs font-bold text-foreground leading-tight">
                 {selectedCar.brand} {selectedCar.model}
               </h4>
-              <p className="text-[10px] text-neutral-400 mt-0.5">Классификатор Яндекс Про</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Классификатор Яндекс Про</p>
             </div>
           </div>
 
           {/* Quick select widgets */}
           <div className="grid grid-cols-2 gap-2 mt-3">
             <div className="space-y-1">
-              <label className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wider">Город</label>
+              <label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Город</label>
               <select 
                 value={selectedCity.id}
                 onChange={(e) => {
                   const city = CITIES.find(c => c.id === e.target.value);
                   if (city) setSelectedCity(city);
                 }}
-                className="w-full bg-white dark:bg-neutral-900 border border-neutral-205 dark:border-neutral-800 rounded px-1.5 py-1 text-[11px] text-neutral-800 dark:text-neutral-200 outline-none"
+                className="w-full bg-card border border-border rounded px-1.5 py-1 text-[11px] text-foreground outline-none"
               >
                 {CITIES.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -476,11 +476,11 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-[9px] font-semibold text-neutral-400 uppercase tracking-wider">Год авто</label>
+              <label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Год авто</label>
               <select 
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded px-1.5 py-1 text-[11px] text-neutral-800 dark:text-neutral-200 outline-none"
+                className="w-full bg-card border border-border rounded px-1.5 py-1 text-[11px] text-foreground outline-none"
               >
                 {Array.from({ length: 2027 - 1980 }, (_, i) => 2026 - i).map(y => (
                   <option key={y} value={y}>{y}</option>
@@ -501,8 +501,8 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                 if (!res) return null;
                 const hasWarning = !!res.warning;
                 return (
-                  <div key={t.key} className="flex items-center justify-between text-[11px] py-1 border-b border-neutral-100 dark:border-neutral-900/60 last:border-0">
-                    <span className="font-medium text-neutral-700 dark:text-neutral-350">{t.name}</span>
+                  <div key={t.key} className="flex items-center justify-between text-[11px] py-1 border-b border-border last:border-0">
+                    <span className="font-medium text-muted-foreground">{t.name}</span>
                     <span className="flex items-center gap-1">
                       {hasWarning ? (
                         <>
@@ -533,7 +533,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
           </div>
         </div>
 
-        <div className="pt-2 border-t border-neutral-200 dark:border-neutral-800 shrink-0">
+        <div className="pt-2 border-t border-border shrink-0">
           <Link 
             to={`/articles/auto-list?brand=${encodeURIComponent(selectedCar?.brand || '')}&model=${encodeURIComponent(selectedCar?.model || '')}&year=${selectedYear}&city=${selectedCity.id}`}
             onClick={() => {
@@ -553,13 +553,13 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
   const renderDropdownContent = () => {
     if (selectedCar) {
       return (
-        <div className="flex divide-x divide-neutral-200 dark:divide-neutral-800 overflow-hidden h-auto max-h-[350px]">
+        <div className="flex divide-x divide-border overflow-hidden h-auto max-h-[350px]">
           {/* Left Side: Standard Search Results */}
           <div className="flex-1 overflow-y-auto p-2 scrollbar-thin">
             {renderResultsList()}
           </div>
           {/* Right Side: Interactive Car Checker Widget */}
-          <div className="w-[300px] bg-neutral-50/50 dark:bg-neutral-900/30 p-3 shrink-0 overflow-hidden">
+          <div className="w-[300px] bg-muted/30 p-3 shrink-0 overflow-hidden">
             {renderCarWidgetContent()}
           </div>
         </div>
@@ -583,7 +583,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsOpen(false)}
-              className="fixed inset-0 bg-neutral-950/60 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/60"
             />
 
             <motion.div
@@ -591,17 +591,17 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.97, opacity: 0 }}
               transition={{ duration: 0.12, ease: 'easeOut' }}
-              className="relative w-full h-full bg-white dark:bg-neutral-950 border-0 shadow-2xl overflow-hidden flex flex-col"
+              className="relative w-full h-full bg-card text-card-foreground border-0 shadow-2xl overflow-hidden flex flex-col"
             >
-              <div className="flex items-center gap-3 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] border-b border-neutral-200 dark:border-neutral-800 shrink-0">
-                <Search className="w-5 h-5 text-neutral-400 shrink-0" />
+              <div className="flex items-center gap-3 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] border-b border-border shrink-0">
+                <Search className="w-5 h-5 text-muted-foreground shrink-0" />
                 <input
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={searchOnlyFavorites ? "Поиск по избранному..." : "Поиск..."}
                   autoFocus
-                  className="w-full bg-transparent text-neutral-900 dark:text-neutral-50 outline-none placeholder-neutral-400 text-base"
+                  className="w-full bg-transparent text-foreground outline-none placeholder-muted-foreground text-base"
                 />
                 {isLoading && (
                   <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin shrink-0" />
@@ -612,7 +612,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                     className={`p-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-sm shrink-0 ${
                       searchOnlyFavorites
                         ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-450'
-                        : 'bg-neutral-50 border-neutral-200 text-neutral-400 hover:bg-neutral-100 dark:bg-neutral-900 dark:border-neutral-800'
+                        : 'bg-muted border-border text-muted-foreground hover:bg-muted'
                     }`}
                     title={searchOnlyFavorites ? "Поиск по всем статьям" : "Поиск только в избранном"}
                   >
@@ -621,7 +621,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                 )}
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="p-1.5 rounded-md text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-900 shrink-0"
+                  className="p-1.5 rounded-md text-muted-foreground hover:bg-muted shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -629,8 +629,8 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
 
               <div className="flex-1 overflow-y-auto p-2 max-h-[calc(100vh-7rem)]">
                 {query.trim().length < 2 && (
-                  <div className="py-8 text-center text-neutral-400 text-sm">
-                    <Sparkles className="w-6 h-6 mx-auto mb-2 text-neutral-300 dark:text-neutral-700" />
+                  <div className="py-8 text-center text-muted-foreground text-sm">
+                    <Sparkles className="w-6 h-6 mx-auto mb-2 text-muted-foreground/60" />
                     Введите не менее 2 символов для поиска...
                   </div>
                 )}
@@ -639,13 +639,13 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                   <>
                     {/* Tabs on Mobile */}
                     {selectedCar && (
-                      <div className="flex border-b border-neutral-200 dark:border-neutral-800 mb-3 px-1">
+                      <div className="flex border-b border-border mb-3 px-1">
                         <button
                           onClick={() => setMobileTab('results')}
                           className={`flex-1 py-2 text-center text-xs font-bold transition-all border-b-2 ${
                             mobileTab === 'results' 
                               ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 font-semibold' 
-                              : 'border-transparent text-neutral-400 dark:text-neutral-500'
+                              : 'border-transparent text-muted-foreground'
                           }`}
                         >
                           Результаты ({results.length})
@@ -655,7 +655,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                           className={`flex-1 py-2 text-center text-xs font-bold transition-all border-b-2 ${
                             mobileTab === 'classifier' 
                               ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 font-semibold' 
-                              : 'border-transparent text-neutral-400 dark:text-neutral-500'
+                              : 'border-transparent text-muted-foreground'
                           }`}
                         >
                           Классификатор: {selectedCar.brand}
@@ -664,14 +664,14 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                     )}
 
                     {mobileTab === 'classifier' && selectedCar ? (
-                      <div className="p-3 bg-neutral-50 dark:bg-neutral-900/20 border border-neutral-200/50 dark:border-neutral-800 rounded-xl">
+                      <div className="p-3 bg-muted/20 border border-border rounded-xl">
                         {renderCarWidgetContent()}
                       </div>
                     ) : (
                       <>
                         {results.length === 0 && brandModels.length === 0 && !isLoading && (
-                          <div className="py-8 text-center text-neutral-400 text-sm">
-                            Ничего не найдено по запросу &quot;<span className="text-neutral-900 dark:text-white font-semibold">{query}</span>&quot;.
+                          <div className="py-8 text-center text-muted-foreground text-sm">
+                            Ничего не найдено по запросу &quot;<span className="text-foreground font-semibold">{query}</span>&quot;.
                           </div>
                         )}
 
@@ -679,7 +679,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
 
                         {matchedArticles.length > 0 && (
                           <div className="mb-4">
-                            <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                            <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                               Статьи
                             </div>
                             <ul className="space-y-1">
@@ -687,12 +687,12 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                                 <li
                                   key={`art-${art.id}`}
                                   onClick={() => handleSelect(art.slug)}
-                                  className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900/50 text-neutral-700 dark:text-neutral-300"
+                                  className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer hover:bg-muted text-foreground"
                                 >
                                   <div className="flex items-center gap-2">
                                     <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
                                     <span dangerouslySetInnerHTML={{ __html: art.title }} />
-                                    <span className="text-[10px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium">
+                                    <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded uppercase font-medium">
                                       {(art.categoryName || '').replace('-', ' ')}
                                     </span>
                                   </div>
@@ -704,7 +704,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
 
                         {textMatches.length > 0 && (
                           <div>
-                            <div className="px-3 py-1.5 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                            <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                               Совпадения в тексте
                             </div>
                             <ul className="space-y-2">
@@ -712,18 +712,18 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                                 <li
                                   key={`match-${match.slug}-${idx}`}
                                   onClick={() => handleSelect(match.slug, match.matchedWord)}
-                                  className="p-3 rounded-lg cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900/30 border-transparent text-neutral-750 dark:text-neutral-300"
+                                  className="p-3 rounded-lg cursor-pointer hover:bg-muted border-transparent text-foreground"
                                 >
                                   <div className="flex items-center justify-between mb-1">
-                                    <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
-                                      из статьи: <strong className="text-neutral-600 dark:text-neutral-300 font-semibold" dangerouslySetInnerHTML={{ __html: match.articleTitle }} />
+                                    <span className="text-xs font-medium text-muted-foreground">
+                                      из статьи: <strong className="text-foreground font-semibold" dangerouslySetInnerHTML={{ __html: match.articleTitle }} />
                                     </span>
-                                    <span className="text-[10px] text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded uppercase font-medium">
+                                    <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded uppercase font-medium">
                                       {(match.categoryName || '').replace('-', ' ')}
                                     </span>
                                   </div>
                                   <p 
-                                    className="text-xs text-neutral-500 dark:text-neutral-400 border-l-2 border-neutral-200 dark:border-neutral-800 pl-2 mt-1.5 italic font-light leading-relaxed"
+                                    className="text-xs text-muted-foreground border-l-2 border-border pl-2 mt-1.5 italic font-light leading-relaxed"
                                     dangerouslySetInnerHTML={{ __html: `... ${match.snippet} ...` }}
                                   />
                                 </li>
@@ -737,7 +737,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                 )}
               </div>
 
-              <div className="flex items-center justify-between px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-neutral-50 dark:bg-neutral-900/40 border-t border-neutral-200/80 dark:border-neutral-900 text-[10px] text-neutral-400 select-none shrink-0">
+              <div className="flex items-center justify-between px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-muted/40 border-t border-border text-[10px] text-muted-foreground select-none shrink-0">
                 <div className="w-full text-center text-xs">Поиск с автодополнением</div>
               </div>
             </motion.div>
@@ -753,23 +753,23 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
         {/* Mobile trigger (looks like search bar) */}
         <div 
           onClick={() => setIsOpen(true)}
-          className="sm:hidden flex items-center gap-4 px-5 py-4 rounded-xl border border-neutral-200 dark:border-neutral-800/80 bg-white dark:bg-neutral-950/80 hover:border-indigo-500/40 dark:hover:border-indigo-500/40 transition-all duration-300 cursor-pointer shadow-premium dark:shadow-premium-dark"
+          className="sm:hidden flex items-center gap-4 px-5 py-4 rounded-xl border border-border bg-card hover:border-indigo-500/40 dark:hover:border-indigo-500/40 transition-all duration-300 cursor-pointer shadow-premium dark:shadow-premium-dark"
         >
-          <Search className="w-5 h-5 text-neutral-400 shrink-0" />
-          <span className="flex-1 text-left text-neutral-400 text-sm">
+          <Search className="w-5 h-5 text-muted-foreground shrink-0" />
+          <span className="flex-1 text-left text-muted-foreground text-sm">
             Поиск по базе знаний...
           </span>
         </div>
 
         {/* Desktop inline input search bar */}
         <div 
-          className={`hidden sm:flex items-center gap-4 px-5 py-4 rounded-xl border bg-white dark:bg-neutral-950/80 transition-all duration-300 shadow-premium dark:shadow-premium-dark ${
+          className={`hidden sm:flex items-center gap-4 px-5 py-4 rounded-xl border bg-card transition-all duration-300 shadow-premium dark:shadow-premium-dark ${
             isFocused 
               ? 'border-indigo-500/50 ring-2 ring-indigo-500/10 shadow-glow dark:shadow-glow' 
-              : 'border-neutral-200 dark:border-neutral-800/80 hover:border-indigo-500/40 dark:hover:border-indigo-500/40 hover:shadow-glow dark:hover:shadow-glow'
+              : 'border-border hover:border-indigo-500/40 dark:hover:border-indigo-500/40 hover:shadow-glow dark:hover:shadow-glow'
           }`}
         >
-          <Search className="w-5 h-5 text-neutral-400 shrink-0" />
+          <Search className="w-5 h-5 text-muted-foreground shrink-0" />
           <input
             ref={inputRef}
             data-search-variant="hero"
@@ -779,7 +779,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
             onFocus={() => setIsFocused(true)}
             onKeyDown={handleListKeyDown}
             placeholder={searchOnlyFavorites ? "Поиск по избранному..." : "Поиск по базе знаний..."}
-            className="flex-1 bg-transparent border-0 outline-none text-base text-neutral-900 dark:text-neutral-50 placeholder-neutral-400"
+            className="flex-1 bg-transparent border-0 outline-none text-base text-foreground placeholder-muted-foreground"
           />
           {isLoading && (
             <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin shrink-0" />
@@ -790,7 +790,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
               className={`p-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-sm shrink-0 flex items-center gap-1.5 ${
                 searchOnlyFavorites
                   ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-450'
-                  : 'bg-neutral-50 border-neutral-200 text-neutral-400 hover:bg-neutral-100 dark:bg-neutral-900 dark:border-neutral-800'
+                  : 'bg-muted border-border text-muted-foreground hover:bg-muted'
               }`}
               title={searchOnlyFavorites ? "Поиск по всем статьям" : "Поиск только в избранном"}
             >
@@ -799,14 +799,14 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
             </button>
           )}
           {!query && (
-            <kbd className="hidden sm:inline-flex h-6 select-none items-center gap-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-2 font-mono text-[11px] font-medium text-neutral-400">
+            <kbd className="hidden sm:inline-flex h-6 select-none items-center gap-0.5 rounded border border-border bg-muted px-2 font-mono text-[11px] font-medium text-muted-foreground">
               ⌘K
             </kbd>
           )}
           {query && (
             <button
               onClick={() => setQuery('')}
-              className="p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400"
+              className="p-1 rounded hover:bg-muted text-muted-foreground"
             >
               <X className="w-4 h-4" />
             </button>
@@ -821,7 +821,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.99 }}
               transition={{ duration: 0.15 }}
-              className={`absolute top-full left-0 right-0 mt-2 bg-white dark:bg-neutral-950 border-2 border-indigo-500 dark:border-indigo-500 rounded-xl shadow-[0_15px_40px_rgba(99,102,241,0.15)] z-50 overflow-hidden flex flex-col max-h-[350px] transition-all duration-300 ${selectedCar ? 'md:left-[-50px] md:right-[-50px]' : ''}`}
+              className={`absolute top-full left-0 right-0 mt-2 bg-card border-2 border-indigo-500 rounded-xl shadow-[0_15px_40px_rgba(99,102,241,0.15)] z-50 overflow-hidden flex flex-col max-h-[350px] transition-all duration-300 ${selectedCar ? 'md:left-[-50px] md:right-[-50px]' : ''}`}
             >
               {renderDropdownContent()}
             </motion.div>
@@ -840,18 +840,18 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
       {/* Mobile trigger */}
       <button
         onClick={() => setIsOpen(true)}
-        className="sm:hidden flex items-center justify-center p-2 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors"
+        className="sm:hidden flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
       >
         <Search className="w-4 h-4" />
       </button>
 
       {/* Desktop inline input search bar */}
       <div 
-        className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 bg-neutral-50 dark:bg-neutral-900/50 text-neutral-550 dark:text-neutral-400 text-sm hover:border-neutral-300 dark:hover:border-neutral-700 transition-all duration-300 ${
-          isFocused ? 'w-96 lg:w-[480px] ring-1 ring-indigo-500/20 border-indigo-500/40 bg-white dark:bg-neutral-950' : 'w-48 lg:w-64'
+        className={`hidden h-9 sm:flex items-center gap-2 px-3 rounded-lg border border-border bg-input text-muted-foreground text-sm hover:border-indigo-500/40 transition-all duration-300 ${
+          isFocused ? 'w-96 lg:w-[480px] ring-2 ring-ring/20 border-indigo-500/50 bg-card' : 'w-48 lg:w-64'
         }`}
       >
-        <Search className="w-4 h-4 shrink-0 text-neutral-400" />
+        <Search className="w-4 h-4 shrink-0 text-muted-foreground" />
         <input
           ref={inputRef}
           data-search-variant="header"
@@ -861,7 +861,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
           onFocus={() => setIsFocused(true)}
           onKeyDown={handleListKeyDown}
           placeholder={searchOnlyFavorites ? "Поиск в избранном..." : "Поиск по вики..."}
-          className="flex-1 bg-transparent border-0 outline-none text-xs text-neutral-900 dark:text-neutral-50 placeholder-neutral-400 py-0.5"
+          className="flex-1 bg-transparent border-0 outline-none text-xs text-foreground placeholder-muted-foreground py-0.5"
         />
         {isLoading && (
           <div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin shrink-0" />
@@ -870,7 +870,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
           <button
             onClick={() => setSearchOnlyFavorites(prev => !prev)}
             className={`p-1 rounded transition-colors cursor-pointer shrink-0 flex items-center gap-0.5 ${
-              searchOnlyFavorites ? 'text-amber-500 bg-amber-500/10' : 'text-neutral-450'
+              searchOnlyFavorites ? 'text-amber-500 bg-amber-500/10' : 'text-muted-foreground'
             }`}
             title={searchOnlyFavorites ? "Поиск по всем статьям" : "Поиск только в избранном"}
           >
@@ -879,14 +879,14 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
           </button>
         )}
         {!query && (
-          <kbd className="hidden md:inline-flex h-4 select-none items-center gap-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-1 font-mono text-[9px] font-medium text-neutral-400 opacity-100">
+          <kbd className="hidden md:inline-flex h-4 select-none items-center gap-0.5 rounded border border-border bg-card px-1 font-mono text-[9px] font-medium text-muted-foreground opacity-100">
             <span>⌘</span>K
           </kbd>
         )}
         {query && (
           <button
             onClick={() => setQuery('')}
-            className="p-0.5 rounded hover:bg-neutral-100 dark:hover:bg-neutral-850 text-neutral-450"
+            className="p-0.5 rounded hover:bg-muted text-muted-foreground"
           >
             <X className="w-3 h-3" />
           </button>
@@ -901,7 +901,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.99 }}
             transition={{ duration: 0.15 }}
-            className={`absolute top-full right-0 mt-2 bg-white dark:bg-neutral-950 border-2 border-indigo-500 dark:border-indigo-500 rounded-xl shadow-[0_15px_40px_rgba(99,102,241,0.15)] z-50 overflow-hidden flex flex-col max-h-[350px] transition-all duration-300 ${
+            className={`absolute top-full right-0 mt-2 bg-card border-2 border-indigo-500 rounded-xl shadow-[0_15px_40px_rgba(99,102,241,0.15)] z-50 overflow-hidden flex flex-col max-h-[350px] transition-all duration-300 ${
               selectedCar ? 'w-[720px]' : 'w-[420px]'
             }`}
           >

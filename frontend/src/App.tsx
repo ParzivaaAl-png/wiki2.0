@@ -62,7 +62,7 @@ function Header() {
   const location = useLocation();
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-neutral-200/50 dark:border-neutral-800/50 glass-header shadow-sm transition-all duration-350">
+    <header className="sticky top-0 z-40 w-full border-b border-border glass-header transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
         
         <Link to="/" className={`flex items-center gap-2 shrink-0 group ${user ? 'ml-11 lg:ml-0' : ''}`}>
@@ -84,7 +84,7 @@ function Header() {
               {isStaff && (
                 <Link 
                   to="/admin" 
-                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shadow-sm"
+                  className="hidden h-9 sm:inline-flex items-center gap-1.5 px-3 rounded-lg border border-border bg-card text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   <ShieldAlert className="w-4 h-4 text-neutral-400" />
                   Админ-панель
@@ -93,7 +93,7 @@ function Header() {
               {isStaff && (
                 <Link 
                   to="/admin" 
-                  className="sm:hidden p-2 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors"
+                  className="sm:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   <ShieldAlert className="w-4 h-4" />
                 </Link>
@@ -101,12 +101,12 @@ function Header() {
               
               <div className="hidden md:flex flex-col text-right">
                 <span className="text-xs font-bold text-neutral-950 dark:text-neutral-100">{user.name}</span>
-                <span className="text-[9px] text-neutral-400 uppercase font-bold tracking-wider">{user.role}</span>
+                <span className="text-[9px] text-neutral-405 dark:text-neutral-450 uppercase font-bold tracking-wider">{user.role}</span>
               </div>
  
               <button 
                 onClick={() => logout()}
-                className="px-2 sm:px-3 py-1.5 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 text-xs sm:text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-900/50 text-neutral-500 hover:text-red-500 transition-colors shadow-sm"
+                className="inline-flex h-9 items-center px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:bg-red-500/10 hover:text-red-500 focus-visible:ring-2 focus-visible:ring-red-500/30"
               >
                 Выйти
               </button>
@@ -115,7 +115,7 @@ function Header() {
             location.pathname !== '/login' && (
               <Link 
                 to="/login"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-all shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20"
+                className="inline-flex h-9 items-center gap-1.5 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold transition-colors shadow-md shadow-indigo-600/10 hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 <LogIn className="w-4.5 h-4.5" />
                 <span className="hidden sm:inline">Войти</span>

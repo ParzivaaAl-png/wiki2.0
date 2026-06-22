@@ -164,7 +164,7 @@ export function NewsBell() {
       {/* Bell Trigger Button */}
       <button
         onClick={() => setIsOpen(prev => !prev)}
-        className={`relative p-2 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-all duration-300 text-neutral-550 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 group ${isOpen ? 'bg-neutral-100/80 dark:bg-neutral-900 text-indigo-600 dark:text-indigo-400' : ''}`}
+        className={`relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-indigo-600 focus-visible:ring-2 focus-visible:ring-ring/40 dark:hover:text-indigo-400 group ${isOpen ? 'bg-muted text-indigo-600 dark:text-indigo-400' : ''}`}
         title="Уведомления и Новости"
       >
         <Bell className="w-4.5 h-4.5 group-hover:rotate-12 transition-transform duration-300" />

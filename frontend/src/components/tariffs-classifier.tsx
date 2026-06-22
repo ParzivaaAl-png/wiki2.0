@@ -526,7 +526,7 @@ export default function TariffsClassifier() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsCityDrawerOpen(false)}
-              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+              className="fixed inset-0 z-50 bg-black/60"
             />
             {/* Drawer */}
             <motion.div

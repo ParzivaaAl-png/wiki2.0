@@ -10,16 +10,18 @@ export function ThemeToggle() {
 
   return (
     <motion.button
+      type="button"
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="p-2 rounded-lg border border-neutral-200/50 dark:border-neutral-800/50 bg-white dark:bg-neutral-950 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white shadow-sm hover:shadow transition-colors"
-      aria-label="Toggle Theme"
+      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+      aria-label={isDark ? 'Включить светлую тему' : 'Включить тёмную тему'}
+      title={isDark ? 'Светлая тема' : 'Тёмная тема'}
     >
       {isDark ? (
-        <Sun className="w-5 h-5" />
+        <Sun className="w-4.5 h-4.5" />
       ) : (
-        <Moon className="w-5 h-5" />
+        <Moon className="w-4.5 h-4.5" />
       )}
     </motion.button>
   );

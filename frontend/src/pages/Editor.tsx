@@ -198,13 +198,13 @@ export default function Editor() {
       <div key={sec.id} className="space-y-1 mt-1">
         <label 
           style={{ paddingLeft: `${depth * 12}px` }}
-          className="flex items-center gap-2 text-xs font-semibold text-neutral-700 dark:text-neutral-300 cursor-pointer select-none py-0.5 hover:text-indigo-500"
+          className="flex items-center gap-2 text-xs font-semibold text-muted-foreground cursor-pointer select-none py-0.5 hover:text-primary"
         >
           <input
             type="checkbox"
             checked={isChecked}
             onChange={(e) => handleCheckboxChange(e.target.checked)}
-            className="rounded border-neutral-300 dark:border-neutral-800 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer"
+            className="rounded border-border text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer"
           />
           <span>{sec.name}</span>
         </label>
@@ -216,10 +216,10 @@ export default function Editor() {
   if (isLoading) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-8 animate-pulse space-y-6">
-        <div className="h-4 w-32 bg-neutral-200 dark:bg-neutral-800 rounded" />
+        <div className="h-4 w-32 bg-muted rounded" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 h-[450px] bg-neutral-200 dark:bg-neutral-800 rounded-xl" />
-          <div className="h-80 bg-neutral-200 dark:bg-neutral-800 rounded-xl" />
+          <div className="lg:col-span-2 h-[450px] bg-muted rounded-xl" />
+          <div className="h-80 bg-muted rounded-xl" />
         </div>
       </div>
     );
@@ -231,7 +231,7 @@ export default function Editor() {
       <div className="flex items-center justify-between gap-4 mb-6">
         <Link
           to="/admin"
-          className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Отмена и возврат
@@ -251,19 +251,19 @@ export default function Editor() {
         
         {/* Sidebar Settings Form */}
         <div className="lg:order-2 space-y-6">
-          <div className="p-5 border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl shadow-premium dark:shadow-premium-dark space-y-4">
-            <h3 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
+          <div className="p-5 border border-border bg-card text-card-foreground rounded-xl shadow-premium dark:shadow-premium-dark space-y-4">
+            <h3 className="font-outfit text-sm font-bold text-foreground flex items-center gap-2">
               <Sparkles className="w-4.5 h-4.5 text-indigo-500" />
               Настройки и метаданные
             </h3>
 
             {/* Статус статьи */}
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-300 mb-1">Статус статьи</label>
+              <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Статус статьи</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 cursor-pointer"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-border bg-muted text-foreground outline-none focus:border-indigo-500 cursor-pointer"
               >
                 <option value="draft">📝 Черновик (Draft)</option>
                 <option value="on_approval">⏳ На согласовании (On approval)</option>
@@ -276,11 +276,11 @@ export default function Editor() {
 
             {/* Тип статьи */}
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-300 mb-1">Тип статьи</label>
+              <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Тип статьи</label>
               <select
                 value={articleType}
                 onChange={(e) => setArticleType(e.target.value)}
-                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 cursor-pointer"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-border bg-muted text-foreground outline-none focus:border-indigo-500 cursor-pointer"
               >
                 <option value="general">📝 Общая статья</option>
                 <option value="job_description">📋 Должностная инструкция</option>
@@ -292,11 +292,11 @@ export default function Editor() {
 
             {/* Владелец процесса */}
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-300 mb-1">Владелец процесса</label>
+              <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Владелец процесса</label>
               <select
                 value={ownerId}
                 onChange={(e) => setOwnerId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 cursor-pointer"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-border bg-muted text-foreground outline-none focus:border-indigo-500 cursor-pointer"
               >
                 <option value="">-- Не назначен --</option>
                 {users.map((u) => (
@@ -309,11 +309,11 @@ export default function Editor() {
 
             {/* Согласующий */}
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-300 mb-1">Согласующий</label>
+              <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Согласующий</label>
               <select
                 value={approverId}
                 onChange={(e) => setApproverId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 cursor-pointer"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-border bg-muted text-foreground outline-none focus:border-indigo-500 cursor-pointer"
               >
                 <option value="">-- Не назначен --</option>
                 {users.map((u) => (
@@ -326,14 +326,14 @@ export default function Editor() {
 
             {/* Выбор разделов оргструктуры */}
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-300 mb-1.5">Разделы оргструктуры</label>
-              <div className="max-h-52 overflow-y-auto border border-neutral-200 dark:border-neutral-800 rounded-lg p-2.5 space-y-3 bg-neutral-50/50 dark:bg-neutral-900/10">
+              <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1.5">Разделы оргструктуры</label>
+              <div className="max-h-52 overflow-y-auto border border-border rounded-lg p-2.5 space-y-3 bg-muted/10">
                 {spaces.map(space => (
                   <div key={space.id} className="space-y-1">
                     <div className="text-[10px] font-extrabold uppercase text-indigo-500 flex items-center gap-1">
                       <span>📁 {space.name}</span>
                     </div>
-                    <div className="pl-2 space-y-1 border-l border-neutral-200/50 dark:border-neutral-850/50">
+                    <div className="pl-2 space-y-1 border-l border-border">
                       {space.sections.map((sec: any) => renderSectionCheckbox(sec, 0))}
                     </div>
                   </div>
@@ -342,34 +342,34 @@ export default function Editor() {
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-300 mb-1">Slug (путь URL)</label>
+              <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Slug (путь URL)</label>
               <input
                 type="text"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
                 placeholder="slug-url-endpoint"
                 required
-                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-border bg-muted text-foreground outline-none focus:border-indigo-500"
               />
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-300 mb-1">Источник данных (Source URL)</label>
+              <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Источник данных (Source URL)</label>
               <input
                 type="text"
                 value={sourceUrl}
                 onChange={(e) => setSourceUrl(e.target.value)}
                 placeholder="Например, ссылка на классификатор Яндекса"
-                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-border bg-muted text-foreground outline-none focus:border-indigo-500"
               />
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-300 mb-1">Интервал авто-синхронизации</label>
+              <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Интервал авто-синхронизации</label>
               <select
                 value={syncInterval}
                 onChange={(e) => setSyncInterval(e.target.value)}
-                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-border bg-muted text-foreground outline-none focus:border-indigo-500"
               >
                 <option value="manual">Вручную (Manual)</option>
                 <option value="6h">Каждые 6 часов</option>
@@ -379,28 +379,28 @@ export default function Editor() {
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-300 mb-1">Порядковый номер (Позиция)</label>
+              <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Порядковый номер (Позиция)</label>
               <input
                 type="number"
                 value={position}
                 onChange={(e) => setPosition(Number(e.target.value))}
                 placeholder="0"
                 min="0"
-                className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-border bg-muted text-foreground outline-none focus:border-indigo-500"
               />
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-300 mb-1">Теги (нажмите Enter)</label>
-              <div className="flex items-center gap-2 border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-1 bg-neutral-50 dark:bg-neutral-900/50 mb-2">
-                <TagIcon className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+              <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Теги (нажмите Enter)</label>
+              <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-1 bg-muted/50 mb-2">
+                <TagIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <input
                   type="text"
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   onKeyDown={handleAddTag}
                   placeholder="добавить тег..."
-                  className="bg-transparent text-xs text-neutral-900 dark:text-white outline-none w-full py-1"
+                  className="bg-transparent text-xs text-foreground outline-none w-full py-1"
                 />
               </div>
 
@@ -409,10 +409,10 @@ export default function Editor() {
                   {tags.map((tag) => (
                     <span
                       key={tag}
-                      className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 font-medium"
+                      className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border border-border bg-muted text-muted-foreground font-medium"
                     >
                       {tag}
-                      <button type="button" onClick={() => handleRemoveTag(tag)} className="text-neutral-400 hover:text-red-500">
+                      <button type="button" onClick={() => handleRemoveTag(tag)} className="text-muted-foreground hover:text-red-500">
                         <X className="w-3 h-3" />
                       </button>
                     </span>
@@ -422,7 +422,7 @@ export default function Editor() {
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">Отображать на главной</span>
+              <span className="text-xs font-semibold text-foreground">Отображать на главной</span>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
@@ -430,14 +430,14 @@ export default function Editor() {
                   onChange={(e) => setPublished(e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="w-9 h-5 bg-neutral-200 dark:bg-neutral-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                <div className="w-9 h-5 bg-muted rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
               </label>
             </div>
           </div>
         </div>
 
         {/* Content Pane */}
-        <div className="lg:col-span-2 lg:order-1 flex flex-col border border-neutral-200/50 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl overflow-hidden shadow-premium dark:shadow-premium-dark p-6 space-y-4">
+        <div className="lg:col-span-2 lg:order-1 flex flex-col border border-border bg-card text-card-foreground rounded-xl overflow-hidden shadow-premium dark:shadow-premium-dark p-6 space-y-4">
           <input
             type="text"
             value={title}
@@ -465,27 +465,27 @@ export default function Editor() {
         </div>
       {/* Save Prompt Modal */}
       {showSaveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/40 dark:bg-neutral-950/60 backdrop-blur-sm animate-fadeIn">
-          <div className="relative w-full max-w-md p-6 border border-neutral-200/50 dark:border-neutral-800 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md rounded-2xl shadow-2xl animate-scaleUp">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 animate-fadeIn">
+          <div className="relative w-full max-w-md p-6 border border-border bg-card text-card-foreground rounded-2xl shadow-2xl animate-scaleUp">
             <button
               onClick={() => setShowSaveModal(false)}
-              className="absolute top-4 right-4 text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors"
+              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
             
-            <h3 className="font-outfit text-base font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2 mb-2">
+            <h3 className="font-outfit text-base font-bold text-foreground flex items-center gap-2 mb-2">
               <Sparkles className="w-5 h-5 text-indigo-500" />
               Что изменено в статье?
             </h3>
             
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
+            <p className="text-xs text-muted-foreground mb-4">
               Пожалуйста, кратко опишите внесенные изменения. Это поможет другим пользователям понять историю обновлений.
             </p>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-[10px] uppercase font-bold text-neutral-550 dark:text-neutral-300 mb-1">
+                <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">
                   Описание изменений <span className="text-red-500 font-bold">*</span>
                 </label>
                 <textarea
@@ -494,20 +494,20 @@ export default function Editor() {
                   placeholder="Например: обновлен классификатор автомобилей, добавлены тарифы, исправлены опечатки..."
                   rows={4}
                   required
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 resize-none placeholder-neutral-400"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-border bg-muted text-foreground outline-none focus:border-indigo-500 resize-none placeholder-muted-foreground"
                 />
               </div>
               
               <div>
-                <label className="block text-[10px] uppercase font-bold text-neutral-550 dark:text-neutral-300 mb-1">
-                  Комментарий редактора <span className="text-neutral-400 font-normal">(необязательно)</span>
+                <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">
+                  Комментарий редактора <span className="text-muted-foreground font-normal">(необязательно)</span>
                 </label>
                 <input
                   type="text"
                   value={editorComment}
                   onChange={(e) => setEditorComment(e.target.value)}
                   placeholder="Например: Исправление критической уязвимости"
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-indigo-500 placeholder-neutral-400"
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-border bg-muted text-foreground outline-none focus:border-indigo-500 placeholder-muted-foreground"
                 />
               </div>
             </div>
@@ -516,7 +516,7 @@ export default function Editor() {
               <button
                 type="button"
                 onClick={() => setShowSaveModal(false)}
-                className="px-4 py-2 border border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 rounded-lg text-xs font-semibold transition-colors"
+                className="px-4 py-2 border border-border text-muted-foreground hover:bg-muted rounded-lg text-xs font-semibold transition-colors"
               >
                 Отмена
               </button>

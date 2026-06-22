@@ -75,8 +75,10 @@ export const requireRole = (allowedRoles: string[]) => {
     const mappedRoles = new Set<string>();
     allowedRoles.forEach((r) => {
       if (r === 'Admin') {
+        mappedRoles.add('Admin');
         mappedRoles.add('Администратор Wiki');
       } else if (r === 'Editor') {
+        mappedRoles.add('Editor');
         mappedRoles.add('Администратор Wiki');
         mappedRoles.add('Коммерческий директор');
         mappedRoles.add('Руководитель группы');
@@ -85,6 +87,7 @@ export const requireRole = (allowedRoles: string[]) => {
         mappedRoles.add('IT-специалист');
         mappedRoles.add('Бухгалтер');
       } else if (r === 'User') {
+        mappedRoles.add('User');
         mappedRoles.add('Оператор');
       } else {
         mappedRoles.add(r);

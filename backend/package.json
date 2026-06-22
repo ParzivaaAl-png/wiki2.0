@@ -7,7 +7,8 @@
     "build": "tsc",
     "start": "node dist/app.js",
     "dev": "nodemon --watch src -e ts --exec ts-node src/app.ts",
-    "reindex": "ts-node src/scripts/reindex.ts"
+    "reindex": "ts-node src/scripts/reindex.ts",
+    "seed:test-content": "node dist/scripts/seedTestContent.js"
   },
   "dependencies": {
     "axios": "^1.16.1",

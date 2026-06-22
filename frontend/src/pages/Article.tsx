@@ -457,7 +457,7 @@ export default function ArticlePage() {
 
         <article className="prose-custom">
           {/* Header section with badges and buttons */}
-          <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center justify-between gap-3 sm:gap-4 mb-6 border-b border-neutral-200/50 dark:border-neutral-800/80 pb-6">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center justify-between gap-3 sm:gap-4 mb-6 border-b border-neutral-200/50 dark:border-border pb-6">
             <div className="w-full sm:w-auto flex-1 space-y-3">
               <div className="flex items-start gap-3 flex-wrap">
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-white">
@@ -469,7 +469,7 @@ export default function ArticlePage() {
                   <button
                     onClick={handleToggleFavorite}
                     disabled={isFavoriteLoading}
-                    className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors shadow-sm cursor-pointer select-none text-neutral-400 dark:text-neutral-500 hover:text-amber-500 dark:hover:text-amber-400 shrink-0"
+                    className="p-1.5 rounded-lg border border-neutral-200 dark:border-border hover:bg-neutral-50 dark:hover:bg-card transition-colors shadow-sm cursor-pointer select-none text-neutral-400 dark:text-neutral-500 hover:text-amber-500 dark:hover:text-amber-400 shrink-0"
                     title={isFavorited ? "Удалить из избранного" : "Добавить в избранное"}
                   >
                     <Star
@@ -504,7 +504,7 @@ export default function ArticlePage() {
             <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
               <button
                 onClick={handleOpenChangesModal}
-                className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shrink-0 shadow-sm cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-border text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-card transition-colors shrink-0 shadow-sm cursor-pointer"
                 title="История изменений этой статьи"
               >
                 <History className="w-3.5 h-3.5 text-indigo-500" />
@@ -514,7 +514,7 @@ export default function ArticlePage() {
               {isStaff && (
                 <Link
                   to={`/admin/editor/${article.id}`}
-                  className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors shrink-0 shadow-sm"
+                  className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-lg border border-neutral-200 dark:border-border text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-card transition-colors shrink-0 shadow-sm"
                 >
                   <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
                   Редактировать
@@ -525,14 +525,14 @@ export default function ArticlePage() {
 
           {/* Process Governance Details (Owner & Approver) */}
           {(article.owner_name || article.approver_name) && (
-            <div className="mb-6 p-5 rounded-2xl border border-teal-150 dark:border-teal-950/60 bg-teal-50/10 dark:bg-teal-950/5 shadow-premium dark:shadow-premium-dark space-y-3">
+            <div className="mb-6 p-5 rounded-2xl border border-teal-150 dark:border-border bg-teal-50/10 dark:bg-card/45 shadow-premium dark:shadow-premium-dark space-y-3">
               <div className="flex items-center gap-2 text-teal-650 dark:text-teal-400 font-bold text-xs uppercase tracking-wider">
                 <span>🛡️ Владение и согласование процесса</span>
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 {article.owner_name && (
-                  <div className="p-3 bg-white/60 dark:bg-neutral-900/60 rounded-xl border border-neutral-200/50 dark:border-neutral-850/50">
+                  <div className="p-3 bg-white/60 dark:bg-background rounded-xl border border-neutral-200/50 dark:border-border">
                     <div className="text-neutral-450 dark:text-neutral-550 mb-1 font-medium">Владелец бизнес-процесса:</div>
                     <div className="font-semibold text-neutral-850 dark:text-neutral-205 flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
@@ -541,7 +541,7 @@ export default function ArticlePage() {
                   </div>
                 )}
                 {article.approver_name && (
-                  <div className="p-3 bg-white/60 dark:bg-neutral-900/60 rounded-xl border border-neutral-200/50 dark:border-neutral-850/50">
+                  <div className="p-3 bg-white/60 dark:bg-background rounded-xl border border-neutral-200/50 dark:border-border">
                     <div className="text-neutral-450 dark:text-neutral-550 mb-1 font-medium">Согласующий:</div>
                     <div className="font-semibold text-neutral-850 dark:text-neutral-205 flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
@@ -555,7 +555,7 @@ export default function ArticlePage() {
 
           {/* Latest change details */}
           {article.latest_change && (
-            <div className="mb-6 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-950/60 bg-indigo-50/15 dark:bg-indigo-950/5 shadow-premium dark:shadow-premium-dark space-y-3">
+            <div className="mb-6 p-5 rounded-2xl border border-indigo-100 dark:border-border bg-indigo-50/15 dark:bg-card/45 shadow-premium dark:shadow-premium-dark space-y-3">
               <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-sm">
                 <span>📢 Последнее обновление</span>
               </div>
@@ -576,7 +576,7 @@ export default function ArticlePage() {
               </div>
 
               <div className="text-xs space-y-1.5">
-                <span className="font-bold text-neutral-700 dark:text-neutral-350">Описание изменений:</span>
+                <span className="font-bold text-neutral-700 dark:text-neutral-300">Описание изменений:</span>
                 <div className="pl-3 border-l-2 border-indigo-400 dark:border-indigo-900 text-neutral-600 dark:text-neutral-400 space-y-1">
                   {article.latest_change.change_description.split('\n').map((line, idx) => (
                     <div key={idx} className="flex items-start gap-1.5">
@@ -586,7 +586,7 @@ export default function ArticlePage() {
                   ))}
                 </div>
                 {article.latest_change.editor_comment && (
-                  <div className="text-[11px] text-neutral-450 dark:text-neutral-500 italic pl-3 mt-1 font-light">
+                  <div className="text-[11px] text-neutral-450 dark:text-muted-foreground italic pl-3 mt-1 font-light">
                     * Комментарий: "{article.latest_change.editor_comment}"
                   </div>
                 )}
@@ -600,7 +600,7 @@ export default function ArticlePage() {
               {article.tags.map((tag) => (
                 <span 
                   key={tag} 
-                  className="text-xs px-2 py-0.5 rounded-md border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 text-neutral-600 dark:text-neutral-400 font-medium"
+                  className="text-xs px-2 py-0.5 rounded-md border border-neutral-200 dark:border-border bg-neutral-50 dark:bg-card text-neutral-600 dark:text-neutral-400 font-medium"
                 >
                   {tag}
                 </span>
@@ -610,13 +610,13 @@ export default function ArticlePage() {
 
           {/* Mobile Table of Contents */}
           {headings.length > 0 && (
-            <div className="block xl:hidden mb-6 border border-neutral-200 dark:border-neutral-800/80 bg-neutral-50/50 dark:bg-neutral-900/30 rounded-xl p-4">
+            <div className="block xl:hidden mb-6 border border-neutral-200 dark:border-border bg-neutral-50/50 dark:bg-card/40 rounded-xl p-4">
               <details className="group">
                 <summary className="flex items-center justify-between text-xs font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider cursor-pointer list-none select-none">
                   <span>Содержание статьи</span>
                   <ChevronDown className="w-4 h-4 text-neutral-400 group-open:rotate-180 transition-transform" />
                 </summary>
-                <nav className="mt-3 space-y-2 border-l border-neutral-200 dark:border-neutral-800 pl-3">
+                <nav className="mt-3 space-y-2 border-l border-neutral-200 dark:border-border pl-3">
                   {headings.map((heading) => (
                     <a
                       key={heading.id}
@@ -759,7 +759,7 @@ export default function ArticlePage() {
                 setIsChangesModalOpen(false);
                 setSelectedChange(null);
               }}
-              className="absolute inset-0 bg-neutral-950/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-neutral-950/60"
             />
             {/* Modal Content */}
             <motion.div
@@ -910,7 +910,7 @@ export default function ArticlePage() {
                         
                         <div 
                           onClick={() => setSelectedChange(log)}
-                          className="bg-neutral-50 dark:bg-neutral-900/30 p-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800 space-y-1.5 hover:border-indigo-500 dark:hover:border-indigo-500 cursor-pointer transition-all hover:bg-neutral-100/50 dark:hover:bg-neutral-900/80"
+                          className="bg-neutral-50 dark:bg-background/30 p-2.5 rounded-lg border border-neutral-200 dark:border-border space-y-1.5 hover:border-indigo-500 dark:hover:border-indigo-500 cursor-pointer transition-all hover:bg-neutral-100/50 dark:hover:bg-neutral-900/80"
                           title="Нажмите, чтобы сравнить с предыдущей версией"
                         >
                           <div>
@@ -947,16 +947,16 @@ export default function ArticlePage() {
                 setTargetArticleId('');
                 setLinkText('');
               }}
-              className="absolute inset-0 bg-neutral-950/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-neutral-950/60"
             />
             {/* Modal Content */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="relative w-full max-w-md border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl shadow-premium dark:shadow-premium-dark flex flex-col overflow-hidden"
+              className="relative w-full max-w-md border border-neutral-200 dark:border-border bg-white dark:bg-card rounded-xl shadow-premium dark:shadow-premium-dark flex flex-col overflow-hidden"
             >
-              <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-800">
+              <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-border">
                 <h3 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
                   🔗 Добавить связь со статьей
                 </h3>
@@ -981,7 +981,7 @@ export default function ArticlePage() {
                     required
                     value={targetArticleId}
                     onChange={(e) => setTargetArticleId(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-neutral-800 dark:text-neutral-100"
+                    className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-background border border-neutral-200 dark:border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-neutral-800 dark:text-neutral-100"
                   >
                     <option value="">-- Выберите статью --</option>
                     {allArticles.map(art => (
@@ -1001,11 +1001,11 @@ export default function ArticlePage() {
                     placeholder="Например: Ссылка на должностную инструкцию"
                     value={linkText}
                     onChange={(e) => setLinkText(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-neutral-800 dark:text-neutral-100"
+                    className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-background border border-neutral-200 dark:border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-neutral-800 dark:text-neutral-100"
                   />
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-900">
+                <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100 dark:border-border">
                   <button
                     type="button"
                     onClick={() => {
@@ -1013,7 +1013,7 @@ export default function ArticlePage() {
                       setTargetArticleId('');
                       setLinkText('');
                     }}
-                    className="px-3 py-1.5 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 text-neutral-700 dark:text-neutral-300 rounded-lg transition-colors cursor-pointer"
+                    className="px-3 py-1.5 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-background border border-neutral-200 dark:border-border text-neutral-700 dark:text-neutral-300 rounded-lg transition-colors cursor-pointer"
                   >
                     Отмена
                   </button>

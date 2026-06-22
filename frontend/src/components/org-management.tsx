@@ -505,7 +505,7 @@ export default function OrgManagement() {
 
       {/* Edit/Create Dialog */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-neutral-900/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
           <div className="w-full max-w-md bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-2xl">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg text-neutral-900 dark:text-white">

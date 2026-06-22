@@ -52,20 +52,13 @@ export default function Login() {
   return (
     <div className="relative min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-12 overflow-hidden bg-background">
       
-      {/* Background Decorative Blurs */}
-      <div className="absolute inset-0 pointer-events-none -z-10 opacity-75 dark:opacity-40">
-        <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] rounded-full bg-indigo-500/20 blur-[130px]" />
-        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-purple-500/20 blur-[130px]" />
-      </div>
-
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
         className="w-full max-w-md"
       >
-        {/* Glass Box */}
-        <div className="relative overflow-hidden rounded-2xl border border-neutral-200/50 dark:border-neutral-800/50 bg-white/60 dark:bg-neutral-950/60 backdrop-blur-xl shadow-2xl p-8 transition-all">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl p-8 transition-colors">
 
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-indigo-500/10 dark:border-indigo-400/20 bg-indigo-500/5 text-indigo-600 dark:text-indigo-400 text-xs font-semibold mb-3">

@@ -9,8 +9,27 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Theme Init -->
+    <script>
+      (function() {
+        var saved = null;
+        try {
+          saved = localStorage.getItem('theme');
+        } catch (error) {
+          saved = null;
+        }
+
+        var theme = saved === 'light' || saved === 'dark'
+          ? saved
+          : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+        document.documentElement.classList.toggle('dark', theme === 'dark');
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
   </head>
-  <body class="min-h-screen bg-[#fcfcfd] dark:bg-[#030303] text-[#18181b] dark:text-[#f4f4f5] font-sans antialiased">
+  <body class="min-h-screen bg-background text-foreground font-sans antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -9,6 +9,7 @@ import * as authController from '../controllers/auth';
 import * as newsController from '../controllers/news';
 import * as orgStructureController from '../controllers/orgStructure';
 import * as guestAccessController from '../controllers/guestAccess';
+import * as analyticsController from '../controllers/analytics';
 import { requireAuth, requireRole, optionalAuth } from '../middleware/auth';
 
 // Ensure uploads folder exists
@@ -128,6 +129,7 @@ router.delete('/admin/sessions/:id', requireAuth, requireRole(['Admin']), authCo
 router.put('/admin/users/:id', requireAuth, requireRole(['Admin']), authController.updateUserByAdmin);
 router.get('/admin/users/:id/history', requireAuth, requireRole(['Admin']), authController.getUserHistory);
 router.post('/admin/clear-cache', requireAuth, requireRole(['Admin']), articlesController.reindexAndClearCache);
+router.get('/admin/analytics', requireAuth, requireRole(['Admin']), analyticsController.getAnalyticsReport);
 
 // Org Structure CRUD Routes (Admin only)
 router.get('/departments', requireAuth, orgStructureController.getDepartments);

@@ -113,18 +113,18 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-neutral-950/60 backdrop-blur-sm overflow-hidden select-text">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/70 overflow-hidden select-text">
       {/* Detail Window Card */}
       <motion.div
         initial={{ opacity: 0, scale: 0.98, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.98, y: 15 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
-        className="w-full h-full sm:h-auto sm:max-h-[85vh] sm:max-w-3xl bg-white dark:bg-neutral-950 sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-neutral-200/50 dark:border-neutral-900"
+        className="w-full h-full sm:h-auto sm:max-h-[85vh] sm:max-w-3xl bg-card text-card-foreground sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-border"
       >
         
         {/* Header toolbar */}
-        <div className="flex items-center justify-between border-b border-neutral-200/50 dark:border-neutral-900 bg-neutral-50/50 dark:bg-neutral-900/30 px-5 py-3 sm:py-4 shrink-0">
+        <div className="flex items-center justify-between border-b border-border bg-muted/30 px-5 py-3 sm:py-4 shrink-0">
           <div className="flex items-center gap-2">
             {news.is_pinned && (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
@@ -132,12 +132,12 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
                 Закреплено
               </span>
             )}
-            <span className="text-xs text-neutral-400 font-medium">Центр новостей</span>
+            <span className="text-xs text-muted-foreground font-medium">Центр новостей</span>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -148,11 +148,11 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
           
           {/* Metadata Block */}
           <div className="space-y-3">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-900 dark:text-white leading-tight font-outfit">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground leading-tight font-outfit">
               {news.title}
             </h1>
             
-            <div className="flex flex-wrap items-center gap-4 text-xs text-neutral-400 font-medium pb-2 border-b border-neutral-100 dark:border-neutral-900/60">
+            <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground font-medium pb-2 border-b border-border">
               <span className="flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5" />
                 {formatDate(news.published_at)}
@@ -223,34 +223,34 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
 
           {/* Description summary (italic, styled) */}
           {news.description && (
-            <div className="p-3.5 bg-neutral-50 dark:bg-neutral-900/40 rounded-xl border border-neutral-200/40 dark:border-neutral-900 italic text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed font-light">
+            <div className="p-3.5 bg-muted/40 rounded-xl border border-border italic text-sm text-muted-foreground leading-relaxed font-light">
               {news.description}
             </div>
           )}
 
           {/* NOTION-STYLE ARTICLE BODY */}
           <div 
-            className="prose-custom prose dark:prose-invert max-w-none text-neutral-800 dark:text-neutral-200"
+            className="prose-custom prose dark:prose-invert max-w-none text-foreground"
             dangerouslySetInnerHTML={{ __html: news.content }}
           />
 
           {/* FILE ATTACHMENTS SECTION */}
           {news.attachments && news.attachments.length > 0 && (
             <div className="space-y-3 mt-6">
-              <h3 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider">Вложения</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Вложения</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {news.attachments.map((att) => (
                   <div
                     key={att.id}
-                    className="flex items-center justify-between p-3 border border-neutral-200/50 dark:border-neutral-900 rounded-xl bg-white dark:bg-neutral-900/20 hover:border-neutral-350 dark:hover:border-neutral-800 transition-all shadow-sm"
+                    className="flex items-center justify-between p-3 border border-border rounded-xl bg-card hover:border-neutral-350 dark:hover:border-neutral-700 transition-all shadow-sm"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       {getAttachmentIcon(att.file_name)}
                       <div className="min-w-0">
-                        <p className="text-xs font-semibold text-neutral-900 dark:text-neutral-100 truncate" title={att.file_name}>
+                        <p className="text-xs font-semibold text-foreground truncate" title={att.file_name}>
                           {att.file_name}
                         </p>
-                        <p className="text-[10px] text-neutral-400 mt-0.5">
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
                           {formatSize(att.file_size)} • {formatDate(att.created_at).split(' в ')[0]}
                         </p>
                       </div>
@@ -261,7 +261,7 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
                       download={att.file_name}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 text-neutral-450 hover:text-indigo-600 dark:text-neutral-500 dark:hover:text-indigo-400 hover:bg-neutral-50 dark:hover:bg-neutral-900/60 rounded-lg transition-colors ml-2 shrink-0"
+                      className="p-2 text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-muted rounded-lg transition-colors ml-2 shrink-0"
                       title="Скачать файл"
                     >
                       <Download className="w-4 h-4" />
@@ -278,7 +278,7 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
               {news.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="px-2 py-0.5 bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 rounded text-[10px] font-bold uppercase tracking-wider"
+                  className="px-2 py-0.5 bg-muted text-muted-foreground rounded text-[10px] font-bold uppercase tracking-wider"
                 >
                   #{tag}
                 </span>
