@@ -696,7 +696,7 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
                       <div
                         key={art.id}
                         onClick={() => handleInsertInternalLink(art)}
-                        className="py-1.5 px-2 hover:bg-neutral-100 dark:hover:bg-neutral-900 cursor-pointer text-xs truncate font-semibold text-neutral-700 dark:text-neutral-350"
+                        className="py-1.5 px-2 hover:bg-neutral-100 dark:hover:bg-neutral-900 cursor-pointer text-xs truncate font-semibold text-neutral-700 dark:text-neutral-300"
                       >
                         {art.title}
                       </div>

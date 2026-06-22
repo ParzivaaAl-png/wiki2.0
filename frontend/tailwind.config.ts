@@ -16,6 +16,11 @@ const config: Config = {
           DEFAULT: 'var(--card-bg)',
           hover: 'var(--card-hover)',
         },
+        neutral: {
+          350: '#b8b8bc',
+          450: '#8b8b90',
+          550: '#626267',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'Outfit', 'sans-serif'],
