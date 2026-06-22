@@ -162,6 +162,19 @@ const run = async () => {
 
     const sectionResult = await client.query('SELECT id, name FROM sections WHERE status = \'Active\'');
     const sectionIds = new Map<string, number>(sectionResult.rows.map((row) => [row.name, row.id]));
+    const generalSectionId = sectionIds.get('Общий сотрудник') ?? sectionResult.rows[0]?.id;
+    let classifierSectionLinks = 0;
+
+    if (generalSectionId) {
+      const linkedClassifier = await client.query(
+        `INSERT INTO article_sections (article_id, section_id)
+         SELECT id, $1 FROM articles WHERE slug LIKE 'auto-list%'
+         ON CONFLICT DO NOTHING`,
+        [generalSectionId]
+      );
+      classifierSectionLinks = linkedClassifier.rowCount ?? 0;
+    }
+
     const createdIds = new Map<string, number>();
 
     for (const article of articles) {
@@ -242,6 +255,7 @@ const run = async () => {
     console.log(JSON.stringify({
       archivedArticles: archived.rowCount ?? 0,
       classifierArticles: classifier.rowCount ?? 0,
+      classifierSectionLinks,
       testArticles: articles.length,
     }));
   } catch (error) {
