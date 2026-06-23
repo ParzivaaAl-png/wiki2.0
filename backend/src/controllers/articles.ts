@@ -288,6 +288,7 @@ export const createArticle = async (req: Request, res: Response) => {
         tags: article.tags,
         published: article.published,
         createdAt: article.created_at.toISOString(),
+        section_ids: article.section_ids,
       };
       msService.indexArticle(doc).catch(err => 
         console.error('Failed to auto-index new article to Meilisearch:', err)
@@ -414,6 +415,7 @@ export const updateArticle = async (req: Request, res: Response) => {
         tags: article.tags,
         published: article.published,
         createdAt: article.created_at.toISOString(),
+        section_ids: article.section_ids,
       };
       msService.indexArticle(doc).catch(err => 
         console.error('Failed to update Meilisearch index for article:', err)
@@ -541,6 +543,7 @@ export const restoreArticleVersion = async (req: Request, res: Response) => {
         tags: updatedArticle.tags,
         published: updatedArticle.published,
         createdAt: updatedArticle.created_at.toISOString(),
+        section_ids: updatedArticle.section_ids,
       };
       await msService.indexArticle(doc);
     } else {
@@ -731,6 +734,7 @@ export const importArticle = async (req: AuthenticatedRequest, res: Response) =>
       tags: [],
       published: true,
       createdAt: article.created_at.toISOString(),
+      section_ids: article.section_ids,
     };
     
     await msService.indexArticle(doc);

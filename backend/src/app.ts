@@ -101,6 +101,7 @@ const startServer = async () => {
       tags: art.tags,
       published: art.published,
       createdAt: art.created_at instanceof Date ? art.created_at.toISOString() : new Date(art.created_at).toISOString(),
+      section_ids: art.section_ids,
     }));
 
     await bulkSyncArticles(docs);

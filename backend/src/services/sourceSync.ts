@@ -376,6 +376,10 @@ export async function syncArticle(articleId: number, options: { force?: boolean 
           // Trigger search indexing
           const catRes = await client.query('SELECT name FROM categories WHERE id = $1', [childArticle.category_id]);
           const catName = catRes.rows.length > 0 ? catRes.rows[0].name : '';
+          const childSectionsRes = await client.query(
+            'SELECT COALESCE(array_agg(section_id), \'{}\') AS section_ids FROM article_sections WHERE article_id = $1',
+            [childArticle.id]
+          );
           
           const doc = {
             id: childArticle.id,
@@ -387,6 +391,7 @@ export async function syncArticle(articleId: number, options: { force?: boolean 
             tags: [],
             published: childArticle.published,
             createdAt: childArticle.created_at.toISOString(),
+            section_ids: childSectionsRes.rows[0]?.section_ids || [],
           };
           await msService.indexArticle(doc);
 
@@ -431,6 +436,10 @@ export async function syncArticle(articleId: number, options: { force?: boolean 
     // Index main page
     const catRes = await client.query('SELECT name FROM categories WHERE id = $1', [mainArticle.category_id]);
     const catName = catRes.rows.length > 0 ? catRes.rows[0].name : '';
+    const mainSectionsRes = await client.query(
+      'SELECT COALESCE(array_agg(section_id), \'{}\') AS section_ids FROM article_sections WHERE article_id = $1',
+      [mainArticle.id]
+    );
     const mainDoc = {
       id: mainArticle.id,
       title: mainArticle.title,
@@ -441,6 +450,7 @@ export async function syncArticle(articleId: number, options: { force?: boolean 
       tags: [],
       published: mainArticle.published,
       createdAt: mainArticle.created_at.toISOString(),
+      section_ids: mainSectionsRes.rows[0]?.section_ids || [],
     };
     await msService.indexArticle(mainDoc);
 
