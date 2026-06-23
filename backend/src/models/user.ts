@@ -16,14 +16,15 @@ export const createUser = async (
   username: string,
   passwordHash: string,
   name: string,
-  role: string = 'Оператор'
+  role: string = 'Оператор',
+  employeeId: number | null = null
 ): Promise<User> => {
   const query = `
-    INSERT INTO users (username, password_hash, name, role)
-    VALUES ($1, $2, $3, $4)
-    RETURNING id, username, name, role, is_blocked, created_at, updated_at
+    INSERT INTO users (username, password_hash, name, role, employee_id)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id, username, name, role, is_blocked, employee_id, created_at, updated_at
   `;
-  const values = [username.trim(), passwordHash, name, role];
+  const values = [username.trim(), passwordHash, name, role, employeeId];
   const { rows } = await pool.query(query, values);
   return rows[0];
 };

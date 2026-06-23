@@ -207,7 +207,7 @@ export const getUsersList = async (req: AuthenticatedRequest, res: Response) => 
 
 export const createUserByAdmin = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { username, password, name, role } = req.body;
+    const { username, password, name, role, employee_id } = req.body;
     if (!username || !password || !name) {
       return res.status(400).json({ error: 'Имя пользователя (логин), пароль и имя обязательны.' });
     }
@@ -217,8 +217,21 @@ export const createUserByAdmin = async (req: AuthenticatedRequest, res: Response
       return res.status(400).json({ error: 'Пользователь с таким логином уже существует.' });
     }
 
+    const employeeId = employee_id ? Number(employee_id) : null;
+    if (employeeId) {
+      const employeeResult = await query('SELECT id FROM employees WHERE id = $1', [employeeId]);
+      if (employeeResult.rowCount === 0) {
+        return res.status(400).json({ error: 'Сотрудник для привязки аккаунта не найден.' });
+      }
+
+      const linkedUserResult = await query('SELECT id FROM users WHERE employee_id = $1', [employeeId]);
+      if ((linkedUserResult.rowCount || 0) > 0) {
+        return res.status(400).json({ error: 'У этого сотрудника уже есть аккаунт.' });
+      }
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await UserModel.createUser(username, passwordHash, name, role || 'Оператор');
+    const user = await UserModel.createUser(username, passwordHash, name, role || 'Оператор', employeeId);
     res.status(201).json(user);
   } catch (error: any) {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
@@ -352,7 +365,7 @@ export const deleteUserSession = async (req: AuthenticatedRequest, res: Response
 export const updateUserByAdmin = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { username, name, password } = req.body;
+    const { username, name, password, employee_id } = req.body;
     const adminId = req.user?.id;
 
     if (!username || !name) {
@@ -413,10 +426,42 @@ export const updateUserByAdmin = async (req: AuthenticatedRequest, res: Response
         );
       }
 
+      if (Object.prototype.hasOwnProperty.call(req.body, 'employee_id')) {
+        const employeeId = employee_id ? Number(employee_id) : null;
+        if (employeeId) {
+          const employeeResult = await client.query('SELECT id FROM employees WHERE id = $1', [employeeId]);
+          if (employeeResult.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Сотрудник для привязки аккаунта не найден.' });
+          }
+
+          const linkedUserResult = await client.query('SELECT id FROM users WHERE employee_id = $1 AND id <> $2', [employeeId, id]);
+          if ((linkedUserResult.rowCount || 0) > 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'У этого сотрудника уже есть другой аккаунт.' });
+          }
+        }
+
+        if ((user.employee_id || null) !== employeeId) {
+          await client.query(
+            'UPDATE users SET employee_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            [employeeId, id]
+          );
+          await client.query(
+            'INSERT INTO user_audit_logs (user_id, changed_by, field_changed, old_value, new_value) VALUES ($1, $2, $3, $4, $5)',
+            [id, adminId, 'employee_id', user.employee_id ? String(user.employee_id) : '', employeeId ? String(employeeId) : '']
+          );
+        }
+      }
+
       await client.query('COMMIT');
       
       const updatedUser = await UserModel.getUserById(Number(id));
-      res.json(updatedUser);
+      if (!updatedUser) {
+        return res.status(404).json({ error: 'Пользователь не найден.' });
+      }
+      const { password_hash, ...safeUser } = updatedUser;
+      res.json(safeUser);
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;

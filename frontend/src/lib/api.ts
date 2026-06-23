@@ -535,7 +535,13 @@ export async function adminFetchUsers(): Promise<User[]> {
   return apiCallWithCache<User[]>('/admin/users', { cache: 'no-store' });
 }
 
-export async function adminCreateUser(data: Omit<User, 'id' | 'is_blocked'> & { password: string }): Promise<User> {
+export async function adminCreateUser(data: {
+  username: string;
+  name: string;
+  password: string;
+  role?: string;
+  employee_id?: number | null;
+}): Promise<User> {
   clearApiCache();
   return apiCall<User>('/admin/users', {
     method: 'POST',
@@ -608,7 +614,7 @@ export async function deleteUserSession(id: number): Promise<{ message: string }
   });
 }
 
-export async function adminUpdateUser(id: number, data: { username: string; name: string; password?: string }): Promise<User> {
+export async function adminUpdateUser(id: number, data: { username: string; name: string; password?: string; employee_id?: number | null }): Promise<User> {
   clearApiCache();
   return apiCall<User>(`/admin/users/${id}`, {
     method: 'PUT',
