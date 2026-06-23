@@ -12,7 +12,6 @@ import {
   FileUp,
   Users,
   Loader2,
-  Key,
   Eye,
   RotateCcw,
   Bell,
@@ -25,10 +24,7 @@ import {
   XCircle,
   Info,
   MessageSquare,
-  Building2,
-  ShieldAlert,
   BarChart3,
-  ShieldCheck
 } from 'lucide-react';
 import { 
   fetchArticles, 
@@ -45,15 +41,11 @@ import {
   Notification
 } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
-import UserManagement from '../components/user-management';
-import SessionManagement from '../components/session-management';
 import PreviewModal from '../components/preview-modal';
 import { NewsAdmin } from '../components/news-admin';
-import OrgManagement from '../components/org-management';
 import WikiManagement from '../components/wiki-management';
-import GuestManagement from '../components/guest-management';
 import AnalyticsDashboard from '../components/analytics-dashboard';
-import AccessManagement from '../components/access-management';
+import TeamAccessManagement from '../components/team-access-management';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export default function Admin() {
@@ -64,7 +56,7 @@ export default function Admin() {
   
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'published' | 'drafts'>('all');
-  const [activeTab, setActiveTab] = React.useState<'articles' | 'archive' | 'analytics' | 'users' | 'sessions' | 'news' | 'org' | 'wiki' | 'guest' | 'access'>('articles');
+  const [activeTab, setActiveTab] = React.useState<'articles' | 'archive' | 'analytics' | 'news' | 'team' | 'wiki'>('articles');
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = React.useState(false);
@@ -457,39 +449,15 @@ export default function Admin() {
           {isAdmin && (
             <>
               <button
-                onClick={() => setActiveTab('users')}
+                onClick={() => setActiveTab('team')}
                 className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
-                  activeTab === 'users'
+                  activeTab === 'team'
                     ? 'border-indigo-500 text-indigo-500'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <Users className="w-4 h-4" />
-                Пользователи (Админ)
-              </button>
-
-              <button
-                onClick={() => setActiveTab('sessions')}
-                className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
-                  activeTab === 'sessions'
-                    ? 'border-indigo-500 text-indigo-500'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Key className="w-4 h-4" />
-                Сессии (Админ)
-              </button>
-
-              <button
-                onClick={() => setActiveTab('org')}
-                className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
-                  activeTab === 'org'
-                    ? 'border-indigo-500 text-indigo-500'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Building2 className="w-4 h-4" />
-                Оргструктура
+                Команда и доступ
               </button>
 
               <button
@@ -503,57 +471,17 @@ export default function Admin() {
                 <Layers className="w-4 h-4" />
                 Wiki-структура
               </button>
-
-              <button
-                onClick={() => setActiveTab('guest')}
-                className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
-                  activeTab === 'guest'
-                    ? 'border-indigo-500 text-indigo-500'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <ShieldAlert className="w-4 h-4" />
-                Гостевой доступ
-              </button>
-
-              <button
-                onClick={() => setActiveTab('access')}
-                className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
-                  activeTab === 'access'
-                    ? 'border-indigo-500 text-indigo-500'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <ShieldCheck className="w-4 h-4" />
-                Доступ
-              </button>
             </>
           )}
         </div>
       )}
 
-      {activeTab === 'users' && isAdmin && (
-        <UserManagement />
-      )}
-
-      {activeTab === 'sessions' && isAdmin && (
-        <SessionManagement />
-      )}
-
-      {activeTab === 'org' && isAdmin && (
-        <OrgManagement />
+      {activeTab === 'team' && isAdmin && (
+        <TeamAccessManagement />
       )}
 
       {activeTab === 'wiki' && isAdmin && (
         <WikiManagement />
-      )}
-
-      {activeTab === 'guest' && isAdmin && (
-        <GuestManagement />
-      )}
-
-      {activeTab === 'access' && isAdmin && (
-        <AccessManagement />
       )}
 
       {activeTab === 'news' && (
