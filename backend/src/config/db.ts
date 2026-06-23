@@ -641,6 +641,130 @@ export const initializeDatabase = async () => {
       );
     `);
 
+    // Role-based access model for Wiki 2.0
+    console.log('Ensuring Wiki access control tables exist...');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wiki_roles (
+        id SERIAL PRIMARY KEY,
+        code VARCHAR(80) NOT NULL UNIQUE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        can_read BOOLEAN DEFAULT false,
+        can_create BOOLEAN DEFAULT false,
+        can_edit BOOLEAN DEFAULT false,
+        can_publish BOOLEAN DEFAULT false,
+        can_approve BOOLEAN DEFAULT false,
+        can_manage_users BOOLEAN DEFAULT false,
+        can_manage_structure BOOLEAN DEFAULT false,
+        can_manage_access BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_wiki_roles (
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        wiki_role_id INT REFERENCES wiki_roles(id) ON DELETE CASCADE,
+        assigned_by INT REFERENCES users(id) ON DELETE SET NULL,
+        assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, wiki_role_id)
+      );
+    `);
+
+    await pool.query(`
+      ALTER TABLE sections
+      ADD COLUMN IF NOT EXISTS visibility_scope VARCHAR(50) DEFAULT 'restricted';
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS section_access_rules (
+        id SERIAL PRIMARY KEY,
+        section_id INT NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
+        position_id INT REFERENCES positions(id) ON DELETE CASCADE,
+        department_id INT REFERENCES departments(id) ON DELETE CASCADE,
+        wiki_role_id INT REFERENCES wiki_roles(id) ON DELETE CASCADE,
+        access_level VARCHAR(50) DEFAULT 'read',
+        can_read BOOLEAN DEFAULT true,
+        can_create BOOLEAN DEFAULT false,
+        can_edit BOOLEAN DEFAULT false,
+        can_publish BOOLEAN DEFAULT false,
+        can_approve BOOLEAN DEFAULT false,
+        grant_subsections BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CHECK (position_id IS NOT NULL OR department_id IS NOT NULL OR wiki_role_id IS NOT NULL)
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS access_audit_logs (
+        id SERIAL PRIMARY KEY,
+        actor_user_id INT REFERENCES users(id) ON DELETE SET NULL,
+        target_user_id INT REFERENCES users(id) ON DELETE SET NULL,
+        section_id INT REFERENCES sections(id) ON DELETE SET NULL,
+        action VARCHAR(100) NOT NULL,
+        old_value JSONB,
+        new_value JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_user_wiki_roles_user ON user_wiki_roles(user_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_user_wiki_roles_role ON user_wiki_roles(wiki_role_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_section_access_rules_section ON section_access_rules(section_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_section_access_rules_position ON section_access_rules(position_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_section_access_rules_department ON section_access_rules(department_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_section_access_rules_role ON section_access_rules(wiki_role_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_sections_visibility_scope ON sections(visibility_scope)');
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_section_access_rules_unique_position
+      ON section_access_rules(section_id, position_id)
+      WHERE position_id IS NOT NULL AND department_id IS NULL AND wiki_role_id IS NULL;
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_section_access_rules_unique_department
+      ON section_access_rules(section_id, department_id)
+      WHERE department_id IS NOT NULL AND position_id IS NULL AND wiki_role_id IS NULL;
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_section_access_rules_unique_wiki_role
+      ON section_access_rules(section_id, wiki_role_id)
+      WHERE wiki_role_id IS NOT NULL AND position_id IS NULL AND department_id IS NULL;
+    `);
+
+    const defaultWikiRoles = [
+      ['reader', 'Читатель', 'Просмотр опубликованных статей в доступных разделах.', true, false, false, false, false, false, false, false],
+      ['editor', 'Редактор', 'Создание и редактирование статей в доступных разделах.', true, true, true, false, false, false, false, false],
+      ['process_owner', 'Владелец бизнес-процесса', 'Ответственный за актуальность процесса и публикацию материалов.', true, true, true, true, false, false, false, false],
+      ['approver', 'Согласователь', 'Проверка и утверждение статей перед публикацией.', true, false, true, true, true, false, false, false],
+      ['wiki_admin', 'Администратор Wiki', 'Полное управление структурой, пользователями, ролями и доступом.', true, true, true, true, true, true, true, true]
+    ];
+
+    for (const role of defaultWikiRoles) {
+      await pool.query(
+        `INSERT INTO wiki_roles (
+           code, name, description,
+           can_read, can_create, can_edit, can_publish, can_approve,
+           can_manage_users, can_manage_structure, can_manage_access
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         ON CONFLICT (code) DO UPDATE SET
+           name = EXCLUDED.name,
+           description = EXCLUDED.description,
+           can_read = EXCLUDED.can_read,
+           can_create = EXCLUDED.can_create,
+           can_edit = EXCLUDED.can_edit,
+           can_publish = EXCLUDED.can_publish,
+           can_approve = EXCLUDED.can_approve,
+           can_manage_users = EXCLUDED.can_manage_users,
+           can_manage_structure = EXCLUDED.can_manage_structure,
+           can_manage_access = EXCLUDED.can_manage_access,
+           updated_at = CURRENT_TIMESTAMP`,
+        role
+      );
+    }
+
     // Create trigger for position delete to archive section
     await pool.query(`
       CREATE OR REPLACE FUNCTION archive_section_on_delete_position() RETURNS TRIGGER AS $$

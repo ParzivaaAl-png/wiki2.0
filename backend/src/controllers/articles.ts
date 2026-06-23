@@ -6,6 +6,7 @@ import { parseDocument } from '../services/parser';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { query } from '../config/db';
 import { getUserAllowedSections } from '../models/orgStructure';
+import { canCreateInSections, canEditArticle } from '../services/accessControl';
 
 // Получение списка разрешенных разделов для запроса
 const getAllowedSectionsForRequest = async (req: Request): Promise<number[]> => {
@@ -226,13 +227,34 @@ export const getArticle = async (req: Request, res: Response) => {
 export const createArticle = async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const { title, slug, content, summary, published, tags, position, is_visible, source_url, sync_interval, section_ids, status } = req.body;
+    const {
+      title,
+      slug,
+      content,
+      summary,
+      published,
+      tags,
+      position,
+      is_visible,
+      source_url,
+      sync_interval,
+      section_ids,
+      status,
+      article_type,
+      owner_id,
+      approver_id,
+    } = req.body;
     
     if (!title || !slug || !content) {
       return res.status(400).json({ error: 'Title, slug, and content are required fields.' });
     }
 
     const authorId = authReq.user ? authReq.user.id : null;
+    const selectedSectionIds = Array.isArray(section_ids) ? section_ids.map((id) => Number(id)).filter(Boolean) : [];
+    const hasCreateAccess = await canCreateInSections(authorId, authReq.user?.role, selectedSectionIds);
+    if (!hasCreateAccess) {
+      return res.status(403).json({ error: 'Недостаточно прав для создания статьи в выбранных разделах.' });
+    }
 
     const article = await ArticleModel.createArticle({
       title,
@@ -245,10 +267,13 @@ export const createArticle = async (req: Request, res: Response) => {
       is_visible: is_visible === undefined ? true : !!is_visible,
       status: status || 'draft',
       tags: tags || [],
-      section_ids: section_ids || [],
+      section_ids: selectedSectionIds,
       position: position !== undefined ? Number(position) : 0,
       source_url: source_url || null,
       sync_interval: sync_interval || 'manual',
+      article_type: article_type || 'general',
+      owner_id: owner_id ? Number(owner_id) : null,
+      approver_id: approver_id ? Number(approver_id) : null,
     });
 
     // Auto-index to Meilisearch
@@ -279,7 +304,25 @@ export const createArticle = async (req: Request, res: Response) => {
 export const updateArticle = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, slug, content, summary, published, tags, position, is_visible, source_url, sync_interval, section_ids, status, change_description, editor_comment } = req.body;
+    const {
+      title,
+      slug,
+      content,
+      summary,
+      published,
+      tags,
+      position,
+      is_visible,
+      source_url,
+      sync_interval,
+      section_ids,
+      status,
+      article_type,
+      owner_id,
+      approver_id,
+      change_description,
+      editor_comment,
+    } = req.body;
 
     if (!title || !slug || !content) {
       return res.status(400).json({ error: 'Title, slug, and content are required.' });
@@ -291,6 +334,13 @@ export const updateArticle = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Article not found' });
     }
 
+    const authReq = req as AuthenticatedRequest;
+    const hasEditAccess = await canEditArticle(authReq.user?.id, authReq.user?.role, currentArticle);
+    if (!hasEditAccess) {
+      return res.status(403).json({ error: 'Недостаточно прав для редактирования этой статьи.' });
+    }
+
+    const selectedSectionIds = Array.isArray(section_ids) ? section_ids.map((sectionId) => Number(sectionId)).filter(Boolean) : [];
     const article = await ArticleModel.updateArticle(Number(id), {
       title,
       slug,
@@ -301,10 +351,13 @@ export const updateArticle = async (req: Request, res: Response) => {
       is_visible: is_visible === undefined ? true : !!is_visible,
       status: status || 'draft',
       tags: tags || [],
-      section_ids: section_ids || [],
+      section_ids: selectedSectionIds,
       position: position !== undefined ? Number(position) : 0,
       source_url: source_url || null,
       sync_interval: sync_interval || 'manual',
+      article_type: article_type || currentArticle.article_type || 'general',
+      owner_id: owner_id !== undefined ? (owner_id ? Number(owner_id) : null) : currentArticle.owner_id || null,
+      approver_id: approver_id !== undefined ? (approver_id ? Number(approver_id) : null) : currentArticle.approver_id || null,
     });
 
     if (!article) {
@@ -312,7 +365,6 @@ export const updateArticle = async (req: Request, res: Response) => {
     }
 
     // Сохранение записи в журнале изменений статьи со снимками
-    const authReq = req as AuthenticatedRequest;
     try {
       await query(
         `INSERT INTO article_changes_log (article_id, user_id, change_description, editor_comment, old_content, new_content, old_title, new_title)
@@ -441,6 +493,9 @@ export const restoreArticleVersion = async (req: Request, res: Response) => {
       position: currentArticle.position,
       source_url: currentArticle.source_url || null,
       sync_interval: currentArticle.sync_interval || 'manual',
+      article_type: currentArticle.article_type || 'general',
+      owner_id: currentArticle.owner_id || null,
+      approver_id: currentArticle.approver_id || null,
     });
 
     if (!updatedArticle) {
@@ -1124,4 +1179,3 @@ export const deleteArticleLink = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 };
-

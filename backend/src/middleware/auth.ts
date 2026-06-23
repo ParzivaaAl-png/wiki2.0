@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { getUserById } from '../models/user';
+import { getUserCapabilities } from '../services/accessControl';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_wiki20';
 
@@ -67,7 +68,7 @@ export const requireAuth = async (
 };
 
 export const requireRole = (allowedRoles: string[]) => {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required' });
     }
@@ -95,7 +96,28 @@ export const requireRole = (allowedRoles: string[]) => {
     });
 
     if (!mappedRoles.has(req.user.role)) {
-      return res.status(403).json({ error: 'Forbidden: Insufficient permissions' });
+      try {
+        const { capabilities } = await getUserCapabilities(req.user.id, req.user.role);
+        const hasAdminAccess = allowedRoles.includes('Admin') && (
+          capabilities.can_manage_access ||
+          capabilities.can_manage_structure ||
+          capabilities.can_manage_users
+        );
+        const hasEditorAccess = allowedRoles.includes('Editor') && (
+          capabilities.can_create ||
+          capabilities.can_edit ||
+          capabilities.can_publish ||
+          capabilities.can_approve
+        );
+        const hasUserAccess = allowedRoles.includes('User') && capabilities.can_read;
+
+        if (!hasAdminAccess && !hasEditorAccess && !hasUserAccess) {
+          return res.status(403).json({ error: 'Forbidden: Insufficient permissions' });
+        }
+      } catch (error) {
+        console.error('Failed to resolve Wiki role permissions:', error);
+        return res.status(403).json({ error: 'Forbidden: Insufficient permissions' });
+      }
     }
 
     next();

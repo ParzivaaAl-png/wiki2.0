@@ -27,7 +27,8 @@ import {
   MessageSquare,
   Building2,
   ShieldAlert,
-  BarChart3
+  BarChart3,
+  ShieldCheck
 } from 'lucide-react';
 import { 
   fetchArticles, 
@@ -52,6 +53,7 @@ import OrgManagement from '../components/org-management';
 import WikiManagement from '../components/wiki-management';
 import GuestManagement from '../components/guest-management';
 import AnalyticsDashboard from '../components/analytics-dashboard';
+import AccessManagement from '../components/access-management';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export default function Admin() {
@@ -62,7 +64,7 @@ export default function Admin() {
   
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'published' | 'drafts'>('all');
-  const [activeTab, setActiveTab] = React.useState<'articles' | 'archive' | 'analytics' | 'users' | 'sessions' | 'news' | 'org' | 'wiki' | 'guest'>('articles');
+  const [activeTab, setActiveTab] = React.useState<'articles' | 'archive' | 'analytics' | 'users' | 'sessions' | 'news' | 'org' | 'wiki' | 'guest' | 'access'>('articles');
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = React.useState(false);
@@ -513,6 +515,18 @@ export default function Admin() {
                 <ShieldAlert className="w-4 h-4" />
                 Гостевой доступ
               </button>
+
+              <button
+                onClick={() => setActiveTab('access')}
+                className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
+                  activeTab === 'access'
+                    ? 'border-indigo-500 text-indigo-500'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4" />
+                Доступ
+              </button>
             </>
           )}
         </div>
@@ -536,6 +550,10 @@ export default function Admin() {
 
       {activeTab === 'guest' && isAdmin && (
         <GuestManagement />
+      )}
+
+      {activeTab === 'access' && isAdmin && (
+        <AccessManagement />
       )}
 
       {activeTab === 'news' && (

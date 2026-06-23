@@ -1,4 +1,5 @@
 import { pool } from '../config/db';
+import { getRuleAllowedSectionIds, isWikiAdmin } from '../services/accessControl';
 
 export interface Department {
   id: number;
@@ -64,12 +65,16 @@ export const getUserAllowedSections = async (
   userId?: number
 ): Promise<number[]> => {
   // 1. Администратор видит все разделы
-  if (userRole === 'Администратор Wiki' || userRole === 'Admin') {
+  if (await isWikiAdmin(userId, userRole)) {
     const { rows } = await pool.query('SELECT id FROM sections WHERE status = \'Active\'');
     return rows.map((r) => r.id);
   }
 
   const allowedSectionIds = new Set<number>();
+
+  // 1b. Явные правила новой ролевой модели и публичные разделы
+  const ruleAllowedSections = await getRuleAllowedSectionIds(userId);
+  ruleAllowedSections.forEach((id) => allowedSectionIds.add(id));
 
   // 2. Всегда добавляем разделы общего отдела (свободный доступ для всех сотрудников)
   const commonSectionsQuery = `

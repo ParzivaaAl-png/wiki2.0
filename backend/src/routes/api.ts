@@ -10,6 +10,7 @@ import * as newsController from '../controllers/news';
 import * as orgStructureController from '../controllers/orgStructure';
 import * as guestAccessController from '../controllers/guestAccess';
 import * as analyticsController from '../controllers/analytics';
+import * as accessControlController from '../controllers/accessControl';
 import { requireAuth, requireRole, optionalAuth } from '../middleware/auth';
 
 // Ensure uploads folder exists
@@ -168,6 +169,10 @@ router.delete('/wiki/access/guest/:id', requireAuth, requireRole(['Admin']), gue
 
 // Access check
 router.get('/wiki/access/check', requireAuth, articlesController.checkAccess);
+router.get('/wiki/access/overview', requireAuth, requireRole(['Admin']), accessControlController.getAccessOverview);
+router.post('/wiki/access/seed-defaults', requireAuth, requireRole(['Admin']), accessControlController.seedAccessDefaults);
+router.get('/wiki/access/effective', requireAuth, requireRole(['Admin']), accessControlController.getEffectiveAccess);
+router.put('/wiki/access/users/:id/wiki-roles', requireAuth, requireRole(['Admin']), accessControlController.updateUserWikiRoles);
 
 // Article Links Routes
 router.get('/articles/:id/links', requireAuth, articlesController.getArticleLinks);

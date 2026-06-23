@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import * as UserModel from '../models/user';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { query, pool } from '../config/db';
+import { getUserCapabilities } from '../services/accessControl';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_wiki20';
 const REFRESH_SECRET = process.env.REFRESH_SECRET || 'super_secret_refresh_key_wiki20';
@@ -54,7 +55,15 @@ export const register = async (req: Request, res: Response) => {
     res.cookie('accessToken', accessToken, setCookieOptions(15 * 60 * 1000));
     res.cookie('refreshToken', refreshToken, setCookieOptions(INFINITE_COOKIE_AGE));
 
-    res.status(201).json({ user, accessToken });
+    const access = await getUserCapabilities(user.id, user.role);
+    res.status(201).json({
+      user: {
+        ...user,
+        wiki_roles: access.roles.map((role) => ({ id: role.id, code: role.code, name: role.name })),
+        capabilities: access.capabilities,
+      },
+      accessToken,
+    });
   } catch (error: any) {
     console.error('Registration failed:', error);
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
@@ -98,6 +107,7 @@ export const login = async (req: Request, res: Response) => {
     res.cookie('accessToken', accessToken, setCookieOptions(15 * 60 * 1000));
     res.cookie('refreshToken', refreshToken, setCookieOptions(INFINITE_COOKIE_AGE));
 
+    const access = await getUserCapabilities(user.id, user.role);
     const userResponse = {
       id: user.id,
       username: user.username,
@@ -105,6 +115,8 @@ export const login = async (req: Request, res: Response) => {
       role: user.role,
       is_blocked: user.is_blocked,
       employee_id: (user as any).employee_id,
+      wiki_roles: access.roles.map((role) => ({ id: role.id, code: role.code, name: role.name })),
+      capabilities: access.capabilities,
     };
 
     res.json({ user: userResponse, accessToken });
@@ -175,7 +187,12 @@ export const refresh = async (req: Request, res: Response) => {
 
 export const getMe = async (req: AuthenticatedRequest, res: Response) => {
   if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
-  res.json(req.user);
+  const access = await getUserCapabilities(req.user.id, req.user.role);
+  res.json({
+    ...req.user,
+    wiki_roles: access.roles.map((role) => ({ id: role.id, code: role.code, name: role.name })),
+    capabilities: access.capabilities,
+  });
 };
 
 // ADMIN CONTROLLERS

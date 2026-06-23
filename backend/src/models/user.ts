@@ -7,6 +7,7 @@ export interface User {
   name: string;
   role: string;
   is_blocked: boolean;
+  employee_id?: number | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -40,7 +41,7 @@ export const getUserById = async (id: number): Promise<User | null> => {
 };
 
 export const getAllUsers = async (): Promise<Omit<User, 'password_hash'>[]> => {
-  const query = 'SELECT id, username, name, role, is_blocked, created_at, updated_at FROM users ORDER BY id ASC';
+  const query = 'SELECT id, username, name, role, is_blocked, employee_id, created_at, updated_at FROM users ORDER BY id ASC';
   const { rows } = await pool.query(query);
   return rows;
 };

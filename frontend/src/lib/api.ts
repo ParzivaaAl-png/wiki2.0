@@ -64,6 +64,8 @@ export interface User {
   role: string;
   is_blocked: boolean;
   employee_id?: number | null;
+  wiki_roles?: Array<{ id: number; code: string; name: string }>;
+  capabilities?: WikiCapabilities;
   created_at?: string;
   updated_at?: string;
 }
@@ -949,6 +951,115 @@ export interface ArticleLink {
   target_slug?: string;
 }
 
+export interface WikiCapabilities {
+  can_read: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_publish: boolean;
+  can_approve: boolean;
+  can_manage_users: boolean;
+  can_manage_structure: boolean;
+  can_manage_access: boolean;
+}
+
+export interface WikiRole {
+  id: number;
+  code: string;
+  name: string;
+  description: string | null;
+  can_read: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_publish: boolean;
+  can_approve: boolean;
+  can_manage_users: boolean;
+  can_manage_structure: boolean;
+  can_manage_access: boolean;
+}
+
+export interface AccessOverviewUser extends User {
+  employee_name?: string | null;
+  position_name?: string | null;
+  department_name?: string | null;
+  wiki_roles: Array<{ id: number; code: string; name: string }>;
+}
+
+export interface SectionAccessRule {
+  id: number;
+  section_id: number;
+  position_id: number | null;
+  department_id: number | null;
+  wiki_role_id: number | null;
+  access_level: string;
+  can_read: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_publish: boolean;
+  can_approve: boolean;
+  grant_subsections: boolean;
+  section_name: string;
+  space_name: string | null;
+  position_name: string | null;
+  department_name: string | null;
+  wiki_role_name: string | null;
+  wiki_role_code: string | null;
+}
+
+export interface AccessMatrixRow {
+  position_id: number;
+  position_name: string;
+  department_name: string | null;
+  hierarchy_level: number;
+  sections: Array<{
+    id: number;
+    name: string;
+    space_name: string | null;
+    visibility_scope: string;
+  }>;
+}
+
+export interface AccessOverview {
+  roles: WikiRole[];
+  users: AccessOverviewUser[];
+  departments: Department[];
+  positions: Position[];
+  sections: Array<Section & {
+    space_name?: string | null;
+    position_name?: string | null;
+    owner_name?: string | null;
+    visibility_scope?: string;
+  }>;
+  rules: SectionAccessRule[];
+  matrix: AccessMatrixRow[];
+  summary: {
+    users: number;
+    roles: number;
+    departments: number;
+    positions: number;
+    sections: number;
+    rules: number;
+  };
+}
+
+export interface EffectiveAccess {
+  user: AccessOverviewUser & {
+    position_id?: number | null;
+    department_id?: number | null;
+    capabilities: WikiCapabilities;
+  };
+  capabilities: WikiCapabilities;
+  wiki_roles: Array<{ id: number; code: string; name: string }>;
+  sections: Array<{
+    id: number;
+    name: string;
+    description: string | null;
+    visibility_scope: string;
+    space_name: string | null;
+    owner_name: string | null;
+  }>;
+  section_count: number;
+}
+
 // DEPARTMENTS
 export async function fetchDepartments(): Promise<Department[]> {
   return apiCall<Department[]>('/departments');
@@ -1061,6 +1172,28 @@ export async function checkAccess(params: { sectionId?: number; articleId?: numb
   return apiCall<{ hasAccess: boolean }>(`/wiki/access/check?${q.toString()}`);
 }
 
+// ROLE ACCESS MODEL
+export async function fetchAccessOverview(): Promise<AccessOverview> {
+  return apiCall<AccessOverview>('/wiki/access/overview', { cache: 'no-store' });
+}
+
+export async function seedAccessDefaults(): Promise<{ message: string; details: any }> {
+  clearApiCache();
+  return apiCall<{ message: string; details: any }>('/wiki/access/seed-defaults', { method: 'POST' });
+}
+
+export async function fetchEffectiveAccess(userId: number): Promise<EffectiveAccess> {
+  return apiCall<EffectiveAccess>(`/wiki/access/effective?userId=${userId}`, { cache: 'no-store' });
+}
+
+export async function updateUserWikiRoles(userId: number, roleIds: number[]): Promise<EffectiveAccess['user']> {
+  clearApiCache();
+  return apiCall<EffectiveAccess['user']>(`/wiki/access/users/${userId}/wiki-roles`, {
+    method: 'PUT',
+    body: JSON.stringify({ role_ids: roleIds }),
+  });
+}
+
 // ARTICLE LINKS
 export async function fetchArticleLinks(articleId: number): Promise<ArticleLink[]> {
   return apiCall<ArticleLink[]>(`/articles/${articleId}/links`);
@@ -1071,4 +1204,3 @@ export async function createArticleLink(articleId: number, data: { target_articl
 export async function deleteArticleLink(articleId: number, linkId: number): Promise<void> {
   return apiCall<void>(`/articles/${articleId}/links/${linkId}`, { method: 'DELETE' });
 }
-

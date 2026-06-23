@@ -86,9 +86,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const isAdmin = user ? (user.role === 'Администратор Wiki' || user.role === 'Admin') : false;
-  const isEditor = user ? ['Администратор Wiki', 'Admin', 'Коммерческий директор', 'Руководитель группы', 'Супервайзер', 'HR-менеджер', 'IT-специалист', 'Бухгалтер', 'Editor'].includes(user.role) : false;
-  const isUser = user ? (user.role === 'Оператор' || user.role === 'User') : false;
+  const capabilities = user?.capabilities;
+  const isAdmin = user ? (
+    user.role === 'Администратор Wiki' ||
+    user.role === 'Admin' ||
+    !!capabilities?.can_manage_access ||
+    !!capabilities?.can_manage_structure ||
+    !!capabilities?.can_manage_users
+  ) : false;
+  const isEditor = user ? (
+    isAdmin ||
+    ['Коммерческий директор', 'Руководитель группы', 'Супервайзер', 'HR-менеджер', 'IT-специалист', 'Бухгалтер', 'Editor'].includes(user.role) ||
+    !!capabilities?.can_create ||
+    !!capabilities?.can_edit ||
+    !!capabilities?.can_publish ||
+    !!capabilities?.can_approve
+  ) : false;
+  const isUser = user ? (
+    user.role === 'Оператор' ||
+    user.role === 'User' ||
+    !!capabilities?.can_read
+  ) : false;
   const isStaff = isEditor;
 
   return (
