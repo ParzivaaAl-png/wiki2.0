@@ -1,30 +1,41 @@
 import * as React from 'react';
 import {
+  Briefcase,
+  Building2,
   Check,
+  Edit3,
   Eye,
   KeyRound,
   Layers,
   Loader2,
+  Plus,
   RefreshCw,
   Save,
-  SearchCheck,
   ShieldCheck,
+  Trash2,
   UserCog,
   Users,
+  X,
 } from 'lucide-react';
 import {
   AccessOverview,
   AccessOverviewUser,
-  EffectiveAccess,
+  createPosition,
+  deletePosition,
   fetchAccessOverview,
-  fetchEffectiveAccess,
+  Position,
   seedAccessDefaults,
+  updatePosition,
   updateUserWikiRoles,
   WikiCapabilities,
   WikiRole,
 } from '../lib/api';
 
-type AccessTab = 'matrix' | 'users' | 'check';
+type AccessTab = 'matrix' | 'users';
+
+type PositionModalState = {
+  position: Position | null;
+};
 
 const capabilityLabels: Array<{ key: keyof WikiCapabilities; label: string }> = [
   { key: 'can_read', label: 'Чтение' },
@@ -67,9 +78,17 @@ export default function AccessManagement() {
   const [isSavingRoles, setIsSavingRoles] = React.useState(false);
   const [selectedUserId, setSelectedUserId] = React.useState<number | null>(null);
   const [pendingRoleIds, setPendingRoleIds] = React.useState<number[]>([]);
-  const [effectiveAccess, setEffectiveAccess] = React.useState<EffectiveAccess | null>(null);
-  const [isCheckingAccess, setIsCheckingAccess] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [departmentFilterId, setDepartmentFilterId] = React.useState<string>('all');
+  const [positionModal, setPositionModal] = React.useState<PositionModalState | null>(null);
+  const [positionForm, setPositionForm] = React.useState({
+    name: '',
+    departmentId: '',
+    parentPositionId: '',
+    hierarchyLevel: 1,
+    status: 'Active',
+  });
+  const [isSavingPosition, setIsSavingPosition] = React.useState(false);
 
   const loadOverview = React.useCallback(async () => {
     setIsLoading(true);
@@ -97,33 +116,6 @@ export default function AccessManagement() {
     setPendingRoleIds(selected?.wiki_roles.map((role) => role.id) || []);
   }, [overview, selectedUserId]);
 
-  React.useEffect(() => {
-    if (!selectedUserId) {
-      setEffectiveAccess(null);
-      return;
-    }
-
-    let ignore = false;
-    setIsCheckingAccess(true);
-    fetchEffectiveAccess(selectedUserId)
-      .then((data) => {
-        if (!ignore) setEffectiveAccess(data);
-      })
-      .catch((err) => {
-        if (!ignore) {
-          console.error('Failed to calculate effective access:', err);
-          setEffectiveAccess(null);
-        }
-      })
-      .finally(() => {
-        if (!ignore) setIsCheckingAccess(false);
-      });
-
-    return () => {
-      ignore = true;
-    };
-  }, [selectedUserId]);
-
   const selectedUser = React.useMemo<AccessOverviewUser | null>(() => {
     if (!overview || !selectedUserId) return null;
     return overview.users.find((user) => user.id === selectedUserId) || null;
@@ -140,6 +132,78 @@ export default function AccessManagement() {
       (user.department_name || '').toLowerCase().includes(q)
     ));
   }, [overview, searchQuery]);
+
+  const positionsById = React.useMemo(() => (
+    new Map((overview?.positions || []).map((position) => [position.id, position]))
+  ), [overview]);
+
+  const filteredMatrixRows = React.useMemo(() => {
+    if (!overview) return [];
+    if (departmentFilterId === 'all') return overview.matrix;
+    const departmentId = Number(departmentFilterId);
+    return overview.matrix.filter((row) => positionsById.get(row.position_id)?.department_id === departmentId);
+  }, [departmentFilterId, overview, positionsById]);
+
+  const openPositionModal = (position: Position | null = null) => {
+    const fallbackDepartmentId = departmentFilterId !== 'all'
+      ? departmentFilterId
+      : String(position?.department_id || overview?.departments[0]?.id || '');
+
+    setPositionForm({
+      name: position?.name || '',
+      departmentId: String(position?.department_id || fallbackDepartmentId),
+      parentPositionId: position?.parent_position_id ? String(position.parent_position_id) : '',
+      hierarchyLevel: position?.hierarchy_level || 1,
+      status: position?.status || 'Active',
+    });
+    setPositionModal({ position });
+  };
+
+  const handleSavePosition = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!positionForm.name.trim() || !positionForm.departmentId) {
+      alert('Название должности и отдел обязательны.');
+      return;
+    }
+
+    setIsSavingPosition(true);
+    try {
+      const payload = {
+        name: positionForm.name.trim(),
+        department_id: Number(positionForm.departmentId),
+        parent_position_id: positionForm.parentPositionId ? Number(positionForm.parentPositionId) : null,
+        hierarchy_level: Number(positionForm.hierarchyLevel) || 1,
+        status: positionForm.status,
+      };
+
+      if (positionModal?.position) {
+        await updatePosition(positionModal.position.id, payload);
+      } else {
+        await createPosition(payload);
+      }
+
+      setPositionModal(null);
+      await loadOverview();
+    } catch (err: any) {
+      alert(err.message || 'Не удалось сохранить должность.');
+    } finally {
+      setIsSavingPosition(false);
+    }
+  };
+
+  const handleDeletePosition = async (position: Position) => {
+    if (!window.confirm(`Удалить должность "${position.name}"?`)) return;
+
+    setIsSavingPosition(true);
+    try {
+      await deletePosition(position.id);
+      await loadOverview();
+    } catch (err: any) {
+      alert(err.message || 'Не удалось удалить должность.');
+    } finally {
+      setIsSavingPosition(false);
+    }
+  };
 
   const handleSeedDefaults = async () => {
     setIsSeeding(true);
@@ -168,8 +232,6 @@ export default function AccessManagement() {
     try {
       await updateUserWikiRoles(selectedUserId, pendingRoleIds);
       await loadOverview();
-      const data = await fetchEffectiveAccess(selectedUserId);
-      setEffectiveAccess(data);
     } catch (err: any) {
       alert(err.message || 'Не удалось сохранить Wiki-роли пользователя.');
     } finally {
@@ -298,58 +360,116 @@ export default function AccessManagement() {
           <UserCog className="w-4 h-4" />
           Роли пользователей
         </button>
-        <button
-          onClick={() => setActiveTab('check')}
-          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors shrink-0 ${
-            activeTab === 'check' ? 'border-indigo-500 text-indigo-500' : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <SearchCheck className="w-4 h-4" />
-          Проверка доступа
-        </button>
       </div>
 
       {activeTab === 'matrix' && (
         <div className="border border-border bg-card text-card-foreground rounded-lg overflow-hidden">
+          <div className="p-4 border-b border-border bg-muted/20 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-indigo-500" />
+                <h3 className="font-bold text-sm text-foreground">Матрица должностей</h3>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Должности добавляются здесь и сразу привязываются к выбранному отделу.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <label className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
+                <Building2 className="w-4 h-4 text-muted-foreground" />
+                <select
+                  value={departmentFilterId}
+                  onChange={(event) => setDepartmentFilterId(event.target.value)}
+                  className="bg-transparent text-xs font-bold text-foreground outline-none"
+                >
+                  <option value="all">Все отделы</option>
+                  {overview.departments.map((department) => (
+                    <option key={department.id} value={department.id}>{department.name}</option>
+                  ))}
+                </select>
+              </label>
+              <button
+                onClick={() => openPositionModal(null)}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Должность
+              </button>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-border bg-muted/50 text-muted-foreground">
                   <th className="p-4 font-bold uppercase tracking-wider min-w-[220px]">Должность</th>
                   <th className="p-4 font-bold uppercase tracking-wider">Доступные разделы</th>
+                  <th className="p-4 font-bold uppercase tracking-wider text-right">Действия</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {overview.matrix.map((row) => (
-                  <tr key={row.position_id} className="hover:bg-muted/30 transition-colors">
-                    <td className="p-4 align-top">
-                      <div className="font-bold text-foreground">{row.position_name}</div>
-                      <div className="text-[10px] text-muted-foreground mt-1">{row.department_name || 'Отдел не указан'}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex flex-wrap gap-1.5">
-                        {row.sections.length === 0 ? (
-                          <span className="text-muted-foreground">Нет разделов</span>
-                        ) : (
-                          row.sections.map((section) => (
-                            <span
-                              key={`${row.position_id}-${section.id}`}
-                              className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-semibold ${
-                                section.visibility_scope === 'public'
-                                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
-                                  : 'border-border bg-muted text-muted-foreground'
-                              }`}
-                              title={section.space_name || ''}
-                            >
-                              <Eye className="w-3 h-3" />
-                              {section.name}
-                            </span>
-                          ))
-                        )}
-                      </div>
+                {filteredMatrixRows.map((row) => {
+                  const position = positionsById.get(row.position_id);
+                  return (
+                    <tr key={row.position_id} className="hover:bg-muted/30 transition-colors">
+                      <td className="p-4 align-top">
+                        <div className="font-bold text-foreground">{row.position_name}</div>
+                        <div className="text-[10px] text-muted-foreground mt-1">{row.department_name || 'Отдел не указан'}</div>
+                        <div className="text-[10px] text-muted-foreground mt-1">Уровень: {row.hierarchy_level}</div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex flex-wrap gap-1.5">
+                          {row.sections.length === 0 ? (
+                            <span className="text-muted-foreground">Нет разделов</span>
+                          ) : (
+                            row.sections.map((section) => (
+                              <span
+                                key={`${row.position_id}-${section.id}`}
+                                className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-semibold ${
+                                  section.visibility_scope === 'public'
+                                    ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+                                    : 'border-border bg-muted text-muted-foreground'
+                                }`}
+                                title={section.space_name || ''}
+                              >
+                                <Eye className="w-3 h-3" />
+                                {section.name}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4 align-top">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => position && openPositionModal(position)}
+                            disabled={!position}
+                            className="p-2 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 hover:bg-muted disabled:opacity-50 transition-colors"
+                            title="Редактировать должность"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => position && handleDeletePosition(position)}
+                            disabled={!position || isSavingPosition}
+                            className="p-2 rounded-lg border border-border text-muted-foreground hover:text-red-500 hover:bg-muted disabled:opacity-50 transition-colors"
+                            title="Удалить должность"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredMatrixRows.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="p-8 text-center text-xs text-muted-foreground">
+                      Для выбранного отдела должности не найдены.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -417,23 +537,40 @@ export default function AccessManagement() {
                 </div>
 
                 <div className="space-y-2">
-                  {overview.roles.map((role) => (
-                    <label
-                      key={role.id}
-                      className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/40 cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={pendingRoleIds.includes(role.id)}
-                        onChange={() => handleToggleRole(role.id)}
-                        className="mt-0.5 accent-indigo-600"
-                      />
-                      <span>
-                        <span className="block text-xs font-bold text-foreground">{role.name}</span>
-                        <span className="block text-[10px] text-muted-foreground mt-0.5">{role.description}</span>
-                      </span>
-                    </label>
-                  ))}
+                  {overview.roles.map((role) => {
+                    const isEnabled = pendingRoleIds.includes(role.id);
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        onClick={() => handleToggleRole(role.id)}
+                        className={`w-full flex items-center justify-between gap-4 p-3 rounded-lg border text-left transition-colors ${
+                          isEnabled
+                            ? 'border-indigo-500/30 bg-indigo-500/10'
+                            : 'border-border hover:bg-muted/40'
+                        }`}
+                      >
+                        <span>
+                          <span className="block text-xs font-bold text-foreground">{role.name}</span>
+                          <span className="block text-[10px] text-muted-foreground mt-0.5">{role.description}</span>
+                        </span>
+                        <span
+                          className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors ${
+                            isEnabled
+                              ? 'border-indigo-500 bg-indigo-600'
+                              : 'border-border bg-muted'
+                          }`}
+                          aria-hidden="true"
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                              isEnabled ? 'translate-x-5' : 'translate-x-1'
+                            }`}
+                          />
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <button
@@ -452,94 +589,106 @@ export default function AccessManagement() {
         </div>
       )}
 
-      {activeTab === 'check' && (
-        <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)] gap-4">
-          <div className="border border-border bg-card text-card-foreground rounded-lg p-4 h-fit">
-            <label className="block text-[10px] font-bold uppercase text-muted-foreground mb-2">Пользователь</label>
-            <select
-              value={selectedUserId || ''}
-              onChange={(event) => setSelectedUserId(Number(event.target.value))}
-              className="w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-xs outline-none focus:border-indigo-500"
-            >
-              {overview.users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name} · {user.role}
-                </option>
-              ))}
-            </select>
-
-            <div className="mt-4 p-3 rounded-lg bg-muted/40 border border-border">
-              <div className="text-[10px] font-bold uppercase text-muted-foreground">Итог</div>
-              <div className="text-2xl font-bold text-foreground mt-1">
-                {isCheckingAccess ? '...' : effectiveAccess?.section_count || 0}
+      {positionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
+          <form onSubmit={handleSavePosition} className="w-full max-w-lg rounded-xl border border-border bg-card text-card-foreground p-6 shadow-2xl">
+            <div className="flex items-center justify-between gap-3 mb-5">
+              <div>
+                <h3 className="text-lg font-extrabold text-foreground">
+                  {positionModal.position ? 'Редактировать должность' : 'Добавить должность'}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">Должность создаётся для конкретного отдела.</p>
               </div>
-              <div className="text-[10px] text-muted-foreground mt-1">доступных разделов</div>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="border border-border bg-card text-card-foreground rounded-lg p-4">
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <h3 className="font-bold text-sm text-foreground">Эффективные права</h3>
-                {isCheckingAccess && <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {effectiveAccess ? (
-                  capabilityLabels.map((item) => {
-                    const isActive = effectiveAccess.capabilities[item.key];
-                    return (
-                      <span
-                        key={item.key}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded border text-[10px] font-bold ${
-                          isActive
-                            ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
-                            : 'border-border bg-muted text-muted-foreground opacity-60'
-                        }`}
-                      >
-                        <Check className="w-3 h-3" />
-                        {item.label}
-                      </span>
-                    );
-                  })
-                ) : (
-                  <span className="text-xs text-muted-foreground">Нет данных для проверки.</span>
-                )}
-              </div>
+              <button type="button" onClick={() => setPositionModal(null)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <div className="border border-border bg-card text-card-foreground rounded-lg overflow-hidden">
-              <div className="p-4 border-b border-border">
-                <h3 className="font-bold text-sm text-foreground">Разделы пользователя</h3>
-              </div>
-              <div className="divide-y divide-border max-h-[520px] overflow-y-auto">
-                {effectiveAccess?.sections.length ? (
-                  effectiveAccess.sections.map((section) => (
-                    <div key={section.id} className="p-4 flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-bold text-sm text-foreground">{section.name}</div>
-                        <div className="text-[10px] text-muted-foreground mt-1">
-                          {section.space_name || 'Без пространства'} · {section.owner_name ? `Владелец: ${section.owner_name}` : 'Владелец не назначен'}
-                        </div>
-                      </div>
-                      <span className={`shrink-0 text-[10px] px-2 py-1 rounded border font-bold ${
-                        section.visibility_scope === 'public'
-                          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
-                          : 'border-border bg-muted text-muted-foreground'
-                      }`}>
-                        {section.visibility_scope === 'public' ? 'Общий' : 'Ограничен'}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-8 text-center text-xs text-muted-foreground">
-                    Доступные разделы не найдены.
-                  </div>
-                )}
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">Название должности</span>
+                <input
+                  value={positionForm.name}
+                  onChange={(event) => setPositionForm((prev) => ({ ...prev, name: event.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                />
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground">Отдел</span>
+                  <select
+                    value={positionForm.departmentId}
+                    onChange={(event) => setPositionForm((prev) => ({
+                      ...prev,
+                      departmentId: event.target.value,
+                      parentPositionId: '',
+                    }))}
+                    className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  >
+                    {overview.departments.map((department) => (
+                      <option key={department.id} value={department.id}>{department.name}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground">Подчиняется</span>
+                  <select
+                    value={positionForm.parentPositionId}
+                    onChange={(event) => setPositionForm((prev) => ({ ...prev, parentPositionId: event.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  >
+                    <option value="">Нет</option>
+                    {overview.positions
+                      .filter((position) => (
+                        position.id !== positionModal.position?.id &&
+                        (!positionForm.departmentId || position.department_id === Number(positionForm.departmentId))
+                      ))
+                      .map((position) => (
+                        <option key={position.id} value={position.id}>{position.name}</option>
+                      ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground">Уровень</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={positionForm.hierarchyLevel}
+                    onChange={(event) => setPositionForm((prev) => ({ ...prev, hierarchyLevel: Number(event.target.value) }))}
+                    className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground">Статус</span>
+                  <select
+                    value={positionForm.status}
+                    onChange={(event) => setPositionForm((prev) => ({ ...prev, status: event.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  >
+                    <option value="Active">Активна</option>
+                    <option value="Inactive">Неактивна</option>
+                  </select>
+                </label>
               </div>
             </div>
-          </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button type="button" onClick={() => setPositionModal(null)} className="px-4 py-2 rounded-lg border border-border hover:bg-muted text-xs font-bold">
+                Отмена
+              </button>
+              <button disabled={isSavingPosition} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold disabled:opacity-60">
+                {isSavingPosition && <Loader2 className="w-4 h-4 animate-spin" />}
+                Сохранить
+              </button>
+            </div>
+          </form>
         </div>
       )}
+
     </div>
   );
 }

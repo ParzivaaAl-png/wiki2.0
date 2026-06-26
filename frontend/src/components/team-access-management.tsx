@@ -49,6 +49,7 @@ import {
 import AccessManagement from './access-management';
 import GuestManagement from './guest-management';
 import SessionManagement from './session-management';
+import { useAuth } from '../lib/auth-context';
 
 type TeamTab = 'org' | 'access' | 'sessions' | 'guest';
 
@@ -97,6 +98,7 @@ const readSettled = <T,>(result: PromiseSettledResult<T>, fallback: T) => (
 );
 
 export default function TeamAccessManagement() {
+  const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = React.useState<TeamTab>('org');
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -188,6 +190,9 @@ export default function TeamAccessManagement() {
     });
     return map;
   }, [users]);
+  const legacyAccounts = React.useMemo(() => (
+    users.filter((account) => !account.employee_id)
+  ), [users]);
   const accessUsersById = React.useMemo(() => (
     new Map((accessOverview?.users || []).map((user) => [user.id, user]))
   ), [accessOverview]);
@@ -219,8 +224,10 @@ export default function TeamAccessManagement() {
     activeEmployees: employees.filter((employee) => employee.is_active).length,
     accounts: users.length,
     linkedAccounts: users.filter((user) => user.employee_id).length,
+    legacyAccounts: legacyAccounts.length,
+    inactiveAccounts: users.filter((user) => user.is_blocked).length,
     guestAccessCount,
-  }), [departments.length, employees, guestAccessCount, positions.length, users]);
+  }), [departments.length, employees, guestAccessCount, legacyAccounts.length, positions.length, users]);
 
   function employeeMatchesQuery(employee: Employee, query: string) {
     const account = usersByEmployeeId.get(employee.id);
@@ -290,6 +297,24 @@ export default function TeamAccessManagement() {
       status: position?.status || 'Active',
     });
     setPositionModal({ position, defaultDepartmentId });
+  };
+
+  const openEmployeeFromLegacyAccount = (account: User) => {
+    setEmployeeForm({
+      fullName: account.name || account.username,
+      email: account.username.includes('@') ? account.username : '',
+      departmentId: '',
+      positionId: '',
+      managerId: '',
+      isActive: !account.is_blocked,
+      accountEnabled: true,
+      accountId: account.id,
+      username: account.username,
+      password: '',
+      systemRole: account.role || 'Оператор',
+      isBlocked: account.is_blocked,
+    });
+    setEmployeeModal({ employee: null, defaultDepartmentId: null });
   };
 
   const handleEmployeeDepartmentChange = (departmentId: string) => {
@@ -393,6 +418,11 @@ export default function TeamAccessManagement() {
     }
 
     if (employeeForm.accountEnabled) {
+      if (!employeeForm.departmentId) {
+        alert('Аккаунт можно создать только для сотрудника, который находится внутри отдела.');
+        return;
+      }
+
       if (!employeeForm.username.trim()) {
         alert('Логин аккаунта обязателен.');
         return;
@@ -424,6 +454,7 @@ export default function TeamAccessManagement() {
         : null;
 
       if (employeeForm.accountEnabled) {
+        const nextAccountBlockedState = employeeForm.isBlocked || !employeeForm.isActive;
         if (currentAccount) {
           await adminUpdateUser(currentAccount.id, {
             username: employeeForm.username.trim(),
@@ -436,18 +467,23 @@ export default function TeamAccessManagement() {
             await adminChangeRole(currentAccount.id, employeeForm.systemRole);
           }
 
-          if (currentAccount.is_blocked !== employeeForm.isBlocked) {
-            await adminToggleBlock(currentAccount.id, employeeForm.isBlocked);
+          if (currentAccount.is_blocked !== nextAccountBlockedState) {
+            await adminToggleBlock(currentAccount.id, nextAccountBlockedState);
           }
         } else {
-          await adminCreateUser({
+          const createdAccount = await adminCreateUser({
             username: employeeForm.username.trim(),
             name: employeeForm.fullName.trim(),
             password: employeeForm.password,
             role: employeeForm.systemRole,
             employee_id: savedEmployee.id,
           });
+          if (nextAccountBlockedState) {
+            await adminToggleBlock(createdAccount.id, true);
+          }
         }
+      } else if (currentAccount && !currentAccount.is_blocked) {
+        await adminToggleBlock(currentAccount.id, true);
       }
 
       setEmployeeModal(null);
@@ -496,6 +532,59 @@ export default function TeamAccessManagement() {
       await loadData();
     } catch (err: any) {
       alert(err.message || 'Не удалось удалить аккаунт.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeactivateLegacyAccount = async (account: User) => {
+    if (account.id === currentUser?.id) {
+      alert('Текущий администратор защищён от деактивации.');
+      return;
+    }
+    if (account.is_blocked) return;
+    if (!window.confirm(`Деактивировать архивный аккаунт "${account.username}"?`)) return;
+
+    setIsSaving(true);
+    try {
+      await adminToggleBlock(account.id, true);
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'Не удалось деактивировать аккаунт.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteLegacyAccount = async (account: User) => {
+    if (account.id === currentUser?.id) {
+      alert('Текущий администратор защищён от удаления.');
+      return;
+    }
+    if (!window.confirm(`Удалить старый аккаунт "${account.username}"? Это действие нельзя отменить.`)) return;
+
+    setIsSaving(true);
+    try {
+      await adminDeleteUser(account.id);
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'Не удалось удалить аккаунт.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeactivateAllLegacyAccounts = async () => {
+    const targets = legacyAccounts.filter((account) => account.id !== currentUser?.id && !account.is_blocked);
+    if (targets.length === 0) return;
+    if (!window.confirm(`Деактивировать старые аккаунты без сотрудника: ${targets.length}?`)) return;
+
+    setIsSaving(true);
+    try {
+      await Promise.all(targets.map((account) => adminToggleBlock(account.id, true)));
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'Не удалось деактивировать архивные аккаунты.');
     } finally {
       setIsSaving(false);
     }
@@ -664,13 +753,6 @@ export default function TeamAccessManagement() {
               Сотрудник
             </button>
             <button
-              onClick={() => openPositionModal(null, department.id)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border hover:bg-muted text-xs font-bold transition-colors"
-            >
-              <Briefcase className="w-3.5 h-3.5" />
-              Должность
-            </button>
-            <button
               onClick={() => openDepartmentModal(department)}
               className="p-2 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 hover:bg-muted transition-colors"
               title="Редактировать отдел"
@@ -697,12 +779,6 @@ export default function TeamAccessManagement() {
                     >
                       <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
                       {position.name}
-                      <button onClick={() => openPositionModal(position, department.id)} className="text-muted-foreground hover:text-indigo-500">
-                        <Edit3 className="w-3 h-3" />
-                      </button>
-                      <button onClick={() => handleDeletePosition(position)} className="text-muted-foreground hover:text-red-500">
-                        <Trash2 className="w-3 h-3" />
-                      </button>
                     </span>
                   ))
                 )}
@@ -745,13 +821,101 @@ export default function TeamAccessManagement() {
     );
   };
 
+  const renderLegacyAccounts = () => {
+    if (legacyAccounts.length === 0) return null;
+    const activeLegacyAccounts = legacyAccounts.filter((account) => !account.is_blocked && account.id !== currentUser?.id);
+
+    return (
+      <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 text-card-foreground overflow-hidden">
+        <div className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <CircleOff className="w-4 h-4 text-amber-500" />
+              <h3 className="font-extrabold text-foreground">Архивные аккаунты</h3>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Старые аккаунты без карточки сотрудника. Их можно привязать к сотруднику, деактивировать или удалить.
+            </p>
+          </div>
+
+          {activeLegacyAccounts.length > 0 && (
+            <button
+              onClick={handleDeactivateAllLegacyAccounts}
+              disabled={isSaving}
+              className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/15 text-xs font-bold disabled:opacity-60"
+            >
+              <CircleOff className="w-4 h-4" />
+              Деактивировать старые
+            </button>
+          )}
+        </div>
+
+        <div className="border-t border-amber-500/20 divide-y divide-border">
+          {legacyAccounts.map((account) => {
+            const isCurrentUser = account.id === currentUser?.id;
+            return (
+              <div key={account.id} className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-sm text-foreground">{account.name}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${
+                      account.is_blocked
+                        ? 'border-neutral-500/25 bg-neutral-500/10 text-neutral-500'
+                        : 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                    }`}>
+                      {account.is_blocked ? 'Деактивирован' : 'Старый аккаунт'}
+                    </span>
+                    {isCurrentUser && (
+                      <span className="text-[10px] px-2 py-0.5 rounded border border-indigo-500/25 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-bold">
+                        Текущий админ
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1">
+                    {account.username} · {account.role}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => openEmployeeFromLegacyAccount(account)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-xs font-bold transition-colors"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    Привязать к сотруднику
+                  </button>
+                  <button
+                    onClick={() => handleDeactivateLegacyAccount(account)}
+                    disabled={isSaving || account.is_blocked || isCurrentUser}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-xs font-bold disabled:opacity-50 transition-colors"
+                  >
+                    <CircleOff className="w-3.5 h-3.5" />
+                    Деактивировать
+                  </button>
+                  <button
+                    onClick={() => handleDeleteLegacyAccount(account)}
+                    disabled={isSaving || isCurrentUser}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-300 hover:bg-red-500/15 text-xs font-bold disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Удалить
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-extrabold text-foreground font-outfit">Команда и доступ</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Сотрудники создаются в оргструктуре, аккаунт и должность редактируются прямо в карточке сотрудника.
+            Сотрудники и аккаунты создаются внутри отделов, должности редактируются в матрице доступа.
           </p>
         </div>
 
@@ -788,7 +952,9 @@ export default function TeamAccessManagement() {
             Аккаунты
           </div>
           <div className="mt-2 text-2xl font-bold text-foreground">{stats.accounts}</div>
-          <div className="text-[10px] text-muted-foreground mt-1">{stats.linkedAccounts} привязаны к сотрудникам</div>
+          <div className="text-[10px] text-muted-foreground mt-1">
+            {stats.linkedAccounts} привязаны · {stats.legacyAccounts} архивных
+          </div>
         </div>
         <div className="p-4 rounded-lg border border-border bg-card text-card-foreground">
           <div className="flex items-center gap-2 text-[10px] uppercase font-bold text-muted-foreground">
@@ -842,13 +1008,9 @@ export default function TeamAccessManagement() {
                 <Building2 className="w-3.5 h-3.5" />
                 Добавить отдел
               </button>
-              <button
-                onClick={() => openEmployeeModal(null)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Добавить сотрудника
-              </button>
+              <span className="text-[11px] text-muted-foreground">
+                Сотрудники добавляются внутри нужного отдела.
+              </span>
             </div>
           </div>
 
@@ -861,7 +1023,8 @@ export default function TeamAccessManagement() {
             <div className="space-y-3">
               {visibleDepartments.map(renderDepartmentCard)}
               {renderUnassignedEmployees()}
-              {visibleDepartments.length === 0 && unassignedEmployees.length === 0 && (
+              {renderLegacyAccounts()}
+              {visibleDepartments.length === 0 && unassignedEmployees.length === 0 && legacyAccounts.length === 0 && (
                 <div className="p-8 text-center border border-border bg-card text-card-foreground rounded-lg text-xs text-muted-foreground">
                   Ничего не найдено.
                 </div>
@@ -1147,6 +1310,7 @@ export default function TeamAccessManagement() {
                     <input
                       type="checkbox"
                       checked={employeeForm.accountEnabled}
+                      disabled={!employeeForm.departmentId}
                       onChange={(event) => setEmployeeForm((prev) => ({ ...prev, accountEnabled: event.target.checked }))}
                       className="accent-indigo-600"
                     />
