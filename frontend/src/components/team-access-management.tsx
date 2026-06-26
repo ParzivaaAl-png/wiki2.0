@@ -2,7 +2,6 @@ import * as React from 'react';
 import {
   Briefcase,
   Building2,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
   CircleOff,
@@ -253,6 +252,33 @@ export default function TeamAccessManagement() {
     );
   }
 
+  const getEligibleManagers = React.useCallback((
+    departmentId: string,
+    positionId: string,
+    excludedEmployeeId?: number
+  ) => {
+    const selectedDepartmentId = departmentId ? Number(departmentId) : null;
+    const selectedPosition = positionId ? positionsById.get(Number(positionId)) : null;
+    const selectedLevel = Number(selectedPosition?.hierarchy_level || 0);
+
+    if (!selectedDepartmentId || !selectedPosition || !selectedLevel) return [];
+
+    return employees.filter((employee) => {
+      if (employee.id === excludedEmployeeId) return false;
+      if (!employee.is_active) return false;
+      if (employee.department_id !== selectedDepartmentId) return false;
+
+      const managerPosition = employee.position_id ? positionsById.get(employee.position_id) : null;
+      if (!managerPosition) return false;
+
+      return Number(managerPosition.hierarchy_level || 999) < selectedLevel;
+    });
+  }, [employees, positionsById]);
+
+  const managerCandidates = React.useMemo(() => (
+    getEligibleManagers(employeeForm.departmentId, employeeForm.positionId, employeeModal?.employee?.id)
+  ), [employeeForm.departmentId, employeeForm.positionId, employeeModal?.employee?.id, getEligibleManagers]);
+
   const toggleDepartment = (id: number | 'none') => {
     setExpandedDepartmentIds((prev) => {
       const next = new Set(prev);
@@ -268,13 +294,19 @@ export default function TeamAccessManagement() {
     const departmentPositions = positions.filter((position) => position.department_id === departmentId);
     const positionId = employee?.position_id || departmentPositions[0]?.id || null;
     const shouldCreateAccount = Boolean(departmentId) && !account;
+    const initialDepartmentId = departmentId ? String(departmentId) : '';
+    const initialPositionId = positionId ? String(positionId) : '';
+    const eligibleManagers = getEligibleManagers(initialDepartmentId, initialPositionId, employee?.id);
+    const managerId = employee?.manager_id && eligibleManagers.some((manager) => manager.id === employee.manager_id)
+      ? String(employee.manager_id)
+      : '';
 
     setEmployeeForm({
       fullName: employee?.full_name || '',
       email: employee?.email || '',
-      departmentId: departmentId ? String(departmentId) : '',
-      positionId: positionId ? String(positionId) : '',
-      managerId: employee?.manager_id ? String(employee.manager_id) : '',
+      departmentId: initialDepartmentId,
+      positionId: initialPositionId,
+      managerId,
       isActive: employee?.is_active ?? true,
       accountEnabled: Boolean(account) || shouldCreateAccount,
       accountId: account?.id || null,
@@ -333,13 +365,28 @@ export default function TeamAccessManagement() {
       ? employeeForm.positionId
       : (nextDepartmentPositions[0]?.id ? String(nextDepartmentPositions[0].id) : '');
 
-    setEmployeeForm((prev) => ({
-      ...prev,
-      departmentId,
-      positionId: nextPositionId,
-      accountEnabled: departmentId ? (prev.accountEnabled || !prev.accountId) : false,
-      password: departmentId && !prev.accountId && !prev.password ? generateTemporaryPassword() : prev.password,
-    }));
+    setEmployeeForm((prev) => {
+      const eligibleManagers = getEligibleManagers(departmentId, nextPositionId, employeeModal?.employee?.id);
+      return {
+        ...prev,
+        departmentId,
+        positionId: nextPositionId,
+        managerId: eligibleManagers.some((manager) => manager.id === Number(prev.managerId)) ? prev.managerId : '',
+        accountEnabled: departmentId ? (prev.accountEnabled || !prev.accountId) : false,
+        password: departmentId && !prev.accountId && !prev.password ? generateTemporaryPassword() : prev.password,
+      };
+    });
+  };
+
+  const handleEmployeePositionChange = (positionId: string) => {
+    setEmployeeForm((prev) => {
+      const eligibleManagers = getEligibleManagers(prev.departmentId, positionId, employeeModal?.employee?.id);
+      return {
+        ...prev,
+        positionId,
+        managerId: eligibleManagers.some((manager) => manager.id === Number(prev.managerId)) ? prev.managerId : '',
+      };
+    });
   };
 
   const handleSaveDepartment = async (event: React.FormEvent) => {
@@ -440,6 +487,17 @@ export default function TeamAccessManagement() {
 
       if (!employeeForm.accountId && employeeForm.password.length < 6) {
         alert('Для нового аккаунта нужен пароль минимум 6 символов.');
+        return;
+      }
+    }
+
+    if (employeeForm.managerId) {
+      const allowedManagerIds = new Set(
+        getEligibleManagers(employeeForm.departmentId, employeeForm.positionId, employeeModal?.employee?.id)
+          .map((manager) => manager.id)
+      );
+      if (!allowedManagerIds.has(Number(employeeForm.managerId))) {
+        alert('Руководитель должен быть выше по иерархии должностей и находиться в том же отделе.');
         return;
       }
     }
@@ -598,7 +656,6 @@ export default function TeamAccessManagement() {
             <tr className="bg-muted/50 text-muted-foreground border-b border-border">
               <th className="p-3 font-bold uppercase tracking-wider min-w-[220px]">Сотрудник</th>
               <th className="p-3 font-bold uppercase tracking-wider">Должность</th>
-              <th className="p-3 font-bold uppercase tracking-wider">Аккаунт</th>
               <th className="p-3 font-bold uppercase tracking-wider">Wiki-роли</th>
               <th className="p-3 font-bold uppercase tracking-wider">Статус</th>
               <th className="p-3 font-bold uppercase tracking-wider text-right">Действия</th>
@@ -621,22 +678,6 @@ export default function TeamAccessManagement() {
                   <td className="p-3 align-top">
                     <div className="font-semibold text-foreground">{position?.name || 'Не указана'}</div>
                     <div className="text-[10px] text-muted-foreground mt-1">Руководитель: {manager?.full_name || 'Не указан'}</div>
-                  </td>
-                  <td className="p-3 align-top">
-                    {account ? (
-                      <div className="space-y-1">
-                        <span className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 font-bold">
-                          <CheckCircle2 className="w-3 h-3" />
-                          {account.username}
-                        </span>
-                        <div className="text-[10px] text-muted-foreground">{account.role}</div>
-                      </div>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded border border-border bg-muted text-muted-foreground font-bold">
-                        <CircleOff className="w-3 h-3" />
-                        Аккаунт не создан
-                      </span>
-                    )}
                   </td>
                   <td className="p-3 align-top">
                     <div className="flex flex-wrap gap-1.5">
@@ -1243,7 +1284,7 @@ export default function TeamAccessManagement() {
                     <span className="text-[10px] font-bold uppercase text-muted-foreground">Должность</span>
                     <select
                       value={employeeForm.positionId}
-                      onChange={(event) => setEmployeeForm((prev) => ({ ...prev, positionId: event.target.value }))}
+                      onChange={(event) => handleEmployeePositionChange(event.target.value)}
                       className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
                     >
                       <option value="">Не указана</option>
@@ -1262,12 +1303,20 @@ export default function TeamAccessManagement() {
                       className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
                     >
                       <option value="">Не указан</option>
-                      {employees
-                        .filter((employee) => employee.id !== employeeModal.employee?.id)
-                        .map((employee) => (
-                          <option key={employee.id} value={employee.id}>{employee.full_name}</option>
-                        ))}
+                      {managerCandidates.map((manager) => {
+                        const managerPosition = manager.position_id ? positionsById.get(manager.position_id) : null;
+                        return (
+                          <option key={manager.id} value={manager.id}>
+                            {manager.full_name}{managerPosition ? ` · ${managerPosition.name}` : ''}
+                          </option>
+                        );
+                      })}
                     </select>
+                    {employeeForm.positionId && managerCandidates.length === 0 && (
+                      <span className="mt-1 block text-[10px] text-muted-foreground">
+                        Для этой должности нет руководителя выше по иерархии в выбранном отделе.
+                      </span>
+                    )}
                   </label>
                   <label className="block">
                     <span className="text-[10px] font-bold uppercase text-muted-foreground">Статус сотрудника</span>
@@ -1289,19 +1338,9 @@ export default function TeamAccessManagement() {
                     <UserCog className="w-4 h-4 text-sky-500" />
                     <div>
                       <h4 className="font-bold text-sm text-foreground">Аккаунт</h4>
-                      <p className="text-[11px] text-muted-foreground">Аккаунт создаётся автоматически для сотрудника внутри отдела.</p>
+                      <p className="text-[11px] text-muted-foreground">Логин и временный пароль для входа сотрудника.</p>
                     </div>
                   </div>
-                  <label className="inline-flex items-center gap-2 text-xs font-bold text-foreground">
-                    <input
-                      type="checkbox"
-                      checked={employeeForm.accountEnabled}
-                      disabled
-                      onChange={() => undefined}
-                      className="accent-indigo-600"
-                    />
-                    Аккаунт создаётся автоматически
-                  </label>
                 </div>
 
                 {!employeeForm.departmentId && (
