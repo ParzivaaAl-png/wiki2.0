@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
 import * as fs from 'fs';
+import * as path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import * as ArticleModel from '../models/article';
 import * as msService from '../services/meilisearch';
 import { parseDocument } from '../services/parser';
@@ -7,6 +10,8 @@ import { AuthenticatedRequest } from '../middleware/auth';
 import { query } from '../config/db';
 import { getUserAllowedSections } from '../models/orgStructure';
 import { canCreateInSections, canEditArticle, getUserCapabilities } from '../services/accessControl';
+
+const execFileAsync = promisify(execFile);
 
 // Получение списка разрешенных разделов для запроса
 const getAllowedSectionsForRequest = async (req: Request): Promise<number[]> => {
@@ -774,6 +779,47 @@ export const reindexAndClearCache = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error clearing cache/syncing Meilisearch:', error);
     res.status(500).json({ error: 'Failed to reindex', details: error.message });
+  }
+};
+
+export const seedSectionArticles = async (req: Request, res: Response) => {
+  try {
+    const scriptPath = path.join(__dirname, '../scripts/seedSectionArticles.js');
+    const { stdout, stderr } = await execFileAsync(process.execPath, [scriptPath], {
+      env: {
+        ...process.env,
+        CONFIRM_SECTION_ARTICLES: 'true',
+      },
+      timeout: 120000,
+      maxBuffer: 1024 * 1024,
+    });
+
+    const jsonLine = stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .find((line) => line.startsWith('{') && line.endsWith('}'));
+
+    let result = null;
+    if (jsonLine) {
+      try {
+        result = JSON.parse(jsonLine);
+      } catch (parseError) {
+        console.warn('Failed to parse section seed output:', parseError);
+      }
+    }
+
+    res.json({
+      message: 'Section demo articles seeded successfully.',
+      result,
+      warning: stderr.trim() || undefined,
+    });
+  } catch (error: any) {
+    console.error('Failed to seed section articles:', error);
+    res.status(500).json({
+      error: 'Failed to seed section articles',
+      details: error.stderr || error.message,
+    });
   }
 };
 

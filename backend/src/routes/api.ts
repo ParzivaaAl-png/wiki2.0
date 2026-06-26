@@ -130,6 +130,7 @@ router.delete('/admin/sessions/:id', requireAuth, requireRole(['Admin']), authCo
 router.put('/admin/users/:id', requireAuth, requireRole(['Admin']), authController.updateUserByAdmin);
 router.get('/admin/users/:id/history', requireAuth, requireRole(['Admin']), authController.getUserHistory);
 router.post('/admin/clear-cache', requireAuth, requireRole(['Admin']), articlesController.reindexAndClearCache);
+router.post('/admin/seed-section-articles', requireAuth, requireRole(['Admin']), articlesController.seedSectionArticles);
 router.get('/admin/analytics', requireAuth, requireRole(['Admin']), analyticsController.getAnalyticsReport);
 
 // Org Structure CRUD Routes (Admin only)
