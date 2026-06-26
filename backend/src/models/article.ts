@@ -61,14 +61,20 @@ export const getAllArticles = async (options: {
     conditions.push(`a.published = true`);
   }
 
-  if (options.authorId) {
+  if (options.allowedStatuses && options.allowedStatuses.length > 0) {
+    const statusParam = paramIndex++;
+    params.push(options.allowedStatuses);
+
+    if (options.authorId) {
+      const authorParam = paramIndex++;
+      params.push(options.authorId);
+      conditions.push(`(a.status = ANY($${statusParam}) OR a.author_id = $${authorParam})`);
+    } else {
+      conditions.push(`a.status = ANY($${statusParam})`);
+    }
+  } else if (options.authorId) {
     conditions.push(`a.author_id = $${paramIndex++}`);
     params.push(options.authorId);
-  }
-
-  if (options.allowedStatuses && options.allowedStatuses.length > 0) {
-    conditions.push(`a.status = ANY($${paramIndex++})`);
-    params.push(options.allowedStatuses);
   }
 
   if (options.allowedSectionIds) {

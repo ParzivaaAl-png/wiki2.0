@@ -6,7 +6,7 @@ import { parseDocument } from '../services/parser';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { query } from '../config/db';
 import { getUserAllowedSections } from '../models/orgStructure';
-import { canCreateInSections, canEditArticle } from '../services/accessControl';
+import { canCreateInSections, canEditArticle, getUserCapabilities } from '../services/accessControl';
 
 // Получение списка разрешенных разделов для запроса
 const getAllowedSectionsForRequest = async (req: Request): Promise<number[]> => {
@@ -26,11 +26,23 @@ export const getArticles = async (req: Request, res: Response) => {
     const employeeId = authReq.user ? authReq.user.employee_id : null;
 
     const allowedSectionIds = await getUserAllowedSections(employeeId, role, userId);
+    const { capabilities } = await getUserCapabilities(userId || null, role);
+    const canManageCatalog =
+      !!authReq.user &&
+      (capabilities.can_manage_access || capabilities.can_manage_structure || capabilities.can_manage_users);
+    const canEditCatalog =
+      !!authReq.user &&
+      (canManageCatalog ||
+        capabilities.can_create ||
+        capabilities.can_edit ||
+        capabilities.can_publish ||
+        capabilities.can_approve);
+    const includeHidden = all === 'true' && canEditCatalog;
 
     let allowedStatuses = ['published', 'requires_verification'];
-    if (role === 'Admin') {
+    if (canManageCatalog) {
       allowedStatuses = ['draft', 'on_approval', 'published', 'requires_verification', 'archived', 'expired'];
-    } else if (role === 'Editor') {
+    } else if (canEditCatalog) {
       allowedStatuses = ['published', 'requires_verification', 'archived', 'expired'];
     }
 
@@ -107,12 +119,12 @@ export const getArticles = async (req: Request, res: Response) => {
       articles = resData.rows;
     } else {
       articles = await ArticleModel.getAllArticles({
-        publishedOnly: all === 'true' ? false : true,
+        publishedOnly: !includeHidden,
         tag: tag as string,
-        all: all === 'true',
+        all: includeHidden,
         allowedSectionIds,
         allowedStatuses,
-        authorId: userId
+        authorId: canEditCatalog ? userId : undefined
       });
     }
     
