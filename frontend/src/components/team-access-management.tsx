@@ -98,6 +98,12 @@ const readSettled = <T,>(result: PromiseSettledResult<T>, fallback: T) => (
   result.status === 'fulfilled' ? result.value : fallback
 );
 
+const generateTemporaryPassword = () => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const chars = Array.from({ length: 10 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]);
+  return `Wiki-${chars.join('')}`;
+};
+
 export default function TeamAccessManagement() {
   const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = React.useState<TeamTab>('org');
@@ -261,6 +267,7 @@ export default function TeamAccessManagement() {
     const departmentId = employee?.department_id ?? defaultDepartmentId ?? null;
     const departmentPositions = positions.filter((position) => position.department_id === departmentId);
     const positionId = employee?.position_id || departmentPositions[0]?.id || null;
+    const shouldCreateAccount = Boolean(departmentId) && !account;
 
     setEmployeeForm({
       fullName: employee?.full_name || '',
@@ -269,10 +276,10 @@ export default function TeamAccessManagement() {
       positionId: positionId ? String(positionId) : '',
       managerId: employee?.manager_id ? String(employee.manager_id) : '',
       isActive: employee?.is_active ?? true,
-      accountEnabled: Boolean(account),
+      accountEnabled: Boolean(account) || shouldCreateAccount,
       accountId: account?.id || null,
       username: account?.username || employee?.email || '',
-      password: '',
+      password: shouldCreateAccount ? generateTemporaryPassword() : '',
       systemRole: account?.role || 'Оператор',
       isBlocked: account?.is_blocked || false,
     });
@@ -330,6 +337,8 @@ export default function TeamAccessManagement() {
       ...prev,
       departmentId,
       positionId: nextPositionId,
+      accountEnabled: departmentId ? (prev.accountEnabled || !prev.accountId) : false,
+      password: departmentId && !prev.accountId && !prev.password ? generateTemporaryPassword() : prev.password,
     }));
   };
 
@@ -625,7 +634,7 @@ export default function TeamAccessManagement() {
                     ) : (
                       <span className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded border border-border bg-muted text-muted-foreground font-bold">
                         <CircleOff className="w-3 h-3" />
-                        Нет аккаунта
+                        Аккаунт не создан
                       </span>
                     )}
                   </td>
@@ -1280,20 +1289,26 @@ export default function TeamAccessManagement() {
                     <UserCog className="w-4 h-4 text-sky-500" />
                     <div>
                       <h4 className="font-bold text-sm text-foreground">Аккаунт</h4>
-                      <p className="text-[11px] text-muted-foreground">Логин и пароль редактируются здесь же, внутри сотрудника.</p>
+                      <p className="text-[11px] text-muted-foreground">Аккаунт создаётся автоматически для сотрудника внутри отдела.</p>
                     </div>
                   </div>
                   <label className="inline-flex items-center gap-2 text-xs font-bold text-foreground">
                     <input
                       type="checkbox"
                       checked={employeeForm.accountEnabled}
-                      disabled={!employeeForm.departmentId}
-                      onChange={(event) => setEmployeeForm((prev) => ({ ...prev, accountEnabled: event.target.checked }))}
+                      disabled
+                      onChange={() => undefined}
                       className="accent-indigo-600"
                     />
-                    Аккаунт нужен
+                    Аккаунт создаётся автоматически
                   </label>
                 </div>
+
+                {!employeeForm.departmentId && (
+                  <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+                    Сначала выберите отдел: аккаунты создаются только для сотрудников внутри отдела.
+                  </div>
+                )}
 
                 {employeeForm.accountEnabled && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1309,13 +1324,25 @@ export default function TeamAccessManagement() {
                       <span className="text-[10px] font-bold uppercase text-muted-foreground">
                         {employeeForm.accountId ? 'Новый пароль' : 'Пароль'}
                       </span>
-                      <input
-                        type="password"
-                        value={employeeForm.password}
-                        onChange={(event) => setEmployeeForm((prev) => ({ ...prev, password: event.target.value }))}
-                        placeholder={employeeForm.accountId ? 'Оставьте пустым, если не меняете' : 'Минимум 6 символов'}
-                        className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500 placeholder-muted-foreground"
-                      />
+                      <div className="mt-1 flex gap-2">
+                        <input
+                          type={employeeForm.accountId ? 'password' : 'text'}
+                          value={employeeForm.password}
+                          onChange={(event) => setEmployeeForm((prev) => ({ ...prev, password: event.target.value }))}
+                          placeholder={employeeForm.accountId ? 'Оставьте пустым, если не меняете' : 'Минимум 6 символов'}
+                          className="w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500 placeholder-muted-foreground"
+                        />
+                        {!employeeForm.accountId && (
+                          <button
+                            type="button"
+                            onClick={() => setEmployeeForm((prev) => ({ ...prev, password: generateTemporaryPassword() }))}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-xs font-bold transition-colors"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                            Новый
+                          </button>
+                        )}
+                      </div>
                     </label>
                     <label className="block">
                       <span className="text-[10px] font-bold uppercase text-muted-foreground">Системная роль</span>
