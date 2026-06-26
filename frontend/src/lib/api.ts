@@ -955,6 +955,9 @@ export interface ArticleLink {
   created_at?: string;
   target_title?: string;
   target_slug?: string;
+  source_title?: string;
+  source_slug?: string;
+  source_summary?: string;
 }
 
 export interface WikiCapabilities {
@@ -1203,6 +1206,9 @@ export async function updateUserWikiRoles(userId: number, roleIds: number[]): Pr
 // ARTICLE LINKS
 export async function fetchArticleLinks(articleId: number): Promise<ArticleLink[]> {
   return apiCall<ArticleLink[]>(`/articles/${articleId}/links`);
+}
+export async function fetchArticleBacklinks(articleId: number): Promise<ArticleLink[]> {
+  return apiCall<ArticleLink[]>(`/articles/${articleId}/backlinks`);
 }
 export async function createArticleLink(articleId: number, data: { target_article_id: number; link_text?: string }): Promise<ArticleLink> {
   return apiCall<ArticleLink>(`/articles/${articleId}/links`, { method: 'POST', body: JSON.stringify(data) });

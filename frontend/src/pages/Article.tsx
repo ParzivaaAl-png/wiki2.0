@@ -27,6 +27,7 @@ import {
   restoreArticleVersion,
   fetchArticles,
   fetchArticleLinks,
+  fetchArticleBacklinks,
   createArticleLink,
   deleteArticleLink,
   ArticleLink
@@ -67,6 +68,7 @@ export default function ArticlePage() {
 
   // Link state
   const [links, setLinks] = React.useState<ArticleLink[]>([]);
+  const [backlinks, setBacklinks] = React.useState<ArticleLink[]>([]);
   const [isLinksLoading, setIsLinksLoading] = React.useState(false);
   const [allArticles, setAllArticles] = React.useState<ArticleType[]>([]);
   const [isAddLinkModalOpen, setIsAddLinkModalOpen] = React.useState(false);
@@ -80,8 +82,12 @@ export default function ArticlePage() {
       if (!article) return;
       setIsLinksLoading(true);
       try {
-        const data = await fetchArticleLinks(article.id);
+        const [data, backlinkData] = await Promise.all([
+          fetchArticleLinks(article.id),
+          fetchArticleBacklinks(article.id),
+        ]);
         setLinks(data);
+        setBacklinks(backlinkData);
       } catch (err) {
         console.error('Failed to fetch article links:', err);
       } finally {
@@ -716,6 +722,45 @@ export default function ArticlePage() {
                     </button>
                   )}
                 </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Backlinks */}
+        <div className="mt-6 pt-6 border-t border-neutral-200/60 dark:border-neutral-800/60">
+          <h3 className="text-sm font-bold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider flex items-center gap-2 font-outfit mb-4">
+            ↩ На эту статью ссылаются
+          </h3>
+
+          {isLinksLoading ? (
+            <div className="flex items-center gap-2 text-xs text-neutral-400">
+              <Loader2 className="w-4 h-4 animate-spin text-indigo-500" /> Загрузка обратных ссылок...
+            </div>
+          ) : backlinks.length === 0 ? (
+            <p className="text-xs text-neutral-400 italic">Пока нет статей, которые ссылаются на этот материал.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {backlinks.map((link) => (
+                <Link
+                  key={link.id}
+                  to={`/articles/${link.source_slug}`}
+                  className="group block p-3 rounded-xl border border-neutral-200/50 dark:border-neutral-850/50 bg-neutral-50/50 dark:bg-neutral-900/30 hover:border-indigo-500/30 hover:bg-white dark:hover:bg-neutral-950/20 transition-all shadow-sm"
+                >
+                  <div className="font-semibold text-xs text-neutral-850 dark:text-neutral-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                    {link.source_title}
+                  </div>
+                  {link.link_text && (
+                    <div className="text-[10px] text-neutral-400 dark:text-neutral-550 truncate mt-0.5">
+                      Контекст: {link.link_text}
+                    </div>
+                  )}
+                  {link.source_summary && (
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 line-clamp-2 mt-2">
+                      {link.source_summary}
+                    </p>
+                  )}
+                </Link>
               ))}
             </div>
           )}

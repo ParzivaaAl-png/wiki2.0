@@ -176,6 +176,7 @@ router.put('/wiki/access/users/:id/wiki-roles', requireAuth, requireRole(['Admin
 
 // Article Links Routes
 router.get('/articles/:id/links', requireAuth, articlesController.getArticleLinks);
+router.get('/articles/:id/backlinks', requireAuth, articlesController.getArticleBacklinks);
 router.post('/articles/:id/links', requireAuth, requireRole(['Admin', 'Editor']), articlesController.createArticleLink);
 router.delete('/articles/:id/links/:linkId', requireAuth, requireRole(['Admin', 'Editor']), articlesController.deleteArticleLink);
 

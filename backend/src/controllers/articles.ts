@@ -1157,6 +1157,24 @@ export const getArticleLinks = async (req: Request, res: Response) => {
   }
 };
 
+export const getArticleBacklinks = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      `SELECT al.*, a.title as source_title, a.slug as source_slug, a.summary as source_summary
+       FROM article_links al
+       JOIN articles a ON al.source_article_id = a.id
+       WHERE al.target_article_id = $1
+         AND a.is_visible = true
+       ORDER BY al.created_at DESC`,
+      [id]
+    );
+    res.json(result.rows);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
 export const createArticleLink = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
