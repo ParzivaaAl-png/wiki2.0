@@ -51,7 +51,7 @@ import GuestManagement from './guest-management';
 import SessionManagement from './session-management';
 import { useAuth } from '../lib/auth-context';
 
-type TeamTab = 'org' | 'access' | 'sessions' | 'guest';
+type TeamTab = 'org' | 'access' | 'archive' | 'sessions' | 'guest';
 
 type EmployeeModalState = {
   employee: Employee | null;
@@ -70,6 +70,7 @@ type PositionModalState = {
 const tabs: Array<{ id: TeamTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'org', label: 'Оргструктура', icon: Network },
   { id: 'access', label: 'Wiki-роли и доступ', icon: ShieldCheck },
+  { id: 'archive', label: 'Архивные аккаунты', icon: CircleOff },
   { id: 'sessions', label: 'Сессии', icon: KeyRound },
   { id: 'guest', label: 'Гостевой доступ', icon: ShieldAlert },
 ];
@@ -191,8 +192,8 @@ export default function TeamAccessManagement() {
     return map;
   }, [users]);
   const legacyAccounts = React.useMemo(() => (
-    users.filter((account) => !account.employee_id)
-  ), [users]);
+    users.filter((account) => !account.employee_id && account.id !== currentUser?.id)
+  ), [currentUser?.id, users]);
   const accessUsersById = React.useMemo(() => (
     new Map((accessOverview?.users || []).map((user) => [user.id, user]))
   ), [accessOverview]);
@@ -537,30 +538,7 @@ export default function TeamAccessManagement() {
     }
   };
 
-  const handleDeactivateLegacyAccount = async (account: User) => {
-    if (account.id === currentUser?.id) {
-      alert('Текущий администратор защищён от деактивации.');
-      return;
-    }
-    if (account.is_blocked) return;
-    if (!window.confirm(`Деактивировать архивный аккаунт "${account.username}"?`)) return;
-
-    setIsSaving(true);
-    try {
-      await adminToggleBlock(account.id, true);
-      await loadData();
-    } catch (err: any) {
-      alert(err.message || 'Не удалось деактивировать аккаунт.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const handleDeleteLegacyAccount = async (account: User) => {
-    if (account.id === currentUser?.id) {
-      alert('Текущий администратор защищён от удаления.');
-      return;
-    }
     if (!window.confirm(`Удалить старый аккаунт "${account.username}"? Это действие нельзя отменить.`)) return;
 
     setIsSaving(true);
@@ -574,17 +552,17 @@ export default function TeamAccessManagement() {
     }
   };
 
-  const handleDeactivateAllLegacyAccounts = async () => {
-    const targets = legacyAccounts.filter((account) => account.id !== currentUser?.id && !account.is_blocked);
+  const handleDeleteAllLegacyAccounts = async () => {
+    const targets = legacyAccounts;
     if (targets.length === 0) return;
-    if (!window.confirm(`Деактивировать старые аккаунты без сотрудника: ${targets.length}?`)) return;
+    if (!window.confirm(`Удалить навсегда архивные аккаунты: ${targets.length}? Это действие нельзя отменить.`)) return;
 
     setIsSaving(true);
     try {
-      await Promise.all(targets.map((account) => adminToggleBlock(account.id, true)));
+      await Promise.all(targets.map((account) => adminDeleteUser(account.id)));
       await loadData();
     } catch (err: any) {
-      alert(err.message || 'Не удалось деактивировать архивные аккаунты.');
+      alert(err.message || 'Не удалось удалить архивные аккаунты.');
     } finally {
       setIsSaving(false);
     }
@@ -822,9 +800,6 @@ export default function TeamAccessManagement() {
   };
 
   const renderLegacyAccounts = () => {
-    if (legacyAccounts.length === 0) return null;
-    const activeLegacyAccounts = legacyAccounts.filter((account) => !account.is_blocked && account.id !== currentUser?.id);
-
     return (
       <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 text-card-foreground overflow-hidden">
         <div className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -834,76 +809,66 @@ export default function TeamAccessManagement() {
               <h3 className="font-extrabold text-foreground">Архивные аккаунты</h3>
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">
-              Старые аккаунты без карточки сотрудника. Их можно привязать к сотруднику, деактивировать или удалить.
+              Старые аккаунты без карточки сотрудника. Их можно привязать к сотруднику или удалить навсегда.
             </p>
           </div>
 
-          {activeLegacyAccounts.length > 0 && (
+          {legacyAccounts.length > 0 && (
             <button
-              onClick={handleDeactivateAllLegacyAccounts}
+              onClick={handleDeleteAllLegacyAccounts}
               disabled={isSaving}
-              className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/15 text-xs font-bold disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-300 hover:bg-red-500/15 text-xs font-bold disabled:opacity-60"
             >
-              <CircleOff className="w-4 h-4" />
-              Деактивировать старые
+              <Trash2 className="w-4 h-4" />
+              Удалить все архивные
             </button>
           )}
         </div>
 
         <div className="border-t border-amber-500/20 divide-y divide-border">
-          {legacyAccounts.map((account) => {
-            const isCurrentUser = account.id === currentUser?.id;
-            return (
-              <div key={account.id} className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-bold text-sm text-foreground">{account.name}</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${
-                      account.is_blocked
-                        ? 'border-neutral-500/25 bg-neutral-500/10 text-neutral-500'
-                        : 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                    }`}>
-                      {account.is_blocked ? 'Деактивирован' : 'Старый аккаунт'}
-                    </span>
-                    {isCurrentUser && (
-                      <span className="text-[10px] px-2 py-0.5 rounded border border-indigo-500/25 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-bold">
-                        Текущий админ
+          {legacyAccounts.length === 0 ? (
+            <div className="p-8 text-center text-xs text-muted-foreground">
+              Архивных аккаунтов нет.
+            </div>
+          ) : (
+            legacyAccounts.map((account) => (
+                <div key={account.id} className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-sm text-foreground">{account.name}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${
+                        account.is_blocked
+                          ? 'border-neutral-500/25 bg-neutral-500/10 text-neutral-500'
+                          : 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                      }`}>
+                        {account.is_blocked ? 'Деактивирован' : 'Старый аккаунт'}
                       </span>
-                    )}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-1">
+                      {account.username} · {account.role}
+                    </div>
                   </div>
-                  <div className="text-[10px] text-muted-foreground mt-1">
-                    {account.username} · {account.role}
-                  </div>
-                </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => openEmployeeFromLegacyAccount(account)}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-xs font-bold transition-colors"
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    Привязать к сотруднику
-                  </button>
-                  <button
-                    onClick={() => handleDeactivateLegacyAccount(account)}
-                    disabled={isSaving || account.is_blocked || isCurrentUser}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-xs font-bold disabled:opacity-50 transition-colors"
-                  >
-                    <CircleOff className="w-3.5 h-3.5" />
-                    Деактивировать
-                  </button>
-                  <button
-                    onClick={() => handleDeleteLegacyAccount(account)}
-                    disabled={isSaving || isCurrentUser}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-300 hover:bg-red-500/15 text-xs font-bold disabled:opacity-50"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Удалить
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => openEmployeeFromLegacyAccount(account)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-xs font-bold transition-colors"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      Привязать к сотруднику
+                    </button>
+                    <button
+                      onClick={() => handleDeleteLegacyAccount(account)}
+                      disabled={isSaving}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-300 hover:bg-red-500/15 text-xs font-bold disabled:opacity-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Удалить навсегда
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              ))
+          )}
         </div>
       </div>
     );
@@ -1023,13 +988,25 @@ export default function TeamAccessManagement() {
             <div className="space-y-3">
               {visibleDepartments.map(renderDepartmentCard)}
               {renderUnassignedEmployees()}
-              {renderLegacyAccounts()}
-              {visibleDepartments.length === 0 && unassignedEmployees.length === 0 && legacyAccounts.length === 0 && (
+              {visibleDepartments.length === 0 && unassignedEmployees.length === 0 && (
                 <div className="p-8 text-center border border-border bg-card text-card-foreground rounded-lg text-xs text-muted-foreground">
                   Ничего не найдено.
                 </div>
               )}
             </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'archive' && (
+        <div className="space-y-4">
+          {isLoading ? (
+            <div className="p-8 text-center border border-border bg-card text-card-foreground rounded-lg">
+              <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-500" />
+              <div className="text-xs text-muted-foreground mt-2">Загружаем архивные аккаунты...</div>
+            </div>
+          ) : (
+            renderLegacyAccounts()
           )}
         </div>
       )}
