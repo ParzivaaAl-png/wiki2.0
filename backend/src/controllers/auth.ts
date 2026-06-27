@@ -9,14 +9,15 @@ import { getUserCapabilities } from '../services/accessControl';
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_wiki20';
 const REFRESH_SECRET = process.env.REFRESH_SECRET || 'super_secret_refresh_key_wiki20';
 
+// Practically infinite session lifetime: 100 years.
+const INFINITE_SESSION_MS = 100 * 365 * 24 * 60 * 60 * 1000;
+const INFINITE_SESSION_SECONDS = Math.floor(INFINITE_SESSION_MS / 1000);
+
 const generateTokens = (userId: number) => {
-  const accessToken = jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: '15m' });
+  const accessToken = jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: INFINITE_SESSION_SECONDS });
   const refreshToken = jwt.sign({ id: userId }, REFRESH_SECRET);
   return { accessToken, refreshToken };
 };
-
-// 100 years in milliseconds for practically infinite session lifetime
-const INFINITE_COOKIE_AGE = 100 * 365 * 24 * 60 * 60 * 1000;
 
 const setCookieOptions = (maxAgeMs: number) => ({
   httpOnly: true,
@@ -52,8 +53,8 @@ export const register = async (req: Request, res: Response) => {
       [user.id, refreshToken, ipAddress, userAgent]
     );
 
-    res.cookie('accessToken', accessToken, setCookieOptions(15 * 60 * 1000));
-    res.cookie('refreshToken', refreshToken, setCookieOptions(INFINITE_COOKIE_AGE));
+    res.cookie('accessToken', accessToken, setCookieOptions(INFINITE_SESSION_MS));
+    res.cookie('refreshToken', refreshToken, setCookieOptions(INFINITE_SESSION_MS));
 
     const access = await getUserCapabilities(user.id, user.role);
     res.status(201).json({
@@ -104,8 +105,8 @@ export const login = async (req: Request, res: Response) => {
       [user.id, refreshToken, ipAddress, userAgent]
     );
 
-    res.cookie('accessToken', accessToken, setCookieOptions(15 * 60 * 1000));
-    res.cookie('refreshToken', refreshToken, setCookieOptions(INFINITE_COOKIE_AGE));
+    res.cookie('accessToken', accessToken, setCookieOptions(INFINITE_SESSION_MS));
+    res.cookie('refreshToken', refreshToken, setCookieOptions(INFINITE_SESSION_MS));
 
     const access = await getUserCapabilities(user.id, user.role);
     const userResponse = {
@@ -176,8 +177,8 @@ export const refresh = async (req: Request, res: Response) => {
       [tokens.refreshToken, ipAddress, userAgent, refreshToken]
     );
 
-    res.cookie('accessToken', tokens.accessToken, setCookieOptions(15 * 60 * 1000));
-    res.cookie('refreshToken', tokens.refreshToken, setCookieOptions(INFINITE_COOKIE_AGE));
+    res.cookie('accessToken', tokens.accessToken, setCookieOptions(INFINITE_SESSION_MS));
+    res.cookie('refreshToken', tokens.refreshToken, setCookieOptions(INFINITE_SESSION_MS));
 
     res.json({ accessToken: tokens.accessToken });
   } catch (error: any) {

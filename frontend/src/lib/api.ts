@@ -213,14 +213,23 @@ export function clearApiCache() {
 }
 
 let isRefreshing = false;
-let refreshSubscribers: ((token: string) => void)[] = [];
+let refreshSubscribers: Array<{
+  resolve: (token: string) => void;
+  reject: (error: Error) => void;
+}> = [];
 
-const subscribeTokenRefresh = (cb: (token: string) => void) => {
-  refreshSubscribers.push(cb);
-};
+const subscribeTokenRefresh = () =>
+  new Promise<string>((resolve, reject) => {
+    refreshSubscribers.push({ resolve, reject });
+  });
 
 const onRefreshed = (token: string) => {
-  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers.forEach(({ resolve }) => resolve(token));
+  refreshSubscribers = [];
+};
+
+const onRefreshFailed = (error: Error) => {
+  refreshSubscribers.forEach(({ reject }) => reject(error));
   refreshSubscribers = [];
 };
 
@@ -269,34 +278,34 @@ async function apiCall<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   // Handle Token Expiration and Refresh Interceptor
   if (response.status === 401 && !path.includes('/auth/login') && !path.includes('/auth/refresh') && !path.includes('/auth/register')) {
-    if (!isRefreshing) {
-      isRefreshing = true;
-      try {
-        const newAccessToken = await performTokenRefresh();
+    let newAccessToken: string;
+
+    try {
+      if (isRefreshing) {
+        newAccessToken = await subscribeTokenRefresh();
+      } else {
+        isRefreshing = true;
+        newAccessToken = await performTokenRefresh();
         isRefreshing = false;
         onRefreshed(newAccessToken);
-      } catch (err) {
-        isRefreshing = false;
-        clearAuthToken();
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('auth_logout'));
-        }
-        throw new Error('Сессия истекла. Пожалуйста, войдите снова.');
       }
+    } catch (err) {
+      const sessionError = new Error('Сессия истекла. Пожалуйста, войдите снова.');
+      isRefreshing = false;
+      onRefreshFailed(sessionError);
+      clearAuthToken();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('auth_logout'));
+      }
+      throw sessionError;
     }
 
-    return new Promise((resolve, reject) => {
-      subscribeTokenRefresh((newToken) => {
-        // Retry the original request with the new access token
-        const newAuthHeaders = { ...authHeaders, 'Authorization': `Bearer ${newToken}` };
-        apiCall<T>(path, {
-          ...options,
-          headers: {
-            ...options.headers,
-            ...newAuthHeaders,
-          },
-        }).then(resolve).catch(reject);
-      });
+    return apiCall<T>(path, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${newAccessToken}`,
+      },
     });
   }
 
