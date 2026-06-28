@@ -24,7 +24,29 @@ const formatDate = (value: string | null) => {
   });
 };
 
-const csvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+type ExcelCell = string | number | null | undefined;
+
+const xmlEscape = (value: unknown) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;');
+
+const sheetName = (name: string) => xmlEscape(name.replace(/[\\/?*:\[\]]/g, '').slice(0, 31) || 'Лист');
+
+const excelCell = (value: ExcelCell, styleId?: string) => {
+  const isNumber = typeof value === 'number' && Number.isFinite(value);
+  const styleAttr = styleId ? ` ss:StyleID="${styleId}"` : '';
+  return `<Cell${styleAttr}><Data ss:Type="${isNumber ? 'Number' : 'String'}">${xmlEscape(value)}</Data></Cell>`;
+};
+
+const excelSheet = (name: string, rows: ExcelCell[][]) => `
+  <Worksheet ss:Name="${sheetName(name)}">
+    <Table>
+      ${rows.map((row, rowIndex) => `<Row>${row.map((cell) => excelCell(cell, rowIndex === 0 ? 'Header' : undefined)).join('')}</Row>`).join('')}
+    </Table>
+  </Worksheet>
+`;
 
 export default function AnalyticsDashboard() {
   const [periodDays, setPeriodDays] = React.useState(30);
@@ -50,34 +72,105 @@ export default function AnalyticsDashboard() {
     loadReport();
   }, [loadReport]);
 
-  const exportCsv = () => {
+  const exportExcel = () => {
     if (!report) return;
 
-    const lines = [
-      ['Отчёт Wiki', `Период: ${report.periodDays} дней`, `Сформирован: ${report.generatedAt}`],
-      [],
-      ['Популярные статьи'],
-      ['Статья', 'Просмотры за период', 'Уникальные читатели', 'Всего просмотров', 'В избранном'],
-      ...report.topArticles.map((item) => [item.title, item.period_views, item.unique_readers, item.total_views, item.favorites]),
-      [],
-      ['Разделы'],
-      ['Пространство', 'Раздел', 'Статей', 'Просмотров за период', 'Последнее обновление'],
-      ...report.sectionStats.map((item) => [item.space_name, item.section_name, item.article_count, item.period_views, formatDate(item.last_updated_at)]),
-      [],
-      ['Активность сотрудников'],
-      ['Сотрудник', 'Роль', 'Просмотры', 'Уникальные статьи', 'Последняя активность'],
-      ...report.userActivity.map((item) => [item.name, item.role, item.views, item.unique_articles, formatDate(item.last_viewed_at)]),
-      [],
-      ['Требуют проверки'],
-      ['Статья', 'Владелец', 'Дней без обновления', 'Последнее обновление'],
-      ...report.staleArticles.map((item) => [item.title, item.owner_name || 'Не назначен', item.days_without_update, formatDate(item.updated_at)]),
-    ];
+    const workbook = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook
+  xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:html="http://www.w3.org/TR/REC-html40">
+  <Styles>
+    <Style ss:ID="Header">
+      <Font ss:Bold="1"/>
+      <Interior ss:Color="#E8EAFD" ss:Pattern="Solid"/>
+      <Borders>
+        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+      </Borders>
+    </Style>
+  </Styles>
+  ${excelSheet('Сводка', [
+    ['Показатель', 'Значение'],
+    ['Сформирован', new Date(report.generatedAt).toLocaleString('ru-RU')],
+    ['Период отчёта, дней', report.periodDays],
+    ['Порог проверки, дней', report.staleDays],
+    ['Всего статей', Number(report.overview.total_articles)],
+    ['Опубликовано', Number(report.overview.published_articles)],
+    ['Черновиков', Number(report.overview.draft_articles)],
+    ['В архиве', Number(report.overview.archived_articles)],
+    ['Требуют проверки', Number(report.overview.stale_articles)],
+    ['Обновлено за период', Number(report.overview.updated_articles)],
+    ['Пространств', Number(report.overview.total_spaces)],
+    ['Разделов', Number(report.overview.total_sections)],
+    ['Пользователей', Number(report.overview.total_users)],
+    ['Просмотры за период', Number(report.overview.period_views)],
+    ['Активные сотрудники', Number(report.overview.active_users)],
+  ])}
+  ${excelSheet('Динамика', [
+    ['Дата', 'Просмотры', 'Уникальные читатели'],
+    ...report.dailyViews.map((item) => [formatDate(item.day), Number(item.views), Number(item.unique_readers)]),
+  ])}
+  ${excelSheet('Популярные статьи', [
+    ['Статья', 'Ссылка', 'Просмотры за период', 'Уникальные читатели', 'Всего просмотров', 'В избранном'],
+    ...report.topArticles.map((item) => [
+      item.title,
+      `/articles/${item.slug}`,
+      Number(item.period_views),
+      Number(item.unique_readers),
+      Number(item.total_views),
+      Number(item.favorites),
+    ]),
+  ])}
+  ${excelSheet('Разделы', [
+    ['Пространство', 'Раздел', 'Статей', 'Просмотров за период', 'Последнее обновление'],
+    ...report.sectionStats.map((item) => [
+      item.space_name,
+      item.section_name,
+      Number(item.article_count),
+      Number(item.period_views),
+      formatDate(item.last_updated_at),
+    ]),
+  ])}
+  ${excelSheet('Активность', [
+    ['Сотрудник', 'Роль', 'Просмотры', 'Уникальные статьи', 'Последняя активность'],
+    ...report.userActivity.map((item) => [
+      item.name,
+      item.role,
+      Number(item.views),
+      Number(item.unique_articles),
+      formatDate(item.last_viewed_at),
+    ]),
+  ])}
+  ${excelSheet('Авторы', [
+    ['Сотрудник', 'Роль', 'Статей', 'Правок за период', 'Последняя правка'],
+    ...report.contributorStats.map((item) => [
+      item.name,
+      item.role,
+      Number(item.authored_articles),
+      Number(item.period_edits),
+      formatDate(item.last_edit_at),
+    ]),
+  ])}
+  ${excelSheet('Проверка', [
+    ['Статья', 'Ссылка', 'Владелец', 'Просмотры', 'Дней без обновления', 'Последнее обновление'],
+    ...report.staleArticles.map((item) => [
+      item.title,
+      `/articles/${item.slug}`,
+      item.owner_name || 'Не назначен',
+      Number(item.views),
+      Number(item.days_without_update),
+      formatDate(item.updated_at),
+    ]),
+  ])}
+</Workbook>`;
 
-    const csv = `\uFEFF${lines.map((row) => row.map(csvCell).join(';')).join('\n')}`;
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const url = URL.createObjectURL(new Blob([workbook], { type: 'application/vnd.ms-excel;charset=utf-8' }));
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `wiki-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.download = `wiki-analytics-${new Date().toISOString().slice(0, 10)}.xls`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -161,11 +254,11 @@ export default function AnalyticsDashboard() {
           </button>
           <button
             type="button"
-            onClick={exportCsv}
+            onClick={exportExcel}
             className="inline-flex h-9 items-center gap-1.5 px-3 rounded-lg border border-border bg-card text-xs font-semibold text-foreground hover:bg-muted"
           >
             <Download className="w-4 h-4" />
-            CSV
+            Excel
           </button>
         </div>
       </div>
