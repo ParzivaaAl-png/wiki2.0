@@ -272,8 +272,12 @@ export const changeRole = async (req: AuthenticatedRequest, res: Response) => {
       'IT-специалист',
       'Администратор Wiki'
     ];
-    if (!role || !VALID_ROLES.includes(role)) {
-      return res.status(400).json({ error: 'Некорректная роль. Роль должна быть одной из списка системных ролей.' });
+    const positionResult = role
+      ? await query('SELECT id FROM positions WHERE name = $1 AND status = $2 LIMIT 1', [role, 'Active'])
+      : { rowCount: 0 };
+
+    if (!role || (!VALID_ROLES.includes(role) && (positionResult.rowCount || 0) === 0)) {
+      return res.status(400).json({ error: 'Некорректная роль. Роль должна совпадать с активной должностью.' });
     }
 
     if (req.user?.id === Number(id)) {

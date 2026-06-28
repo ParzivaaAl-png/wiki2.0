@@ -29,7 +29,6 @@ import {
   adminCreateUser,
   adminDeleteUser,
   adminFetchUsers,
-  adminToggleBlock,
   adminUpdateUser,
   createDepartment,
   createEmployee,
@@ -74,17 +73,6 @@ const tabs: Array<{ id: TeamTab; label: string; icon: React.ComponentType<{ clas
   { id: 'guest', label: 'Гостевой доступ', icon: ShieldAlert },
 ];
 
-const systemRoleOptions = [
-  'Оператор',
-  'Супервайзер',
-  'Руководитель группы',
-  'Коммерческий директор',
-  'HR-менеджер',
-  'Бухгалтер',
-  'IT-специалист',
-  'Администратор Wiki',
-];
-
 const roleTone = (code: string) => {
   if (code === 'wiki_admin') return 'border-rose-500/25 bg-rose-500/10 text-rose-600 dark:text-rose-300';
   if (code === 'process_owner') return 'border-indigo-500/25 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300';
@@ -123,17 +111,12 @@ export default function TeamAccessManagement() {
 
   const [employeeForm, setEmployeeForm] = React.useState({
     fullName: '',
-    email: '',
     departmentId: '',
     positionId: '',
     managerId: '',
-    isActive: true,
-    accountEnabled: false,
     accountId: null as number | null,
     username: '',
     password: '',
-    systemRole: 'Оператор',
-    isBlocked: false,
   });
 
   const [departmentForm, setDepartmentForm] = React.useState({
@@ -279,6 +262,11 @@ export default function TeamAccessManagement() {
     getEligibleManagers(employeeForm.departmentId, employeeForm.positionId, employeeModal?.employee?.id)
   ), [employeeForm.departmentId, employeeForm.positionId, employeeModal?.employee?.id, getEligibleManagers]);
 
+  const selectedEmployeePosition = employeeForm.positionId
+    ? positionsById.get(Number(employeeForm.positionId)) || null
+    : null;
+  const derivedAccountRole = selectedEmployeePosition?.name || 'Оператор';
+
   const toggleDepartment = (id: number | 'none') => {
     setExpandedDepartmentIds((prev) => {
       const next = new Set(prev);
@@ -303,17 +291,12 @@ export default function TeamAccessManagement() {
 
     setEmployeeForm({
       fullName: employee?.full_name || '',
-      email: employee?.email || '',
       departmentId: initialDepartmentId,
       positionId: initialPositionId,
       managerId,
-      isActive: employee?.is_active ?? true,
-      accountEnabled: Boolean(account) || shouldCreateAccount,
       accountId: account?.id || null,
       username: account?.username || employee?.email || '',
       password: shouldCreateAccount ? generateTemporaryPassword() : '',
-      systemRole: account?.role || 'Оператор',
-      isBlocked: account?.is_blocked || false,
     });
     setEmployeeModal({ employee, defaultDepartmentId });
   };
@@ -342,17 +325,12 @@ export default function TeamAccessManagement() {
   const openEmployeeFromLegacyAccount = (account: User) => {
     setEmployeeForm({
       fullName: account.name || account.username,
-      email: account.username.includes('@') ? account.username : '',
       departmentId: '',
       positionId: '',
       managerId: '',
-      isActive: !account.is_blocked,
-      accountEnabled: true,
       accountId: account.id,
       username: account.username,
       password: '',
-      systemRole: account.role || 'Оператор',
-      isBlocked: account.is_blocked,
     });
     setEmployeeModal({ employee: null, defaultDepartmentId: null });
   };
@@ -372,7 +350,6 @@ export default function TeamAccessManagement() {
         departmentId,
         positionId: nextPositionId,
         managerId: eligibleManagers.some((manager) => manager.id === Number(prev.managerId)) ? prev.managerId : '',
-        accountEnabled: departmentId ? (prev.accountEnabled || !prev.accountId) : false,
         password: departmentId && !prev.accountId && !prev.password ? generateTemporaryPassword() : prev.password,
       };
     });
@@ -469,26 +446,29 @@ export default function TeamAccessManagement() {
   const handleSaveEmployee = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!employeeForm.fullName.trim() || !employeeForm.email.trim()) {
-      alert('ФИО и почта сотрудника обязательны.');
+    if (!employeeForm.fullName.trim()) {
+      alert('ФИО сотрудника обязательно.');
       return;
     }
 
-    if (employeeForm.accountEnabled) {
-      if (!employeeForm.departmentId) {
-        alert('Аккаунт можно создать только для сотрудника, который находится внутри отдела.');
-        return;
-      }
+    if (!employeeForm.departmentId) {
+      alert('Выберите отдел сотрудника.');
+      return;
+    }
 
-      if (!employeeForm.username.trim()) {
-        alert('Логин аккаунта обязателен.');
-        return;
-      }
+    if (!employeeForm.positionId) {
+      alert('Выберите должность сотрудника.');
+      return;
+    }
 
-      if (!employeeForm.accountId && employeeForm.password.length < 6) {
-        alert('Для нового аккаунта нужен пароль минимум 6 символов.');
-        return;
-      }
+    if (!employeeForm.username.trim()) {
+      alert('Логин аккаунта обязателен.');
+      return;
+    }
+
+    if (!employeeForm.accountId && employeeForm.password.length < 6) {
+      alert('Для нового аккаунта нужен пароль минимум 6 символов.');
+      return;
     }
 
     if (employeeForm.managerId) {
@@ -504,13 +484,15 @@ export default function TeamAccessManagement() {
 
     setIsSaving(true);
     try {
+      const accountLogin = employeeForm.username.trim();
+      const accountRole = derivedAccountRole;
       const employeePayload = {
         full_name: employeeForm.fullName.trim(),
-        email: employeeForm.email.trim(),
+        email: accountLogin,
         department_id: employeeForm.departmentId ? Number(employeeForm.departmentId) : null,
         position_id: employeeForm.positionId ? Number(employeeForm.positionId) : null,
         manager_id: employeeForm.managerId ? Number(employeeForm.managerId) : null,
-        is_active: employeeForm.isActive,
+        is_active: employeeModal?.employee?.is_active ?? true,
       };
 
       const savedEmployee = employeeModal?.employee
@@ -521,37 +503,25 @@ export default function TeamAccessManagement() {
         ? users.find((user) => user.id === employeeForm.accountId) || null
         : null;
 
-      if (employeeForm.accountEnabled) {
-        const nextAccountBlockedState = employeeForm.isBlocked || !employeeForm.isActive;
-        if (currentAccount) {
-          await adminUpdateUser(currentAccount.id, {
-            username: employeeForm.username.trim(),
-            name: employeeForm.fullName.trim(),
-            password: employeeForm.password || undefined,
-            employee_id: savedEmployee.id,
-          });
+      if (currentAccount) {
+        await adminUpdateUser(currentAccount.id, {
+          username: accountLogin,
+          name: employeeForm.fullName.trim(),
+          password: employeeForm.password || undefined,
+          employee_id: savedEmployee.id,
+        });
 
-          if (currentAccount.role !== employeeForm.systemRole) {
-            await adminChangeRole(currentAccount.id, employeeForm.systemRole);
-          }
-
-          if (currentAccount.is_blocked !== nextAccountBlockedState) {
-            await adminToggleBlock(currentAccount.id, nextAccountBlockedState);
-          }
-        } else {
-          const createdAccount = await adminCreateUser({
-            username: employeeForm.username.trim(),
-            name: employeeForm.fullName.trim(),
-            password: employeeForm.password,
-            role: employeeForm.systemRole,
-            employee_id: savedEmployee.id,
-          });
-          if (nextAccountBlockedState) {
-            await adminToggleBlock(createdAccount.id, true);
-          }
+        if (currentAccount.role !== accountRole) {
+          await adminChangeRole(currentAccount.id, accountRole);
         }
-      } else if (currentAccount && !currentAccount.is_blocked) {
-        await adminToggleBlock(currentAccount.id, true);
+      } else {
+        await adminCreateUser({
+          username: accountLogin,
+          name: employeeForm.fullName.trim(),
+          password: employeeForm.password,
+          role: accountRole,
+          employee_id: savedEmployee.id,
+        });
       }
 
       setEmployeeModal(null);
@@ -576,30 +546,6 @@ export default function TeamAccessManagement() {
       await loadData();
     } catch (err: any) {
       alert(err.message || 'Не удалось удалить сотрудника.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    if (!employeeForm.accountId) return;
-    if (!window.confirm('Удалить аккаунт сотрудника? Сам сотрудник останется в оргструктуре.')) return;
-
-    setIsSaving(true);
-    try {
-      await adminDeleteUser(employeeForm.accountId);
-      setEmployeeForm((prev) => ({
-        ...prev,
-        accountEnabled: false,
-        accountId: null,
-        username: prev.email,
-        password: '',
-        systemRole: 'Оператор',
-        isBlocked: false,
-      }));
-      await loadData();
-    } catch (err: any) {
-      alert(err.message || 'Не удалось удалить аккаунт.');
     } finally {
       setIsSaving(false);
     }
@@ -1228,11 +1174,11 @@ export default function TeamAccessManagement() {
 
       {employeeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
-          <form onSubmit={handleSaveEmployee} className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-card text-card-foreground p-6 shadow-2xl">
+          <form onSubmit={handleSaveEmployee} className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-card text-card-foreground p-6 shadow-2xl">
             <div className="flex items-center justify-between gap-3 mb-5">
               <div>
                 <h3 className="text-lg font-extrabold text-foreground">{employeeModal.employee ? 'Карточка сотрудника' : 'Добавить сотрудника'}</h3>
-                <p className="text-xs text-muted-foreground mt-1">Здесь редактируются ФИО, почта, отдел, должность и аккаунт.</p>
+                <p className="text-xs text-muted-foreground mt-1">Здесь редактируются ФИО, отдел, должность, руководитель и аккаунт.</p>
               </div>
               <button type="button" onClick={() => setEmployeeModal(null)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground">
                 <X className="w-4 h-4" />
@@ -1251,19 +1197,6 @@ export default function TeamAccessManagement() {
                     <input
                       value={employeeForm.fullName}
                       onChange={(event) => setEmployeeForm((prev) => ({ ...prev, fullName: event.target.value }))}
-                      className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-[10px] font-bold uppercase text-muted-foreground">Почта</span>
-                    <input
-                      type="email"
-                      value={employeeForm.email}
-                      onChange={(event) => setEmployeeForm((prev) => ({
-                        ...prev,
-                        email: event.target.value,
-                        username: prev.accountId ? prev.username : event.target.value,
-                      }))}
                       className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
                     />
                   </label>
@@ -1318,17 +1251,6 @@ export default function TeamAccessManagement() {
                       </span>
                     )}
                   </label>
-                  <label className="block">
-                    <span className="text-[10px] font-bold uppercase text-muted-foreground">Статус сотрудника</span>
-                    <select
-                      value={employeeForm.isActive ? 'active' : 'inactive'}
-                      onChange={(event) => setEmployeeForm((prev) => ({ ...prev, isActive: event.target.value === 'active' }))}
-                      className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                    >
-                      <option value="active">Активен</option>
-                      <option value="inactive">Неактивен</option>
-                    </select>
-                  </label>
                 </div>
               </section>
 
@@ -1343,83 +1265,38 @@ export default function TeamAccessManagement() {
                   </div>
                 </div>
 
-                {!employeeForm.departmentId && (
-                  <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
-                    Сначала выберите отдел: аккаунты создаются только для сотрудников внутри отдела.
-                  </div>
-                )}
-
-                {employeeForm.accountEnabled && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <label className="block">
-                      <span className="text-[10px] font-bold uppercase text-muted-foreground">Логин</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground">Логин</span>
+                    <input
+                      value={employeeForm.username}
+                      onChange={(event) => setEmployeeForm((prev) => ({ ...prev, username: event.target.value }))}
+                      className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground">
+                      {employeeForm.accountId ? 'Новый пароль' : 'Пароль'}
+                    </span>
+                    <div className="mt-1 flex gap-2">
                       <input
-                        value={employeeForm.username}
-                        onChange={(event) => setEmployeeForm((prev) => ({ ...prev, username: event.target.value }))}
-                        className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                        type={employeeForm.accountId ? 'password' : 'text'}
+                        value={employeeForm.password}
+                        onChange={(event) => setEmployeeForm((prev) => ({ ...prev, password: event.target.value }))}
+                        placeholder={employeeForm.accountId ? 'Оставьте пустым, если не меняете' : 'Минимум 6 символов'}
+                        className="w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500 placeholder-muted-foreground"
                       />
-                    </label>
-                    <label className="block">
-                      <span className="text-[10px] font-bold uppercase text-muted-foreground">
-                        {employeeForm.accountId ? 'Новый пароль' : 'Пароль'}
-                      </span>
-                      <div className="mt-1 flex gap-2">
-                        <input
-                          type={employeeForm.accountId ? 'password' : 'text'}
-                          value={employeeForm.password}
-                          onChange={(event) => setEmployeeForm((prev) => ({ ...prev, password: event.target.value }))}
-                          placeholder={employeeForm.accountId ? 'Оставьте пустым, если не меняете' : 'Минимум 6 символов'}
-                          className="w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500 placeholder-muted-foreground"
-                        />
-                        {!employeeForm.accountId && (
-                          <button
-                            type="button"
-                            onClick={() => setEmployeeForm((prev) => ({ ...prev, password: generateTemporaryPassword() }))}
-                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-xs font-bold transition-colors"
-                          >
-                            <KeyRound className="w-3.5 h-3.5" />
-                            Новый
-                          </button>
-                        )}
-                      </div>
-                    </label>
-                    <label className="block">
-                      <span className="text-[10px] font-bold uppercase text-muted-foreground">Системная роль</span>
-                      <select
-                        value={employeeForm.systemRole}
-                        onChange={(event) => setEmployeeForm((prev) => ({ ...prev, systemRole: event.target.value }))}
-                        className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                      <button
+                        type="button"
+                        onClick={() => setEmployeeForm((prev) => ({ ...prev, password: generateTemporaryPassword() }))}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-xs font-bold transition-colors"
                       >
-                        {systemRoleOptions.map((role) => (
-                          <option key={role} value={role}>{role}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="block">
-                      <span className="text-[10px] font-bold uppercase text-muted-foreground">Статус аккаунта</span>
-                      <select
-                        value={employeeForm.isBlocked ? 'blocked' : 'active'}
-                        onChange={(event) => setEmployeeForm((prev) => ({ ...prev, isBlocked: event.target.value === 'blocked' }))}
-                        className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                      >
-                        <option value="active">Активен</option>
-                        <option value="blocked">Заблокирован</option>
-                      </select>
-                    </label>
-                  </div>
-                )}
-
-                {employeeForm.accountId && (
-                  <button
-                    type="button"
-                    onClick={handleDeleteAccount}
-                    disabled={isSaving}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-300 hover:bg-red-500/15 text-xs font-bold disabled:opacity-60"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Удалить только аккаунт
-                  </button>
-                )}
+                        <KeyRound className="w-3.5 h-3.5" />
+                        Новый
+                      </button>
+                    </div>
+                  </label>
+                </div>
               </section>
             </div>
 
