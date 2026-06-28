@@ -300,6 +300,17 @@ export const initializeDatabase = async () => {
       );
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS news_departments (
+        news_id INT REFERENCES news(id) ON DELETE CASCADE,
+        department_id INT REFERENCES departments(id) ON DELETE CASCADE,
+        PRIMARY KEY (news_id, department_id)
+      );
+    `);
+
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_news_departments_department_id ON news_departments(department_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_news_departments_news_id ON news_departments(news_id)');
+
     // Create positions
     await pool.query(`
       CREATE TABLE IF NOT EXISTS positions (

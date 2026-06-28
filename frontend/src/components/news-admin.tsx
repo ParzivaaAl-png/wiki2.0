@@ -1,16 +1,17 @@
 import * as React from 'react';
 import { 
   Plus, Edit, Trash2, Pin, Eye, EyeOff, Calendar, 
-  Upload, X, FileText, Loader2, Sparkles, Search, MessageSquare, Video
+  Upload, X, FileText, Loader2, Sparkles, Search, MessageSquare, Video, Building2, Check
 } from 'lucide-react';
 import { 
   fetchNews, createNews, updateNews, deleteNews, 
-  uploadImage, uploadNewsAttachment, News 
+  uploadImage, uploadNewsAttachment, fetchDepartments, News, Department
 } from '../lib/api';
 import WYSIWYGEditor from './wysiwyg-editor';
 
 export function NewsAdmin() {
   const [newsList, setNewsList] = React.useState<News[]>([]);
+  const [departments, setDepartments] = React.useState<Department[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [selectedNews, setSelectedNews] = React.useState<News | null>(null);
   
@@ -24,6 +25,7 @@ export function NewsAdmin() {
   const [isPinned, setIsPinned] = React.useState(false);
   const [publishedAt, setPublishedAt] = React.useState('');
   const [tagsInput, setTagsInput] = React.useState('');
+  const [selectedDepartmentIds, setSelectedDepartmentIds] = React.useState<number[]>([]);
   const [galleryImages, setGalleryImages] = React.useState<string[]>([]);
   const [attachments, setAttachments] = React.useState<{ file_url: string; file_name: string; file_size: number }[]>([]);
   
@@ -31,6 +33,27 @@ export function NewsAdmin() {
   const [isUploadingImage, setIsUploadingImage] = React.useState(false);
   const [isUploadingFile, setIsUploadingFile] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState('');
+
+  const hasEditorContent = React.useCallback((value: string) => {
+    const plainText = value
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .trim();
+
+    return plainText.length > 0 || /<(img|iframe|video|table|ul|ol|li|h[1-6])\b/i.test(value);
+  }, []);
+
+  const hasDraftData = React.useCallback(() => (
+    title.trim().length > 0 ||
+    description.trim().length > 0 ||
+    hasEditorContent(content) ||
+    videoUrl.trim().length > 0 ||
+    tagsInput.trim().length > 0 ||
+    galleryImages.length > 0 ||
+    attachments.length > 0
+  ), [attachments.length, content, description, galleryImages.length, hasEditorContent, tagsInput, title, videoUrl]);
+
+  const createDraftTitle = () => `Черновик новости ${new Date().toLocaleString('ru-RU')}`;
 
   const loadNews = async () => {
     setIsLoading(true);
@@ -44,8 +67,18 @@ export function NewsAdmin() {
     }
   };
 
+  const loadDepartments = async () => {
+    try {
+      const list = await fetchDepartments();
+      setDepartments(list.filter((department) => department.status !== 'Archived'));
+    } catch (e) {
+      setDepartments([]);
+    }
+  };
+
   React.useEffect(() => {
     loadNews();
+    loadDepartments();
   }, []);
 
   const handleEditClick = (news: News) => {
@@ -71,6 +104,7 @@ export function NewsAdmin() {
     }
     
     setTagsInput(news.tags.join(', '));
+    setSelectedDepartmentIds(news.department_ids || []);
     setGalleryImages(news.images || []);
     setAttachments(news.attachments || []);
     setIsEditing(true);
@@ -95,6 +129,7 @@ export function NewsAdmin() {
     setPublishedAt(`${year}-${month}-${day}T${hours}:${minutes}`);
     
     setTagsInput('');
+    setSelectedDepartmentIds([]);
     setGalleryImages([]);
     setAttachments([]);
     setIsEditing(true);
@@ -149,14 +184,29 @@ export function NewsAdmin() {
     setAttachments(prev => prev.filter((_, idx) => idx !== idxToRemove));
   };
 
+  const toggleDepartment = (departmentId: number) => {
+    setSelectedDepartmentIds((prev) => (
+      prev.includes(departmentId)
+        ? prev.filter((id) => id !== departmentId)
+        : [...prev, departmentId]
+    ));
+  };
+
   // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!title.trim()) {
-      alert('Заголовок обязателен');
+    if (!isPublished && !hasDraftData()) {
+      alert('Добавьте заголовок, текст или вложение, чтобы сохранить черновик');
       return;
     }
+
+    if (isPublished && !title.trim()) {
+      alert('Заголовок обязателен для публикации');
+      return;
+    }
+
+    const normalizedTitle = title.trim() || createDraftTitle();
 
     const tags = tagsInput
       .split(',')
@@ -164,17 +214,18 @@ export function NewsAdmin() {
       .filter(t => t.length > 0);
 
     const payload = {
-      title,
+      title: normalizedTitle,
       description,
-      content,
+      content: content || '<p></p>',
       video_url: videoUrl.trim() || null,
       is_published: isPublished,
-      is_pinned: isPinned,
+      is_pinned: isPublished && isPinned,
       published_at: publishedAt ? new Date(publishedAt).toISOString() : undefined,
       bump_to_top: !!selectedNews && isPublished && (!publishedAt || new Date(publishedAt).getTime() <= Date.now()),
       tags,
       images: galleryImages,
-      attachments
+      attachments,
+      department_ids: selectedDepartmentIds
     };
 
     try {
@@ -217,7 +268,8 @@ export function NewsAdmin() {
         bump_to_top: false,
         tags: news.tags,
         images: news.images,
-        attachments: news.attachments
+        attachments: news.attachments,
+        department_ids: news.department_ids || []
       });
       loadNews();
     } catch (err) {
@@ -238,7 +290,8 @@ export function NewsAdmin() {
         bump_to_top: false,
         tags: news.tags,
         images: news.images,
-        attachments: news.attachments
+        attachments: news.attachments,
+        department_ids: news.department_ids || []
       });
       loadNews();
     } catch (err) {
@@ -310,7 +363,6 @@ export function NewsAdmin() {
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Введите броский заголовок..."
                   className="w-full bg-transparent border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-900 dark:text-white outline-none focus:border-indigo-500 transition-colors"
-                  required
                 />
               </div>
 
@@ -368,14 +420,22 @@ export function NewsAdmin() {
                       onChange={(e) => setIsPublished(e.target.checked)}
                       className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 border-neutral-350 dark:border-neutral-800 dark:bg-neutral-900"
                     />
-                    <span className="text-xs text-neutral-700 dark:text-neutral-300">Опубликовать сразу</span>
+                    <span className="text-xs text-neutral-700 dark:text-neutral-300">
+                      {isPublished ? 'Опубликовать после сохранения' : 'Сохранить как черновик'}
+                    </span>
                   </label>
+                  {!isPublished && (
+                    <div className="rounded-lg border border-amber-200 dark:border-amber-500/25 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-[10px] leading-relaxed text-amber-700 dark:text-amber-200">
+                      Новость останется в черновиках и не появится у сотрудников, пока вы её не опубликуете.
+                    </div>
+                  )}
                   
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <label className={`flex items-center gap-2 select-none ${isPublished ? 'cursor-pointer' : 'cursor-not-allowed opacity-55'}`}>
                     <input
                       type="checkbox"
-                      checked={isPinned}
+                      checked={isPinned && isPublished}
                       onChange={(e) => setIsPinned(e.target.checked)}
+                      disabled={!isPublished}
                       className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 border-neutral-350 dark:border-neutral-800 dark:bg-neutral-900"
                     />
                     <span className="text-xs text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
@@ -383,6 +443,50 @@ export function NewsAdmin() {
                       Закрепить новость сверху
                     </span>
                   </label>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <label className="text-[10px] font-bold text-neutral-450 dark:text-neutral-400 uppercase tracking-wider flex items-center gap-1">
+                    <Building2 className="w-3.5 h-3.5 text-neutral-400" />
+                    Отделы-получатели
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDepartmentIds([])}
+                    className={`w-full flex items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs transition-colors ${
+                      selectedDepartmentIds.length === 0
+                        ? 'border-indigo-500 bg-indigo-500/10 text-indigo-700 dark:text-indigo-200'
+                        : 'border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950 text-neutral-650 dark:text-neutral-300 hover:border-indigo-300'
+                    }`}
+                  >
+                    <span className="font-semibold">Все отделы</span>
+                    {selectedDepartmentIds.length === 0 && <Check className="w-3.5 h-3.5" />}
+                  </button>
+                  {departments.length > 0 && (
+                    <div className="max-h-40 overflow-y-auto pr-1 space-y-1">
+                      {departments.map((department) => {
+                        const selected = selectedDepartmentIds.includes(department.id);
+                        return (
+                          <button
+                            key={department.id}
+                            type="button"
+                            onClick={() => toggleDepartment(department.id)}
+                            className={`w-full flex items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs transition-colors ${
+                              selected
+                                ? 'border-indigo-500 bg-indigo-500/10 text-indigo-700 dark:text-indigo-200'
+                                : 'border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950 text-neutral-650 dark:text-neutral-300 hover:border-indigo-300 dark:hover:border-indigo-500/60'
+                            }`}
+                          >
+                            <span className="truncate">{department.name}</span>
+                            {selected && <Check className="w-3.5 h-3.5 shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-neutral-400 leading-relaxed">
+                    Если отделы не выбраны, новость видят все сотрудники.
+                  </p>
                 </div>
 
                 {/* Tags */}
@@ -507,7 +611,7 @@ export function NewsAdmin() {
                 type="submit"
                 className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/10 transition-all"
               >
-                {selectedNews ? 'Сохранить и поднять вверх' : 'Сохранить и опубликовать'}
+                {!isPublished ? 'Сохранить черновик' : selectedNews ? 'Сохранить и поднять вверх' : 'Сохранить и опубликовать'}
               </button>
 
             </div>
@@ -558,6 +662,7 @@ export function NewsAdmin() {
                 <tbody className="divide-y divide-neutral-200/50 dark:divide-neutral-900 text-sm">
                   {filteredNews.map((news) => {
                     const isScheduled = new Date(news.published_at) > new Date();
+                    const departmentNames = news.department_names || [];
                     return (
                       <tr key={news.id} className="hover:bg-neutral-50/40 dark:hover:bg-neutral-900/20 transition-colors">
                         
@@ -578,6 +683,26 @@ export function NewsAdmin() {
                           {news.description && (
                             <div className="text-xs text-neutral-450 dark:text-neutral-500 truncate mt-0.5">{news.description}</div>
                           )}
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {departmentNames.length === 0 ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded">
+                                <Building2 className="w-3 h-3" />
+                                Все отделы
+                              </span>
+                            ) : (
+                              departmentNames.slice(0, 2).map((departmentName) => (
+                                <span key={departmentName} className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-700 dark:text-sky-300 bg-sky-500/10 px-1.5 py-0.5 rounded">
+                                  <Building2 className="w-3 h-3" />
+                                  {departmentName}
+                                </span>
+                              ))
+                            )}
+                            {departmentNames.length > 2 && (
+                              <span className="text-[10px] font-bold text-neutral-400 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded">
+                                +{departmentNames.length - 2}
+                              </span>
+                            )}
+                          </div>
                           {news.video_url && (
                             <div className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">
                               <Video className="w-3 h-3" />
@@ -622,7 +747,7 @@ export function NewsAdmin() {
                             {!news.is_published ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-2 py-0.5 rounded-full uppercase tracking-wider">
                                 <EyeOff className="w-3 h-3" />
-                                Скрыто
+                                Черновик
                               </span>
                             ) : isScheduled ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">

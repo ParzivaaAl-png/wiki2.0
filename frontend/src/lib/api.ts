@@ -728,6 +728,8 @@ export interface News {
   tags: string[];
   images: string[];
   attachments: NewsAttachment[];
+  department_ids?: number[];
+  department_names?: string[];
   is_read?: boolean;
 }
 
@@ -770,6 +772,7 @@ export async function createNews(data: {
   tags: string[];
   images: string[];
   attachments: { file_url: string; file_name: string; file_size: number }[];
+  department_ids?: number[];
 }): Promise<News> {
   clearApiCache();
   return apiCall<News>('/news', {
@@ -792,6 +795,7 @@ export async function updateNews(
     tags: string[];
     images: string[];
     attachments: { file_url: string; file_name: string; file_size: number }[];
+    department_ids?: number[];
   }
 ): Promise<News> {
   clearApiCache();

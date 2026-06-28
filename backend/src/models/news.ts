@@ -33,8 +33,41 @@ export interface News {
   tags: string[];
   images: string[];
   attachments: Omit<NewsAttachment, 'news_id'>[];
+  department_ids: number[];
+  department_names: string[];
   is_read?: boolean;
 }
+
+const normalizeDepartmentIds = (ids: unknown): number[] => {
+  if (!Array.isArray(ids)) return [];
+
+  return Array.from(
+    new Set(
+      ids
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  );
+};
+
+const normalizeNewsRow = (row: any): News => ({
+  ...row,
+  department_ids: normalizeDepartmentIds(row.department_ids),
+  department_names: Array.isArray(row.department_names)
+    ? row.department_names.filter((name: unknown) => typeof name === 'string' && name.trim().length > 0)
+    : [],
+});
+
+const insertNewsDepartments = async (client: any, newsId: number, departmentIds: number[]) => {
+  const ids = normalizeDepartmentIds(departmentIds);
+  if (ids.length === 0) return;
+
+  const values = ids.map((_, index) => `($1, $${index + 2})`).join(', ');
+  await client.query(
+    `INSERT INTO news_departments (news_id, department_id) VALUES ${values} ON CONFLICT DO NOTHING`,
+    [newsId, ...ids]
+  );
+};
 
 export const getAllNews = async (options: {
   publishedOnly?: boolean;
@@ -56,24 +89,47 @@ export const getAllNews = async (options: {
     params.push(options.userId);
   }
 
+  if (options.userId && options.publishedOnly !== false) {
+    const audienceUserParam = paramIndex++;
+    params.push(options.userId);
+    whereClauses.push(`(
+      NOT EXISTS (
+        SELECT 1 FROM news_departments nd_all
+        WHERE nd_all.news_id = n.id
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM news_departments nd_allowed
+        JOIN users audience_user ON audience_user.id = $${audienceUserParam}
+        JOIN employees audience_employee ON audience_employee.id = audience_user.employee_id
+        WHERE nd_allowed.news_id = n.id
+          AND nd_allowed.department_id = audience_employee.department_id
+      )
+    )`);
+  }
+
   const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
   const sql = `
     SELECT n.*, u.name as author_name, ${userSelect},
            COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
-           COALESCE(array_agg(DISTINCT img.image_url) FILTER (WHERE img.image_url IS NOT NULL), '{}') as images
+           COALESCE(array_agg(DISTINCT img.image_url) FILTER (WHERE img.image_url IS NOT NULL), '{}') as images,
+           COALESCE(array_agg(DISTINCT nd.department_id) FILTER (WHERE nd.department_id IS NOT NULL), '{}') as department_ids,
+           COALESCE(array_agg(DISTINCT d.name) FILTER (WHERE d.name IS NOT NULL), '{}') as department_names
     FROM news n
     LEFT JOIN users u ON n.author_id = u.id
     ${joinReadStatus}
     LEFT JOIN news_tags t ON n.id = t.news_id
     LEFT JOIN news_images img ON n.id = img.news_id
+    LEFT JOIN news_departments nd ON n.id = nd.news_id
+    LEFT JOIN departments d ON d.id = nd.department_id
     ${whereSql}
     GROUP BY n.id, u.name ${options.userId ? ', rs.is_read' : ''}
     ORDER BY n.is_pinned DESC, n.published_at DESC, n.created_at DESC
   `;
 
   const res = await query(sql, params);
-  const newsList = res.rows as any[];
+  const newsList = res.rows.map(normalizeNewsRow) as any[];
 
   // For attachments, we can make a separate batch query to populate them efficiently
   if (newsList.length > 0) {
@@ -117,18 +173,22 @@ export const getNewsById = async (id: number, userId?: number): Promise<News | n
 
   const sql = `
     SELECT n.*, u.name as author_name, ${userSelect},
-           COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags
+           COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
+           COALESCE(array_agg(DISTINCT nd.department_id) FILTER (WHERE nd.department_id IS NOT NULL), '{}') as department_ids,
+           COALESCE(array_agg(DISTINCT d.name) FILTER (WHERE d.name IS NOT NULL), '{}') as department_names
     FROM news n
     LEFT JOIN users u ON n.author_id = u.id
     ${joinReadStatus}
     LEFT JOIN news_tags t ON n.id = t.news_id
+    LEFT JOIN news_departments nd ON n.id = nd.news_id
+    LEFT JOIN departments d ON d.id = nd.department_id
     WHERE n.id = $1
     GROUP BY n.id, u.name ${userId ? ', rs.is_read' : ''}
   `;
 
   const res = await query(sql, params);
   if (res.rows.length === 0) return null;
-  const news = res.rows[0] as any;
+  const news = normalizeNewsRow(res.rows[0]) as any;
 
   // Retrieve gallery images ordered by position
   const imgRes = await query(
@@ -147,6 +207,22 @@ export const getNewsById = async (id: number, userId?: number): Promise<News | n
   return news;
 };
 
+export const canUserAccessNews = async (news: Pick<News, 'department_ids'>, userId: number): Promise<boolean> => {
+  const targetDepartmentIds = normalizeDepartmentIds(news.department_ids);
+  if (targetDepartmentIds.length === 0) return true;
+
+  const res = await query(
+    `SELECT e.department_id
+     FROM users u
+     JOIN employees e ON e.id = u.employee_id
+     WHERE u.id = $1`,
+    [userId]
+  );
+
+  const userDepartmentId = Number(res.rows[0]?.department_id);
+  return Number.isInteger(userDepartmentId) && targetDepartmentIds.includes(userDepartmentId);
+};
+
 export const getUnreadNewsCount = async (userId: number): Promise<number> => {
   const sql = `
     SELECT COUNT(*) as count 
@@ -156,6 +232,20 @@ export const getUnreadNewsCount = async (userId: number): Promise<number> => {
       AND NOT EXISTS (
         SELECT 1 FROM news_read_status rs 
         WHERE rs.news_id = n.id AND rs.user_id = $1 AND rs.is_read = true
+      )
+      AND (
+        NOT EXISTS (
+          SELECT 1 FROM news_departments nd_all
+          WHERE nd_all.news_id = n.id
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM news_departments nd_allowed
+          JOIN users audience_user ON audience_user.id = $1
+          JOIN employees audience_employee ON audience_employee.id = audience_user.employee_id
+          WHERE nd_allowed.news_id = n.id
+            AND nd_allowed.department_id = audience_employee.department_id
+        )
       )
   `;
   const res = await query(sql, [userId]);
@@ -192,6 +282,7 @@ export const createNews = async (data: {
   tags: string[];
   images: string[];
   attachments: { file_url: string; file_name: string; file_size: number }[];
+  department_ids?: number[];
 }): Promise<News> => {
   const client = await pool.connect();
   try {
@@ -214,6 +305,7 @@ export const createNews = async (data: {
       data.published_at || new Date(),
     ]);
     const news = newsRes.rows[0];
+    await insertNewsDepartments(client, news.id, data.department_ids || []);
 
     // Insert Tags
     if (data.tags && data.tags.length > 0) {
@@ -269,6 +361,7 @@ export const updateNews = async (
     tags: string[];
     images: string[];
     attachments: { file_url: string; file_name: string; file_size: number }[];
+    department_ids?: number[];
   },
   userId: number
 ): Promise<News | null> => {
@@ -314,6 +407,8 @@ export const updateNews = async (
     await client.query('DELETE FROM news_tags WHERE news_id = $1', [id]);
     await client.query('DELETE FROM news_images WHERE news_id = $1', [id]);
     await client.query('DELETE FROM news_attachments WHERE news_id = $1', [id]);
+    await client.query('DELETE FROM news_departments WHERE news_id = $1', [id]);
+    await insertNewsDepartments(client, id, data.department_ids || []);
 
     // Insert New Tags
     if (data.tags && data.tags.length > 0) {
