@@ -25,18 +25,26 @@ import {
   Info,
   MessageSquare,
   BarChart3,
+  ChevronDown,
+  ChevronRight,
+  Building2,
+  Briefcase,
+  FileText,
 } from 'lucide-react';
 import { 
   fetchArticles, 
   deleteArticle, 
   updateArticle,
   Article, 
+  Space,
+  Section,
   importArticle,
   clearServerCache,
   syncArticleNow,
   fetchArticleSyncHistory,
   fetchNotifications,
   markNotificationsAsRead,
+  fetchNavigationTree,
   ArticleSyncLog,
   Notification
 } from '../lib/api';
@@ -48,15 +56,44 @@ import AnalyticsDashboard from '../components/analytics-dashboard';
 import TeamAccessManagement from '../components/team-access-management';
 import { AnimatePresence, motion } from 'framer-motion';
 
+type SectionMeta = {
+  section: Section;
+  space: Space;
+  path: string;
+  sortKey: string;
+};
+
+type ArticleSectionGroup = {
+  id: string;
+  title: string;
+  description: string;
+  section: Section | null;
+  articles: Article[];
+};
+
+type ArticleSpaceGroup = {
+  id: string;
+  title: string;
+  description: string;
+  space: Space | null;
+  sections: ArticleSectionGroup[];
+  articleCount: number;
+};
+
 export default function Admin() {
   const { user, isAdmin, isEditor, isStaff } = useAuth();
   const navigate = useNavigate();
   const [articles, setArticles] = React.useState<Article[]>([]);
+  const [navigationTree, setNavigationTree] = React.useState<Space[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'published' | 'drafts'>('all');
+  const [spaceFilter, setSpaceFilter] = React.useState('all');
+  const [sectionFilter, setSectionFilter] = React.useState('all');
   const [activeTab, setActiveTab] = React.useState<'articles' | 'archive' | 'analytics' | 'news' | 'team' | 'wiki'>('articles');
+  const [collapsedSpaceIds, setCollapsedSpaceIds] = React.useState<Set<string>>(new Set());
+  const [collapsedSectionIds, setCollapsedSectionIds] = React.useState<Set<string>>(new Set());
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = React.useState(false);
@@ -133,9 +170,13 @@ export default function Admin() {
   const loadAdminData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      // Fetch all articles (including drafts and hidden)
-      const arts = await fetchArticles({ all: true });
+      // Fetch all articles and the same wiki tree used by the left navigator.
+      const [arts, tree] = await Promise.all([
+        fetchArticles({ all: true }),
+        fetchNavigationTree(),
+      ]);
       setArticles(arts.filter(art => !art.slug.startsWith('auto-list-')));
+      setNavigationTree(tree);
     } catch (err) {
       console.error('Failed to load admin articles catalog:', err);
     } finally {
@@ -160,22 +201,32 @@ export default function Admin() {
     }
   };
 
+  const buildArticleUpdatePayload = (art: Article, overrides: Partial<Article> = {}) => ({
+    title: art.title,
+    slug: art.slug,
+    summary: art.summary || '',
+    content: art.content,
+    category_id: art.category_id || null,
+    published: art.published,
+    tags: art.tags || [],
+    position: art.position || 0,
+    is_visible: art.is_visible !== false,
+    status: art.status || (art.published ? 'published' : 'draft'),
+    section_ids: art.section_ids || [],
+    source_url: art.source_url || null,
+    sync_interval: art.sync_interval || 'manual',
+    article_type: art.article_type || 'general',
+    owner_id: art.owner_id || null,
+    approver_id: art.approver_id || null,
+    ...overrides,
+  });
+
   // Position change handler for articles
   const handleArticlePositionChange = async (artId: number, newPos: number) => {
     const art = articles.find(a => a.id === artId);
     if (!art) return;
     try {
-      await updateArticle(artId, {
-        title: art.title,
-        slug: art.slug,
-        summary: art.summary,
-        content: art.content,
-        category_id: null,
-        published: art.published,
-        tags: art.tags,
-        position: newPos,
-        is_visible: art.is_visible
-      });
+      await updateArticle(artId, buildArticleUpdatePayload(art, { position: newPos }));
       setArticles(prev => prev.map(a => a.id === artId ? { ...a, position: newPos } : a));
     } catch (err) {
       console.error('Failed to update article position:', err);
@@ -187,17 +238,7 @@ export default function Admin() {
     if (!window.confirm(`Вы уверены, что хотите скрыть статью "${art.title}"? Она будет отправлена в архив.`)) return;
 
     try {
-      await updateArticle(art.id, {
-        title: art.title,
-        slug: art.slug,
-        summary: art.summary || '',
-        content: art.content,
-        category_id: null,
-        published: art.published,
-        tags: art.tags,
-        position: art.position || 0,
-        is_visible: false
-      });
+      await updateArticle(art.id, buildArticleUpdatePayload(art, { is_visible: false }));
       await loadAdminData();
       alert('Статья перенесена в архив.');
     } catch (err: any) {
@@ -209,17 +250,7 @@ export default function Admin() {
   // Restore Article (is_visible = true)
   const handleRestoreArticle = async (art: Article) => {
     try {
-      await updateArticle(art.id, {
-        title: art.title,
-        slug: art.slug,
-        summary: art.summary || '',
-        content: art.content,
-        category_id: null,
-        published: art.published,
-        tags: art.tags,
-        position: art.position || 0,
-        is_visible: true
-      });
+      await updateArticle(art.id, buildArticleUpdatePayload(art, { is_visible: true }));
       await loadAdminData();
       alert('Статья успешно восстановлена из архива.');
     } catch (err: any) {
@@ -278,37 +309,489 @@ export default function Admin() {
     };
   }, [articles]);
 
-  // FILTERED ARTICLES (ACTIVE LIST)
-  const filteredArticles = React.useMemo(() => {
-    return articles.filter(art => {
-      // Exclude archived articles from active view
-      if (art.is_visible === false) return false;
+  const sectionMeta = React.useMemo(() => {
+    const byId = new Map<number, SectionMeta>();
+    const options: Array<{ id: number; name: string; spaceId: number; path: string }> = [];
 
-      // Apply status filters
+    const walkSections = (space: Space, sections: Section[], parents: string[] = []) => {
+      sections.forEach((section, index) => {
+        const pathParts = [...parents, section.name];
+        const path = pathParts.join(' / ');
+        byId.set(section.id, {
+          section,
+          space,
+          path,
+          sortKey: `${space.name.toLowerCase()}-${path.toLowerCase()}-${index}`,
+        });
+        options.push({ id: section.id, name: section.name, spaceId: space.id, path });
+        if (section.subsections?.length) {
+          walkSections(space, section.subsections, pathParts);
+        }
+      });
+    };
+
+    navigationTree.forEach((space) => walkSections(space, space.sections || []));
+    return { byId, options };
+  }, [navigationTree]);
+
+  const sectionFilterOptions = React.useMemo(() => (
+    sectionMeta.options.filter((section) => (
+      spaceFilter === 'all' || section.spaceId === Number(spaceFilter)
+    ))
+  ), [sectionMeta.options, spaceFilter]);
+
+  React.useEffect(() => {
+    if (sectionFilter === 'all') return;
+    const selected = sectionMeta.byId.get(Number(sectionFilter));
+    if (spaceFilter !== 'all' && selected?.space.id !== Number(spaceFilter)) {
+      setSectionFilter('all');
+    }
+  }, [sectionFilter, sectionMeta.byId, spaceFilter]);
+
+  const getArticlePrimarySectionId = React.useCallback((article: Article) => {
+    const ids = article.section_ids || [];
+
+    if (sectionFilter !== 'all') {
+      const selectedId = Number(sectionFilter);
+      return ids.includes(selectedId) ? selectedId : null;
+    }
+
+    if (spaceFilter !== 'all') {
+      const selectedSpaceId = Number(spaceFilter);
+      const spaceSection = ids.find((id) => sectionMeta.byId.get(id)?.space.id === selectedSpaceId);
+      return spaceSection || null;
+    }
+
+    return ids.find((id) => sectionMeta.byId.has(id)) || null;
+  }, [sectionFilter, sectionMeta.byId, spaceFilter]);
+
+  const articleMatchesHierarchyFilters = React.useCallback((article: Article) => {
+    const ids = article.section_ids || [];
+    if (sectionFilter !== 'all') {
+      return ids.includes(Number(sectionFilter));
+    }
+    if (spaceFilter !== 'all') {
+      return ids.some((id) => sectionMeta.byId.get(id)?.space.id === Number(spaceFilter));
+    }
+    return true;
+  }, [sectionFilter, sectionMeta.byId, spaceFilter]);
+
+  const articleMatchesSearch = React.useCallback((article: Article, meta: SectionMeta | null, query: string) => {
+    if (!query) return true;
+    const text = [
+      article.title,
+      article.slug,
+      article.summary || '',
+      article.author_name || '',
+      ...(article.tags || []),
+    ].join(' ').toLowerCase();
+
+    const sectionText = [
+      meta?.path || '',
+      meta?.section.description || '',
+      meta?.space.name || '',
+      meta?.space.description || '',
+    ].join(' ').toLowerCase();
+
+    return text.includes(query) || sectionText.includes(query);
+  }, []);
+
+  const buildArticleTree = React.useCallback((sourceArticles: Article[]): ArticleSpaceGroup[] => {
+    const query = searchQuery.trim().toLowerCase();
+    const spaceGroups = new Map<string, ArticleSpaceGroup>();
+
+    const ensureSpaceGroup = (meta: SectionMeta | null) => {
+      const id = meta ? `space-${meta.space.id}` : 'space-unassigned';
+      if (!spaceGroups.has(id)) {
+        spaceGroups.set(id, {
+          id,
+          title: meta?.space.name || 'Без отдела',
+          description: meta?.space.description || 'Статьи без привязки к разделу Wiki.',
+          space: meta?.space || null,
+          sections: [],
+          articleCount: 0,
+        });
+      }
+      return spaceGroups.get(id)!;
+    };
+
+    const ensureSectionGroup = (spaceGroup: ArticleSpaceGroup, meta: SectionMeta | null) => {
+      const id = meta ? `section-${meta.section.id}` : `${spaceGroup.id}-section-unassigned`;
+      let group = spaceGroup.sections.find((item) => item.id === id);
+      if (!group) {
+        group = {
+          id,
+          title: meta?.path || 'Без раздела',
+          description: meta?.section.description || 'Статьи без выбранной должности или раздела.',
+          section: meta?.section || null,
+          articles: [],
+        };
+        spaceGroup.sections.push(group);
+      }
+      return group;
+    };
+
+    sourceArticles
+      .filter(articleMatchesHierarchyFilters)
+      .sort((a, b) => (a.position || 0) - (b.position || 0) || a.title.localeCompare(b.title, 'ru'))
+      .forEach((article) => {
+        const primarySectionId = getArticlePrimarySectionId(article);
+        const meta = primarySectionId ? sectionMeta.byId.get(primarySectionId) || null : null;
+
+        if (!articleMatchesSearch(article, meta, query)) return;
+
+        const spaceGroup = ensureSpaceGroup(meta);
+        const sectionGroup = ensureSectionGroup(spaceGroup, meta);
+        sectionGroup.articles.push(article);
+        spaceGroup.articleCount += 1;
+      });
+
+    return Array.from(spaceGroups.values())
+      .map((spaceGroup) => ({
+        ...spaceGroup,
+        sections: spaceGroup.sections.sort((a, b) => {
+          if (!a.section) return 1;
+          if (!b.section) return -1;
+          const aMeta = sectionMeta.byId.get(a.section.id);
+          const bMeta = sectionMeta.byId.get(b.section.id);
+          return (aMeta?.sortKey || a.title).localeCompare(bMeta?.sortKey || b.title, 'ru');
+        }),
+      }))
+      .sort((a, b) => {
+        if (!a.space) return 1;
+        if (!b.space) return -1;
+        return a.space.name.localeCompare(b.space.name, 'ru');
+      });
+  }, [
+    articleMatchesHierarchyFilters,
+    articleMatchesSearch,
+    getArticlePrimarySectionId,
+    searchQuery,
+    sectionMeta.byId,
+  ]);
+
+  const activeArticles = React.useMemo(() => (
+    articles.filter((art) => {
+      if (art.is_visible === false) return false;
       if (statusFilter === 'published' && !art.published) return false;
       if (statusFilter === 'drafts' && art.published) return false;
-
-      // Apply search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        return art.title.toLowerCase().includes(q) || (art.summary || '').toLowerCase().includes(q);
-      }
-
       return true;
-    });
-  }, [articles, searchQuery, statusFilter]);
+    })
+  ), [articles, statusFilter]);
 
-  // FILTERED ARCHIVED ARTICLES
-  const archivedArticles = React.useMemo(() => {
-    return articles.filter(art => {
-      if (art.is_visible !== false) return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        return art.title.toLowerCase().includes(q) || (art.summary || '').toLowerCase().includes(q);
-      }
-      return true;
+  const archivedArticles = React.useMemo(() => (
+    articles.filter((art) => art.is_visible === false)
+  ), [articles]);
+
+  const activeArticleTree = React.useMemo(() => buildArticleTree(activeArticles), [activeArticles, buildArticleTree]);
+  const archivedArticleTree = React.useMemo(() => buildArticleTree(archivedArticles), [archivedArticles, buildArticleTree]);
+  const activeDisplayedCount = React.useMemo(() => (
+    activeArticleTree.reduce((sum, space) => sum + space.articleCount, 0)
+  ), [activeArticleTree]);
+  const archivedDisplayedCount = React.useMemo(() => (
+    archivedArticleTree.reduce((sum, space) => sum + space.articleCount, 0)
+  ), [archivedArticleTree]);
+
+  const forceTreeExpanded = Boolean(searchQuery.trim()) || spaceFilter !== 'all' || sectionFilter !== 'all';
+
+  const toggleSpaceCollapsed = (id: string) => {
+    setCollapsedSpaceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
-  }, [articles, searchQuery]);
+  };
+
+  const toggleSectionCollapsed = (id: string) => {
+    setCollapsedSectionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const formatDateTime = (value: string) => (
+    new Date(value).toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  );
+
+  const renderArticleStatusBadge = (article: Article) => (
+    article.published ? (
+      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-semibold uppercase tracking-wider">
+        Опубликовано
+      </span>
+    ) : (
+      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 font-semibold uppercase tracking-wider">
+        Черновик
+      </span>
+    )
+  );
+
+  const renderArticleActions = (article: Article, mode: 'active' | 'archive') => {
+    if (mode === 'archive') {
+      return (
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <button
+            onClick={() => handleRestoreArticle(article)}
+            className="px-2.5 py-1 text-[10px] font-bold text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-md transition-colors cursor-pointer"
+            title="Восстановить статью"
+          >
+            Восстановить
+          </button>
+          <button
+            onClick={() => navigate(`/admin/editor/${article.id}`)}
+            className="px-2.5 py-1 text-[10px] font-bold text-indigo-600 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-md transition-colors cursor-pointer"
+            title="Редактировать статью"
+          >
+            Изменить
+          </button>
+          {isAdmin && (
+            <button
+              onClick={() => handleDeleteForever(article.id, article.title)}
+              className="px-2.5 py-1 text-[10px] font-bold text-red-600 bg-red-500/10 hover:bg-red-500/20 rounded-md transition-colors cursor-pointer"
+              title="Удалить навсегда из базы данных"
+            >
+              Удалить
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-end gap-1">
+        {article.source_url && (
+          <>
+            <button
+              onClick={() => handleSyncArticle(article.id)}
+              disabled={!!syncingArticleIds[article.id]}
+              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-card transition-colors cursor-pointer"
+              title="Синхронизировать сейчас"
+            >
+              {syncingArticleIds[article.id] ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5" />
+              )}
+            </button>
+            <button
+              onClick={() => handleOpenHistory(article)}
+              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-card transition-colors cursor-pointer"
+              title="История синхронизации"
+            >
+              <History className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
+        <button
+          onClick={() => setSelectedArticleForPreview(article)}
+          className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-card transition-colors cursor-pointer"
+          title="Предпросмотр статьи"
+        >
+          <Eye className="w-3.5 h-3.5" />
+        </button>
+        <Link
+          to={`/admin/editor/${article.id}`}
+          className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-card transition-colors"
+          title="Редактировать статью"
+        >
+          <Edit3 className="w-3.5 h-3.5" />
+        </Link>
+        <button
+          onClick={() => handleArchiveArticle(article)}
+          className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-red-500 dark:hover:text-red-400 hover:bg-card transition-colors cursor-pointer"
+          title="Архивировать статью"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  };
+
+  const renderArticleTree = (tree: ArticleSpaceGroup[], mode: 'active' | 'archive') => {
+    const emptyText = mode === 'archive'
+      ? 'В архиве нет статей, подходящих под выбранные фильтры.'
+      : 'Статей не найдено по выбранным фильтрам.';
+
+    if (tree.length === 0) {
+      return (
+        <div className="text-center p-12 text-muted-foreground italic">
+          {emptyText}
+        </div>
+      );
+    }
+
+    return (
+      <div className="divide-y divide-border">
+        {tree.map((spaceGroup) => {
+          const spaceOpen = forceTreeExpanded || !collapsedSpaceIds.has(spaceGroup.id);
+          return (
+            <div key={spaceGroup.id} className="bg-card">
+              <button
+                type="button"
+                onClick={() => toggleSpaceCollapsed(spaceGroup.id)}
+                className="w-full flex items-center justify-between gap-4 px-4 py-4 text-left hover:bg-muted/35 transition-colors"
+              >
+                <div className="flex items-start gap-3 min-w-0">
+                  <span className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-indigo-500/20 bg-indigo-500/10 text-indigo-500 shrink-0">
+                    <Building2 className="w-4.5 h-4.5" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-bold text-foreground truncate">{spaceGroup.title}</h3>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-border bg-muted text-muted-foreground">
+                        {spaceGroup.sections.length} разделов
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 text-indigo-500">
+                        {spaceGroup.articleCount} статей
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      {spaceGroup.description || 'Раздел Wiki без описания.'}
+                    </p>
+                  </div>
+                </div>
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground shrink-0">
+                  {spaceOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </span>
+              </button>
+
+              {spaceOpen && (
+                <div className="px-3 pb-4 space-y-3">
+                  {spaceGroup.sections.map((sectionGroup) => {
+                    const sectionOpen = forceTreeExpanded || !collapsedSectionIds.has(sectionGroup.id);
+                    return (
+                      <div key={sectionGroup.id} className="ml-0 sm:ml-8 rounded-xl border border-border bg-background/60 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => toggleSectionCollapsed(sectionGroup.id)}
+                          className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/35 transition-colors"
+                        >
+                          <div className="flex items-start gap-2 min-w-0">
+                            <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-500/20 bg-sky-500/10 text-sky-500 shrink-0">
+                              <Briefcase className="w-4 h-4" />
+                            </span>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="font-bold text-sm text-foreground truncate">{sectionGroup.title}</h4>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-border bg-muted text-muted-foreground">
+                                  {sectionGroup.articles.length} статей
+                                </span>
+                              </div>
+                              {sectionGroup.description && (
+                                <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{sectionGroup.description}</p>
+                              )}
+                            </div>
+                          </div>
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground shrink-0">
+                            {sectionOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                          </span>
+                        </button>
+
+                        {sectionOpen && (
+                          <div className="border-t border-border divide-y divide-border">
+                            {sectionGroup.articles.map((article) => {
+                              const extraSections = Math.max((article.section_ids?.length || 0) - 1, 0);
+                              return (
+                                <div key={`${sectionGroup.id}-${article.id}`} className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_160px_150px_170px] gap-3 px-4 py-3 hover:bg-muted/25 transition-colors">
+                                  <div className="min-w-0">
+                                    <div className="flex items-start gap-2">
+                                      <FileText className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                                      <div className="min-w-0">
+                                        {mode === 'active' ? (
+                                          <Link
+                                            to={`/articles/${article.slug}`}
+                                            className="font-bold text-sm text-foreground hover:text-indigo-500 hover:underline inline-flex items-center gap-1"
+                                          >
+                                            <span className="truncate">{article.title}</span>
+                                            <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0" />
+                                          </Link>
+                                        ) : (
+                                          <div className="font-bold text-sm text-foreground truncate">{article.title}</div>
+                                        )}
+                                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                                          <span className="text-[10px] text-muted-foreground font-mono">/{article.slug}</span>
+                                          {extraSections > 0 && (
+                                            <span className="text-[10px] font-bold text-indigo-500 bg-indigo-500/10 px-1.5 py-0.5 rounded">
+                                              +{extraSections} связ.
+                                            </span>
+                                          )}
+                                          {article.source_url && mode === 'active' && (
+                                            <a
+                                              href={article.source_url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="inline-flex items-center gap-1 text-[9px] text-indigo-500 hover:text-indigo-600 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium bg-indigo-500/5 dark:bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/15"
+                                            >
+                                              <ExternalLink className="w-2.5 h-2.5" />
+                                              <span>Источник</span>
+                                            </a>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="text-[11px] text-muted-foreground">
+                                    <div className="font-semibold text-foreground/80">Автор</div>
+                                    <div className="truncate">{article.author_name || 'Не указан'}</div>
+                                  </div>
+
+                                  <div className="text-[11px] text-muted-foreground">
+                                    <div className="font-semibold text-foreground/80">
+                                      {mode === 'archive' ? 'Архивировано' : 'Обновлено'}
+                                    </div>
+                                    <div className="font-mono">{formatDateTime(article.updated_at)}</div>
+                                    {mode === 'active' && (
+                                      <div className="mt-1 flex items-center gap-2">
+                                        {renderArticleStatusBadge(article)}
+                                        <span className="font-mono text-[10px]">{article.views} просмотров</span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="flex lg:justify-end items-start gap-2">
+                                    {mode === 'active' && (
+                                      <input
+                                        type="number"
+                                        key={`art-pos-${article.id}-${article.position}`}
+                                        defaultValue={article.position}
+                                        onBlur={(e) => handleArticlePositionChange(article.id, Number(e.target.value))}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            handleArticlePositionChange(article.id, Number((e.target as HTMLInputElement).value));
+                                            (e.target as HTMLInputElement).blur();
+                                          }
+                                        }}
+                                        className="w-12 text-center text-xs py-1.5 rounded border border-border bg-input text-foreground outline-none focus:border-indigo-500"
+                                        title="Порядок статьи"
+                                      />
+                                    )}
+                                    {renderArticleActions(article, mode)}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -525,185 +1008,88 @@ export default function Admin() {
             </div>
           </div>
 
-          {/* Table Container */}
+          {/* Structured Article Tree */}
           <div className="border border-border bg-card text-card-foreground rounded-xl overflow-hidden shadow-premium dark:shadow-premium-dark">
-            <div className="p-4 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-1.5 bg-muted/30 w-full md:max-w-xs">
-                <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Поиск по названию..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-transparent text-xs text-foreground outline-none w-full placeholder-muted-foreground"
-                />
+            <div className="p-4 border-b border-border space-y-3">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 bg-muted/30 w-full lg:max-w-md focus-within:border-indigo-500 transition-colors">
+                  <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <input
+                    type="text"
+                    placeholder="Поиск по статье, разделу или автору..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="bg-transparent text-xs text-foreground outline-none w-full placeholder-muted-foreground"
+                  />
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Статус:</span>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as any)}
+                      className="text-xs border border-border rounded-lg px-2.5 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+                    >
+                      <option value="all">Все</option>
+                      <option value="published">Опубликованные</option>
+                      <option value="drafts">Черновики</option>
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={handleClearCache}
+                    disabled={isClearingCache}
+                    className="inline-flex items-center justify-center gap-1 px-3 py-2 border border-border hover:bg-muted rounded-lg text-xs font-semibold shadow-sm transition-colors text-muted-foreground cursor-pointer"
+                    title="Очистить серверный кэш"
+                  >
+                    {isClearingCache ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    )}
+                    <span>Сбросить кэш</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs text-muted-foreground">Статус:</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as any)}
-                  className="text-xs border border-border rounded-lg px-2.5 py-1.5 bg-muted text-foreground outline-none focus:border-indigo-500"
+                  value={spaceFilter}
+                  onChange={(e) => {
+                    setSpaceFilter(e.target.value);
+                    setSectionFilter('all');
+                  }}
+                  className="text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
                 >
-                  <option value="all">Все</option>
-                  <option value="published">Опубликованные</option>
-                  <option value="drafts">Черновики</option>
+                  <option value="all">Все отделы</option>
+                  {navigationTree.map((space) => (
+                    <option key={space.id} value={space.id}>{space.name}</option>
+                  ))}
                 </select>
 
-                <button
-                  onClick={handleClearCache}
-                  disabled={isClearingCache}
-                  className="ml-2 inline-flex items-center gap-1 px-3 py-1.5 border border-border hover:bg-muted rounded-lg text-xs font-semibold shadow-sm transition-colors text-muted-foreground cursor-pointer"
-                  title="Очистить серверный кэш"
+                <select
+                  value={sectionFilter}
+                  onChange={(e) => setSectionFilter(e.target.value)}
+                  className="text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
                 >
-                  {isClearingCache ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  )}
-                  <span>Сбросить кэш</span>
-                </button>
+                  <option value="all">Все должности / разделы</option>
+                  {sectionFilterOptions.map((section) => (
+                    <option key={section.id} value={section.id}>{section.path}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50 text-muted-foreground select-none">
-                    <th className="p-4 font-bold uppercase tracking-wider">Статья</th>
-                    <th className="p-4 font-bold uppercase tracking-wider hidden sm:table-cell">Автор</th>
-                    <th className="p-4 font-bold uppercase tracking-wider text-center">Порядок</th>
-                    <th className="p-4 font-bold uppercase tracking-wider text-center">Просмотры</th>
-                    <th className="p-4 font-bold uppercase tracking-wider text-center">Статус</th>
-                    <th className="p-4 font-bold uppercase tracking-wider text-center">Действия</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredArticles.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="text-center p-12 text-muted-foreground italic">
-                        Статей не найдено по вашему запросу.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredArticles.map((art) => (
-                      <tr key={art.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="p-4 min-w-[200px]">
-                          <div className="flex items-center gap-2">
-                            <Link 
-                              to={`/articles/${art.slug}`}
-                              className="font-bold text-foreground hover:text-indigo-500 hover:underline flex items-center gap-1"
-                            >
-                              <span>{art.title}</span>
-                              <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0" />
-                            </Link>
-                          </div>
-                          <span className="block text-[10px] text-muted-foreground font-mono mt-0.5">
-                            /{art.slug}
-                          </span>
-                          {art.source_url && (
-                            <a
-                              href={art.source_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[9px] text-indigo-500 hover:text-indigo-600 dark:text-indigo-400 dark:hover:text-indigo-300 mt-1 font-medium bg-indigo-500/5 dark:bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/15"
-                            >
-                              <ExternalLink className="w-2.5 h-2.5" />
-                              <span>Источник</span>
-                            </a>
-                          )}
-                        </td>
-                        <td className="p-4 text-muted-foreground hidden sm:table-cell">
-                          {art.author_name || 'Не указан'}
-                        </td>
-                        <td className="p-4 text-center">
-                          <input
-                            type="number"
-                            key={`art-pos-${art.id}-${art.position}`}
-                            defaultValue={art.position}
-                            onBlur={(e) => handleArticlePositionChange(art.id, Number(e.target.value))}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                handleArticlePositionChange(art.id, Number((e.target as HTMLInputElement).value));
-                                (e.target as HTMLInputElement).blur();
-                              }
-                            }}
-                            className="w-12 text-center text-xs py-0.5 rounded border border-border bg-input text-foreground outline-none focus:border-indigo-500 mx-auto"
-                          />
-                        </td>
-                        <td className="p-4 text-center text-muted-foreground font-mono">
-                          {art.views}
-                        </td>
-                        <td className="p-4 text-center select-none">
-                          {art.published ? (
-                            <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-semibold uppercase tracking-wider">
-                              Опубликовано
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 font-semibold uppercase tracking-wider">
-                              Черновик
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-4 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            {art.source_url && (
-                              <>
-                                <button
-                                  onClick={() => handleSyncArticle(art.id)}
-                                  disabled={!!syncingArticleIds[art.id]}
-                                  className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-card transition-colors cursor-pointer"
-                                  title="Синхронизировать сейчас"
-                                >
-                                  {syncingArticleIds[art.id] ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
-                                  ) : (
-                                    <RefreshCw className="w-3.5 h-3.5" />
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() => handleOpenHistory(art)}
-                                  className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-card transition-colors cursor-pointer"
-                                  title="История синхронизации"
-                                >
-                                  <History className="w-3.5 h-3.5" />
-                                </button>
-                              </>
-                            )}
-                            <button
-                              onClick={() => setSelectedArticleForPreview(art)}
-                              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-card transition-colors cursor-pointer"
-                              title="Предпросмотр статьи"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                            <Link
-                              to={`/admin/editor/${art.id}`}
-                              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-card transition-colors"
-                              title="Редактировать статью"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </Link>
-                            <button
-                              onClick={() => handleArchiveArticle(art)}
-                              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-red-500 dark:hover:text-red-400 hover:bg-card transition-colors cursor-pointer"
-                              title="Архивировать статью"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {renderArticleTree(activeArticleTree, 'active')}
 
             <div className="p-4 bg-muted border-t border-border text-[10px] text-muted-foreground flex items-center justify-between">
-              <span>Всего статей: {filteredArticles.length}</span>
-              <span>SaaS CMS-движок v2.0</span>
+              <span>Показано статей: {activeDisplayedCount}</span>
+              <span>
+                {searchQuery.trim() || spaceFilter !== 'all' || sectionFilter !== 'all'
+                  ? 'Фильтры применены'
+                  : 'SaaS CMS-движок v2.0'}
+              </span>
             </div>
           </div>
         </>
@@ -722,89 +1108,50 @@ export default function Admin() {
               </p>
             </div>
             
-            <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-1.5 bg-muted/30 w-full md:max-w-xs shrink-0">
-              <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-              <input
-                type="text"
-                placeholder="Поиск в архиве..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-transparent text-xs text-foreground outline-none w-full placeholder-muted-foreground"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_180px_220px] gap-2 w-full md:max-w-3xl shrink-0">
+              <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 bg-muted/30 focus-within:border-indigo-500 transition-colors">
+                <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Поиск в архиве..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="bg-transparent text-xs text-foreground outline-none w-full placeholder-muted-foreground"
+                />
+              </div>
+
+              <select
+                value={spaceFilter}
+                onChange={(e) => {
+                  setSpaceFilter(e.target.value);
+                  setSectionFilter('all');
+                }}
+                className="text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+              >
+                <option value="all">Все отделы</option>
+                {navigationTree.map((space) => (
+                  <option key={space.id} value={space.id}>{space.name}</option>
+                ))}
+              </select>
+
+              <select
+                value={sectionFilter}
+                onChange={(e) => setSectionFilter(e.target.value)}
+                className="text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+              >
+                <option value="all">Все должности</option>
+                {sectionFilterOptions.map((section) => (
+                  <option key={section.id} value={section.id}>{section.path}</option>
+                ))}
+              </select>
             </div>
           </div>
 
           <div className="border border-border bg-card text-card-foreground rounded-xl overflow-hidden shadow-premium dark:shadow-premium-dark">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50 text-muted-foreground select-none">
-                    <th className="p-4 font-bold uppercase tracking-wider">Статья</th>
-                    <th className="p-4 font-bold uppercase tracking-wider">Автор статьи</th>
-                    <th className="p-4 font-bold uppercase tracking-wider">Скрыта (изменена)</th>
-                    <th className="p-4 font-bold uppercase tracking-wider text-center">Действия</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {archivedArticles.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="text-center p-12 text-muted-foreground italic">
-                        В архиве нет статей, подходящих под критерии поиска.
-                      </td>
-                    </tr>
-                  ) : (
-                    archivedArticles.map((art) => (
-                      <tr key={art.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="p-4 min-w-[200px]">
-                          <div className="font-bold text-foreground">
-                            {art.title}
-                          </div>
-                          <span className="block text-[10px] text-muted-foreground font-mono mt-0.5">
-                            /{art.slug}
-                          </span>
-                        </td>
-                        <td className="p-4 text-muted-foreground">
-                          {art.author_name || 'Не указан'}
-                        </td>
-                        <td className="p-4 text-muted-foreground font-mono">
-                          {new Date(art.updated_at).toLocaleString()}
-                        </td>
-                        <td className="p-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              onClick={() => handleRestoreArticle(art)}
-                              className="px-2.5 py-1 text-[10px] font-bold text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-md transition-colors cursor-pointer"
-                              title="Восстановить статью"
-                            >
-                              Восстановить
-                            </button>
-                            <button
-                              onClick={() => navigate(`/admin/editor/${art.id}`)}
-                              className="px-2.5 py-1 text-[10px] font-bold text-indigo-600 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-md transition-colors cursor-pointer"
-                              title="Редактировать статью"
-                            >
-                              Изменить
-                            </button>
-                            {isAdmin && (
-                              <button
-                                onClick={() => handleDeleteForever(art.id, art.title)}
-                                className="px-2.5 py-1 text-[10px] font-bold text-red-600 bg-red-500/10 hover:bg-red-500/20 rounded-md transition-colors cursor-pointer"
-                                title="Удалить навсегда из базы данных"
-                              >
-                                Удалить
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {renderArticleTree(archivedArticleTree, 'archive')}
 
             <div className="p-4 bg-muted border-t border-border text-[10px] text-muted-foreground">
-              Всего архивных статей: {archivedArticles.length}
+              Всего архивных статей: {archivedDisplayedCount}
             </div>
           </div>
         </div>
