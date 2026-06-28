@@ -9,6 +9,13 @@ import {
 } from '../lib/api';
 import WYSIWYGEditor from './wysiwyg-editor';
 
+type NewsStatus = 'draft' | 'published' | 'archived';
+type NewsSubmitAction = 'draft' | 'publish' | 'bump';
+
+const getNewsStatus = (news: Pick<News, 'is_published'>): NewsStatus => (
+  news.is_published ? 'published' : 'draft'
+);
+
 export function NewsAdmin() {
   const [newsList, setNewsList] = React.useState<News[]>([]);
   const [departments, setDepartments] = React.useState<Department[]>([]);
@@ -21,13 +28,13 @@ export function NewsAdmin() {
   const [description, setDescription] = React.useState('');
   const [content, setContent] = React.useState('');
   const [videoUrl, setVideoUrl] = React.useState('');
-  const [isPublished, setIsPublished] = React.useState(true);
   const [isPinned, setIsPinned] = React.useState(false);
   const [publishedAt, setPublishedAt] = React.useState('');
   const [tagsInput, setTagsInput] = React.useState('');
   const [selectedDepartmentIds, setSelectedDepartmentIds] = React.useState<number[]>([]);
   const [galleryImages, setGalleryImages] = React.useState<string[]>([]);
   const [attachments, setAttachments] = React.useState<{ file_url: string; file_name: string; file_size: number }[]>([]);
+  const [submitAction, setSubmitAction] = React.useState<NewsSubmitAction | null>(null);
   
   // Loading indicators for media
   const [isUploadingImage, setIsUploadingImage] = React.useState(false);
@@ -87,7 +94,6 @@ export function NewsAdmin() {
     setDescription(news.description);
     setContent(news.content);
     setVideoUrl(news.video_url || '');
-    setIsPublished(news.is_published);
     setIsPinned(news.is_pinned);
     
     // Format published_at to YYYY-MM-DDTHH:MM for datetime-local input
@@ -116,7 +122,6 @@ export function NewsAdmin() {
     setDescription('');
     setContent('<p></p>');
     setVideoUrl('');
-    setIsPublished(true);
     setIsPinned(false);
     
     // Set current time for publishedAt
@@ -136,6 +141,7 @@ export function NewsAdmin() {
   };
 
   const handleCancel = () => {
+    setSubmitAction(null);
     setIsEditing(false);
     setSelectedNews(null);
   };
@@ -192,43 +198,51 @@ export function NewsAdmin() {
     ));
   };
 
-  // Submit Handler
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!isPublished && !hasDraftData()) {
-      alert('Добавьте заголовок, текст или вложение, чтобы сохранить черновик');
-      return;
-    }
-
-    if (isPublished && !title.trim()) {
-      alert('Заголовок обязателен для публикации');
-      return;
-    }
-
-    const normalizedTitle = title.trim() || createDraftTitle();
+  const buildNewsPayload = (action: NewsSubmitAction) => {
+    const willPublish = action === 'publish' || action === 'bump';
+    const shouldLiftToTop = willPublish;
 
     const tags = tagsInput
       .split(',')
       .map(t => t.trim())
       .filter(t => t.length > 0);
 
-    const payload = {
-      title: normalizedTitle,
+    return {
+      title: title.trim() || createDraftTitle(),
       description,
       content: content || '<p></p>',
       video_url: videoUrl.trim() || null,
-      is_published: isPublished,
-      is_pinned: isPublished && isPinned,
-      published_at: publishedAt ? new Date(publishedAt).toISOString() : undefined,
-      bump_to_top: !!selectedNews && isPublished && (!publishedAt || new Date(publishedAt).getTime() <= Date.now()),
+      is_published: willPublish,
+      is_pinned: willPublish ? isPinned : false,
+      published_at: shouldLiftToTop
+        ? new Date().toISOString()
+        : (publishedAt ? new Date(publishedAt).toISOString() : selectedNews?.published_at),
+      bump_to_top: shouldLiftToTop,
       tags,
       images: galleryImages,
       attachments,
-      department_ids: selectedDepartmentIds
+      department_ids: selectedDepartmentIds,
     };
+  };
+
+  // Submit Handler
+  const handleSaveNews = async (action: NewsSubmitAction) => {
+    const willPublish = action === 'publish' || action === 'bump';
+
+    if (!willPublish && !hasDraftData()) {
+      alert('Добавьте заголовок, текст или вложение, чтобы сохранить черновик');
+      return;
+    }
+
+    if (willPublish && !title.trim()) {
+      alert('Заголовок обязателен для публикации');
+      return;
+    }
+
+    const payload = buildNewsPayload(action);
 
     try {
+      setSubmitAction(action);
       if (selectedNews) {
         await updateNews(selectedNews.id, payload);
       } else {
@@ -239,6 +253,8 @@ export function NewsAdmin() {
       loadNews();
     } catch (err: any) {
       alert(err.message || 'Ошибка при сохранении новости');
+    } finally {
+      setSubmitAction(null);
     }
   };
 
@@ -256,16 +272,17 @@ export function NewsAdmin() {
 
   // Toggle quick values directly
   const handleQuickTogglePublish = async (news: News) => {
+    const willPublish = !news.is_published;
     try {
       await updateNews(news.id, {
         title: news.title,
         description: news.description,
         content: news.content,
         video_url: news.video_url || null,
-        is_published: !news.is_published,
-        is_pinned: news.is_pinned,
-        published_at: news.published_at,
-        bump_to_top: false,
+        is_published: willPublish,
+        is_pinned: willPublish ? news.is_pinned : false,
+        published_at: willPublish ? new Date().toISOString() : news.published_at,
+        bump_to_top: willPublish,
         tags: news.tags,
         images: news.images,
         attachments: news.attachments,
@@ -306,6 +323,10 @@ export function NewsAdmin() {
     n.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  const selectedNewsStatus = selectedNews ? getNewsStatus(selectedNews) : 'draft';
+  const isEditingPublishedNews = selectedNewsStatus === 'published';
+  const isSaving = submitAction !== null;
+
   return (
     <div className="space-y-6">
       
@@ -334,18 +355,30 @@ export function NewsAdmin() {
       {isEditing ? (
         
         /* EDITOR FORM PANEL */
-        <form onSubmit={handleSubmit} className="bg-white dark:bg-neutral-950 border border-neutral-200/50 dark:border-neutral-900 rounded-xl p-5 sm:p-6 space-y-6 shadow-sm">
+        <form onSubmit={(e) => e.preventDefault()} className="bg-white dark:bg-neutral-950 border border-neutral-200/50 dark:border-neutral-900 rounded-xl p-5 sm:p-6 space-y-6 shadow-sm">
           
           <div className="flex items-center justify-between pb-3 border-b border-neutral-200/50 dark:border-neutral-900">
-            <span className="text-sm font-bold text-neutral-700 dark:text-neutral-350">
-              {selectedNews ? 'Редактирование новости' : 'Новое объявление'}
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-bold text-neutral-700 dark:text-neutral-350">
+                {selectedNews ? 'Редактирование новости' : 'Новое объявление'}
+              </span>
+              {selectedNews && (
+                <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                  selectedNewsStatus === 'published'
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-neutral-100 dark:bg-neutral-900 text-neutral-500'
+                }`}>
+                  {selectedNewsStatus === 'published' ? 'published' : 'draft'}
+                </span>
+              )}
+            </div>
             <button
               type="button"
               onClick={handleCancel}
-              className="px-3 py-1.5 text-xs text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-900 rounded-lg transition-colors border border-neutral-200/50 dark:border-neutral-800"
+              className="p-1.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-900 rounded-lg transition-colors border border-neutral-200/50 dark:border-neutral-800"
+              title="Закрыть"
             >
-              Отмена
+              <X className="w-4 h-4" />
             </button>
           </div>
 
@@ -411,36 +444,21 @@ export function NewsAdmin() {
                   />
                 </div>
 
-                {/* Flags Checkbox */}
                 <div className="flex flex-col gap-2.5 pt-2">
+                  <div className="rounded-lg border border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950 px-3 py-2 text-[10px] leading-relaxed text-neutral-500 dark:text-neutral-400">
+                    Статус: {selectedNews ? selectedNewsStatus : 'новая новость'}.
+                  </div>
+
                   <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input
                       type="checkbox"
-                      checked={isPublished}
-                      onChange={(e) => setIsPublished(e.target.checked)}
-                      className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 border-neutral-350 dark:border-neutral-800 dark:bg-neutral-900"
-                    />
-                    <span className="text-xs text-neutral-700 dark:text-neutral-300">
-                      {isPublished ? 'Опубликовать после сохранения' : 'Сохранить как черновик'}
-                    </span>
-                  </label>
-                  {!isPublished && (
-                    <div className="rounded-lg border border-amber-200 dark:border-amber-500/25 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-[10px] leading-relaxed text-amber-700 dark:text-amber-200">
-                      Новость останется в черновиках и не появится у сотрудников, пока вы её не опубликуете.
-                    </div>
-                  )}
-                  
-                  <label className={`flex items-center gap-2 select-none ${isPublished ? 'cursor-pointer' : 'cursor-not-allowed opacity-55'}`}>
-                    <input
-                      type="checkbox"
-                      checked={isPinned && isPublished}
+                      checked={isPinned}
                       onChange={(e) => setIsPinned(e.target.checked)}
-                      disabled={!isPublished}
                       className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 border-neutral-350 dark:border-neutral-800 dark:bg-neutral-900"
                     />
                     <span className="text-xs text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
                       <Pin className="w-3.5 h-3.5 text-amber-500 fill-current" />
-                      Закрепить новость сверху
+                      Закрепить после публикации
                     </span>
                   </label>
                 </div>
@@ -606,16 +624,63 @@ export function NewsAdmin() {
                 )}
               </div>
 
-              {/* SAVE ACTION BAR */}
-              <button
-                type="submit"
-                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/10 transition-all"
-              >
-                {!isPublished ? 'Сохранить черновик' : selectedNews ? 'Сохранить и поднять вверх' : 'Сохранить и опубликовать'}
-              </button>
-
             </div>
 
+          </div>
+
+          <div className="pt-4 border-t border-neutral-200/50 dark:border-neutral-900 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={isSaving}
+              className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-250 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-xs font-bold transition-colors disabled:opacity-60"
+            >
+              Отмена
+            </button>
+
+            {isEditingPublishedNews ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleSaveNews('draft')}
+                  disabled={isSaving}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg border border-amber-500/25 bg-amber-500/10 hover:bg-amber-500/15 text-amber-700 dark:text-amber-300 text-xs font-bold transition-colors disabled:opacity-60"
+                >
+                  {submitAction === 'draft' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Перевести в черновик
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveNews('bump')}
+                  disabled={isSaving}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/10 transition-all disabled:opacity-60"
+                >
+                  {submitAction === 'bump' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Сохранить и поднять вверх
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleSaveNews('draft')}
+                  disabled={isSaving}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-250 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-xs font-bold transition-colors disabled:opacity-60"
+                >
+                  {submitAction === 'draft' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Сохранить как черновик
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveNews('publish')}
+                  disabled={isSaving}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/10 transition-all disabled:opacity-60"
+                >
+                  {submitAction === 'publish' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Опубликовать
+                </button>
+              </>
+            )}
           </div>
 
         </form>
@@ -661,7 +726,8 @@ export function NewsAdmin() {
                 </thead>
                 <tbody className="divide-y divide-neutral-200/50 dark:divide-neutral-900 text-sm">
                   {filteredNews.map((news) => {
-                    const isScheduled = new Date(news.published_at) > new Date();
+                    const status = getNewsStatus(news);
+                    const isScheduled = status === 'published' && new Date(news.published_at) > new Date();
                     const departmentNames = news.department_names || [];
                     return (
                       <tr key={news.id} className="hover:bg-neutral-50/40 dark:hover:bg-neutral-900/20 transition-colors">
@@ -670,8 +736,13 @@ export function NewsAdmin() {
                         <td className="px-5 py-3">
                           <button
                             onClick={() => handleQuickTogglePin(news)}
-                            className={`p-1.5 rounded hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors ${news.is_pinned ? 'text-amber-500' : 'text-neutral-300 dark:text-neutral-700'}`}
-                            title={news.is_pinned ? 'Открепить новость' : 'Закрепить новость'}
+                            disabled={status !== 'published'}
+                            className={`p-1.5 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                              news.is_pinned
+                                ? 'text-amber-500 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                                : 'text-neutral-300 dark:text-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                            }`}
+                            title={status !== 'published' ? 'Закрепление доступно после публикации' : news.is_pinned ? 'Открепить новость' : 'Закрепить новость'}
                           >
                             <Pin className={`w-4 h-4 ${news.is_pinned ? 'fill-current' : ''}`} />
                           </button>
@@ -742,9 +813,9 @@ export function NewsAdmin() {
                           <button
                             onClick={() => handleQuickTogglePublish(news)}
                             className="text-left outline-none"
-                            title="Нажмите для переключения"
+                            title={status === 'published' ? 'Перевести в черновик' : 'Опубликовать'}
                           >
-                            {!news.is_published ? (
+                            {status === 'draft' ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-neutral-500 bg-neutral-100 dark:bg-neutral-900 px-2 py-0.5 rounded-full uppercase tracking-wider">
                                 <EyeOff className="w-3 h-3" />
                                 Черновик
@@ -757,7 +828,7 @@ export function NewsAdmin() {
                             ) : (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">
                                 <Eye className="w-3 h-3" />
-                                Активна
+                                Опубликована
                               </span>
                             )}
                           </button>
