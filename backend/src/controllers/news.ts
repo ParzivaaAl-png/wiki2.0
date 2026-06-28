@@ -70,7 +70,7 @@ export const getUnreadCount = async (req: AuthenticatedRequest, res: Response) =
 
 export const createNews = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { title, description, content, is_published, is_pinned, published_at, tags, images, attachments } = req.body;
+    const { title, description, content, video_url, is_published, is_pinned, published_at, tags, images, attachments } = req.body;
     const authorId = req.user?.id;
 
     if (!authorId) {
@@ -85,6 +85,7 @@ export const createNews = async (req: AuthenticatedRequest, res: Response) => {
       title,
       description: description || '',
       content,
+      video_url: video_url || null,
       is_published: is_published === undefined ? true : !!is_published,
       is_pinned: is_pinned === undefined ? false : !!is_pinned,
       author_id: authorId,
@@ -101,6 +102,7 @@ export const createNews = async (req: AuthenticatedRequest, res: Response) => {
         title: news.title,
         description: news.description,
         content: news.content,
+        videoUrl: news.video_url || null,
         tags: news.tags,
         attachments: news.attachments.map((a: any) => a.file_name),
         isPublished: news.is_published,
@@ -124,7 +126,7 @@ export const createNews = async (req: AuthenticatedRequest, res: Response) => {
 export const updateNews = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, description, content, is_published, is_pinned, published_at, tags, images, attachments } = req.body;
+    const { title, description, content, video_url, is_published, is_pinned, published_at, bump_to_top, tags, images, attachments } = req.body;
     const userId = req.user?.id;
 
     if (!userId) {
@@ -139,9 +141,11 @@ export const updateNews = async (req: AuthenticatedRequest, res: Response) => {
       title,
       description: description || '',
       content,
+      video_url: video_url || null,
       is_published: is_published === undefined ? true : !!is_published,
       is_pinned: is_pinned === undefined ? false : !!is_pinned,
       published_at: published_at ? new Date(published_at) : new Date(),
+      bump_to_top: !!bump_to_top,
       tags: tags || [],
       images: images || [],
       attachments: attachments || [],
@@ -158,6 +162,7 @@ export const updateNews = async (req: AuthenticatedRequest, res: Response) => {
         title: news.title,
         description: news.description,
         content: news.content,
+        videoUrl: news.video_url || null,
         tags: news.tags,
         attachments: news.attachments.map((a: any) => a.file_name),
         isPublished: news.is_published,

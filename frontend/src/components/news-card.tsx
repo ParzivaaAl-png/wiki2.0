@@ -12,6 +12,65 @@ interface NewsCardProps {
   onClose: () => void;
 }
 
+type EmbeddedVideo =
+  | { type: 'iframe'; src: string; provider: string }
+  | { type: 'video'; src: string; provider: string }
+  | { type: 'unsupported'; src: string; provider: string };
+
+const getEmbeddedVideo = (rawUrl?: string | null): EmbeddedVideo | null => {
+  if (!rawUrl?.trim()) return null;
+
+  const urlText = rawUrl.trim();
+  let url: URL;
+
+  try {
+    url = new URL(urlText);
+  } catch {
+    try {
+      url = new URL(`https://${urlText}`);
+    } catch {
+      return null;
+    }
+  }
+
+  const host = url.hostname.replace(/^www\./, '').toLowerCase();
+  const path = url.pathname;
+
+  if (host === 'youtu.be') {
+    const videoId = path.split('/').filter(Boolean)[0];
+    if (videoId) {
+      return { type: 'iframe', provider: 'YouTube', src: `https://www.youtube-nocookie.com/embed/${videoId}` };
+    }
+  }
+
+  if (host.includes('youtube.com')) {
+    const videoId = url.searchParams.get('v') || path.match(/\/(?:embed|shorts)\/([^/?]+)/)?.[1];
+    if (videoId) {
+      return { type: 'iframe', provider: 'YouTube', src: `https://www.youtube-nocookie.com/embed/${videoId}` };
+    }
+  }
+
+  if (host.includes('vimeo.com')) {
+    const videoId = path.match(/\/(?:video\/)?(\d+)/)?.[1];
+    if (videoId) {
+      return { type: 'iframe', provider: 'Vimeo', src: `https://player.vimeo.com/video/${videoId}` };
+    }
+  }
+
+  if (host.includes('rutube.ru')) {
+    const videoId = path.match(/\/video\/([a-z0-9]+)/i)?.[1] || path.match(/\/play\/embed\/([a-z0-9]+)/i)?.[1];
+    if (videoId) {
+      return { type: 'iframe', provider: 'Rutube', src: `https://rutube.ru/play/embed/${videoId}` };
+    }
+  }
+
+  if (/\.(mp4|webm|ogg|mov)$/i.test(path)) {
+    return { type: 'video', provider: 'Видео', src: url.toString() };
+  }
+
+  return { type: 'unsupported', provider: 'Видео', src: url.toString() };
+};
+
 export function NewsCard({ news, onClose }: NewsCardProps) {
   const [currentPhotoIdx, setCurrentPhotoIdx] = React.useState(0);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
@@ -20,6 +79,7 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
 
   const hasImages = news.images && news.images.length > 0;
   const imageCount = news.images?.length || 0;
+  const embeddedVideo = React.useMemo(() => getEmbeddedVideo(news.video_url), [news.video_url]);
 
   // Touch Swipe Handlers for mobile
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -225,6 +285,55 @@ export function NewsCard({ news, onClose }: NewsCardProps) {
           {news.description && (
             <div className="p-3.5 bg-muted/40 rounded-xl border border-border italic text-sm text-muted-foreground leading-relaxed font-light">
               {news.description}
+            </div>
+          )}
+
+          {embeddedVideo && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  Видео
+                </h3>
+                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
+                  {embeddedVideo.provider}
+                </span>
+              </div>
+
+              {embeddedVideo.type === 'iframe' && (
+                <div className="aspect-video overflow-hidden rounded-xl border border-border bg-neutral-950 shadow-premium">
+                  <iframe
+                    src={embeddedVideo.src}
+                    title={`Видео: ${news.title}`}
+                    className="h-full w-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    loading="lazy"
+                  />
+                </div>
+              )}
+
+              {embeddedVideo.type === 'video' && (
+                <video
+                  src={embeddedVideo.src}
+                  controls
+                  className="aspect-video w-full rounded-xl border border-border bg-neutral-950 shadow-premium"
+                />
+              )}
+
+              {embeddedVideo.type === 'unsupported' && (
+                <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300">
+                  <div className="font-bold">Эта ссылка не поддерживает встроенное воспроизведение.</div>
+                  <a
+                    href={embeddedVideo.src}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold underline"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Открыть ссылку
+                  </a>
+                </div>
+              )}
             </div>
           )}
 

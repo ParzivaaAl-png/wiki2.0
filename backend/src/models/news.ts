@@ -22,6 +22,7 @@ export interface News {
   title: string;
   description: string;
   content: string;
+  video_url?: string | null;
   is_published: boolean;
   is_pinned: boolean;
   author_id: number | null;
@@ -183,6 +184,7 @@ export const createNews = async (data: {
   title: string;
   description: string;
   content: string;
+  video_url?: string | null;
   is_published: boolean;
   is_pinned: boolean;
   author_id: number;
@@ -197,14 +199,15 @@ export const createNews = async (data: {
 
     // Insert News
     const newsSql = `
-      INSERT INTO news (title, description, content, is_published, is_pinned, author_id, published_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO news (title, description, content, video_url, is_published, is_pinned, author_id, published_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `;
     const newsRes = await client.query(newsSql, [
       data.title,
       data.description || '',
       data.content,
+      data.video_url || null,
       data.is_published,
       data.is_pinned,
       data.author_id,
@@ -258,9 +261,11 @@ export const updateNews = async (
     title: string;
     description: string;
     content: string;
+    video_url?: string | null;
     is_published: boolean;
     is_pinned: boolean;
     published_at?: Date;
+    bump_to_top?: boolean;
     tags: string[];
     images: string[];
     attachments: { file_url: string; file_name: string; file_size: number }[];
@@ -274,16 +279,28 @@ export const updateNews = async (
     // Update News
     const newsSql = `
       UPDATE news
-      SET title = $1, description = $2, content = $3, is_published = $4, is_pinned = $5, published_at = $6, updated_at = NOW()
-      WHERE id = $7
+      SET title = $1,
+          description = $2,
+          content = $3,
+          video_url = $4,
+          is_published = $5,
+          is_pinned = $6,
+          published_at = CASE
+            WHEN $7::boolean = true AND $5::boolean = true THEN NOW()
+            ELSE $8
+          END,
+          updated_at = NOW()
+      WHERE id = $9
       RETURNING *
     `;
     const newsRes = await client.query(newsSql, [
       data.title,
       data.description || '',
       data.content,
+      data.video_url || null,
       data.is_published,
       data.is_pinned,
+      !!data.bump_to_top,
       data.published_at || new Date(),
       id,
     ]);

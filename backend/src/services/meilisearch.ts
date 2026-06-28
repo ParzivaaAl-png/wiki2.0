@@ -61,6 +61,7 @@ export interface NewsDocument {
   title: string;
   description: string;
   content: string;
+  videoUrl?: string | null;
   tags: string[];
   attachments: string[];
   isPublished: boolean;
@@ -184,6 +185,7 @@ export const initializeMeilisearch = async () => {
         'title',
         'description',
         'content',
+        'videoUrl',
         'tags',
         'attachments',
       ],

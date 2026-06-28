@@ -281,6 +281,7 @@ export const initializeDatabase = async () => {
     console.log('Altering news image and attachment URL columns to TEXT...');
     await pool.query('ALTER TABLE news_images ALTER COLUMN image_url TYPE TEXT');
     await pool.query('ALTER TABLE news_attachments ALTER COLUMN file_url TYPE TEXT');
+    await pool.query('ALTER TABLE news ADD COLUMN IF NOT EXISTS video_url TEXT');
 
     // ----------------------------------------------------
     // STAGE 1 MVP DATABASE MIGRATIONS

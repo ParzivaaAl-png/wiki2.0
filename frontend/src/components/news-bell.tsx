@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { 
-  Bell, Pin, Search, X, Check, Inbox, MessageSquare 
+  Bell, Pin, Search, X, Check, Inbox, MessageSquare, Video
 } from 'lucide-react';
 import { 
   fetchNews, fetchUnreadNewsCount, searchNews, 
@@ -325,6 +325,12 @@ export function NewsBell() {
                                   {news.attachments && news.attachments.length > 0 && (
                                     <span className="bg-indigo-100/50 dark:bg-indigo-950/20 text-indigo-500 px-1 py-0.5 rounded">
                                       Скрепка ({news.attachments.length})
+                                    </span>
+                                  )}
+                                  {news.video_url && (
+                                    <span className="inline-flex items-center gap-0.5 bg-indigo-100/50 dark:bg-indigo-950/20 text-indigo-500 px-1 py-0.5 rounded">
+                                      <Video className="w-2 h-2" />
+                                      Видео
                                     </span>
                                   )}
                                 </div>

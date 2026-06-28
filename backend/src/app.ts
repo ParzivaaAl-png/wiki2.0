@@ -114,6 +114,7 @@ const startServer = async () => {
       title: n.title,
       description: n.description,
       content: n.content,
+      videoUrl: n.video_url || null,
       tags: n.tags || [],
       attachments: (n.attachments || []).map((a: any) => a.file_name),
       isPublished: n.is_published,

@@ -717,6 +717,7 @@ export interface News {
   title: string;
   description: string;
   content: string;
+  video_url?: string | null;
   is_published: boolean;
   is_pinned: boolean;
   author_id: number | null;
@@ -762,6 +763,7 @@ export async function createNews(data: {
   title: string;
   description: string;
   content: string;
+  video_url?: string | null;
   is_published: boolean;
   is_pinned: boolean;
   published_at?: string;
@@ -782,9 +784,11 @@ export async function updateNews(
     title: string;
     description: string;
     content: string;
+    video_url?: string | null;
     is_published: boolean;
     is_pinned: boolean;
     published_at?: string;
+    bump_to_top?: boolean;
     tags: string[];
     images: string[];
     attachments: { file_url: string; file_name: string; file_size: number }[];

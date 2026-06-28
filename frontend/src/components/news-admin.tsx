@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { 
   Plus, Edit, Trash2, Pin, Eye, EyeOff, Calendar, 
-  Upload, X, FileText, Loader2, Sparkles, Search, MessageSquare
+  Upload, X, FileText, Loader2, Sparkles, Search, MessageSquare, Video
 } from 'lucide-react';
 import { 
   fetchNews, createNews, updateNews, deleteNews, 
@@ -19,6 +19,7 @@ export function NewsAdmin() {
   const [title, setTitle] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [content, setContent] = React.useState('');
+  const [videoUrl, setVideoUrl] = React.useState('');
   const [isPublished, setIsPublished] = React.useState(true);
   const [isPinned, setIsPinned] = React.useState(false);
   const [publishedAt, setPublishedAt] = React.useState('');
@@ -52,6 +53,7 @@ export function NewsAdmin() {
     setTitle(news.title);
     setDescription(news.description);
     setContent(news.content);
+    setVideoUrl(news.video_url || '');
     setIsPublished(news.is_published);
     setIsPinned(news.is_pinned);
     
@@ -79,6 +81,7 @@ export function NewsAdmin() {
     setTitle('');
     setDescription('');
     setContent('<p></p>');
+    setVideoUrl('');
     setIsPublished(true);
     setIsPinned(false);
     
@@ -164,9 +167,11 @@ export function NewsAdmin() {
       title,
       description,
       content,
+      video_url: videoUrl.trim() || null,
       is_published: isPublished,
       is_pinned: isPinned,
       published_at: publishedAt ? new Date(publishedAt).toISOString() : undefined,
+      bump_to_top: !!selectedNews && isPublished && (!publishedAt || new Date(publishedAt).getTime() <= Date.now()),
       tags,
       images: galleryImages,
       attachments
@@ -205,9 +210,11 @@ export function NewsAdmin() {
         title: news.title,
         description: news.description,
         content: news.content,
+        video_url: news.video_url || null,
         is_published: !news.is_published,
         is_pinned: news.is_pinned,
         published_at: news.published_at,
+        bump_to_top: false,
         tags: news.tags,
         images: news.images,
         attachments: news.attachments
@@ -224,9 +231,11 @@ export function NewsAdmin() {
         title: news.title,
         description: news.description,
         content: news.content,
+        video_url: news.video_url || null,
         is_published: news.is_published,
         is_pinned: !news.is_pinned,
         published_at: news.published_at,
+        bump_to_top: false,
         tags: news.tags,
         images: news.images,
         attachments: news.attachments
@@ -387,6 +396,23 @@ export function NewsAdmin() {
                     className="w-full bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-850 rounded-lg px-2.5 py-1.5 text-xs text-neutral-950 dark:text-white outline-none"
                   />
                 </div>
+
+                <div className="space-y-1 pt-1">
+                  <label className="text-[10px] font-bold text-neutral-450 dark:text-neutral-400 uppercase tracking-wider flex items-center gap-1">
+                    <Video className="w-3.5 h-3.5 text-neutral-400" />
+                    Ссылка на видео
+                  </label>
+                  <input
+                    type="url"
+                    value={videoUrl}
+                    onChange={(e) => setVideoUrl(e.target.value)}
+                    placeholder="YouTube, Vimeo, Rutube или прямая ссылка mp4/webm"
+                    className="w-full bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-850 rounded-lg px-2.5 py-1.5 text-xs text-neutral-950 dark:text-white outline-none focus:border-indigo-500"
+                  />
+                  <p className="text-[10px] text-neutral-400 leading-relaxed">
+                    Видео будет воспроизводиться внутри новости, без перехода на другой сайт.
+                  </p>
+                </div>
               </div>
 
               {/* Gallery Images Zone */}
@@ -481,7 +507,7 @@ export function NewsAdmin() {
                 type="submit"
                 className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/10 transition-all"
               >
-                Сохранить и опубликовать
+                {selectedNews ? 'Сохранить и поднять вверх' : 'Сохранить и опубликовать'}
               </button>
 
             </div>
@@ -551,6 +577,12 @@ export function NewsAdmin() {
                           <div className="font-bold text-neutral-900 dark:text-white truncate">{news.title}</div>
                           {news.description && (
                             <div className="text-xs text-neutral-450 dark:text-neutral-500 truncate mt-0.5">{news.description}</div>
+                          )}
+                          {news.video_url && (
+                            <div className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">
+                              <Video className="w-3 h-3" />
+                              Видео
+                            </div>
                           )}
                         </td>
 
