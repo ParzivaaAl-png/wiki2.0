@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, BookOpen, Search, Sparkles, Home, ShieldAlert, Plus, FileText, Folder, FolderOpen, Layers, ClipboardList } from 'lucide-react';
 import { fetchNavigationTree, Space, Section } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
+import GuestAccessTimer from './guest-access-timer';
 
 interface BookSidebarProps {
   isOpen: boolean;
@@ -179,6 +180,15 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
             <span className="truncate" title={section.description || section.name}>
               {section.name}
             </span>
+
+            {section.guest_access && (
+              <GuestAccessTimer
+                expiresAt={section.guest_access.expires_at}
+                scope="section"
+                compact
+                className="shrink-0"
+              />
+            )}
           </div>
 
           {/* Быстрый плюс для создания статьи в этой секции */}
@@ -236,6 +246,13 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
 
                     {/* Статусы в виде компактных точек/значков */}
                     <div className="flex items-center gap-1 shrink-0 ml-1.5">
+                      {art.guest_access && (
+                        <GuestAccessTimer
+                          expiresAt={art.guest_access.expires_at}
+                          scope={art.guest_access.type}
+                          compact
+                        />
+                      )}
                       {isDraft && (
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Черновик" />
                       )}

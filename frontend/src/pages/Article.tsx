@@ -36,6 +36,7 @@ import { useAuth } from '../lib/auth-context';
 import { AnimatePresence, motion } from 'framer-motion';
 import TariffsClassifier from '../components/tariffs-classifier';
 import TariffDetails from '../components/tariff-details';
+import GuestAccessTimer from '../components/guest-access-timer';
 
 const getTariffKeyFromSlug = (slug: string): string | null => {
   switch (slug) {
@@ -528,6 +529,15 @@ export default function ArticlePage() {
               )}
             </div>
           </div>
+
+          {article.guest_access && (
+            <div className="mb-6">
+              <GuestAccessTimer
+                expiresAt={article.guest_access.expires_at}
+                scope={article.guest_access.type}
+              />
+            </div>
+          )}
 
           {/* Process Governance Details (Owner & Approver) */}
           {(article.owner_name || article.approver_name) && (

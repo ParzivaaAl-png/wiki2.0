@@ -85,6 +85,13 @@ export interface ArticleChangeLog {
   new_title: string | null;
 }
 
+export interface GuestAccessInfo {
+  type: 'article' | 'section';
+  expires_at: string;
+  article_id: number | null;
+  section_id: number | null;
+}
+
 export interface Article {
   id: number;
   title: string;
@@ -120,6 +127,7 @@ export interface Article {
   viewed_at?: string;
   trending_views?: number | string;
   favorites_count?: number | string;
+  guest_access?: GuestAccessInfo | null;
 }
 
 export interface AnalyticsReport {
@@ -895,8 +903,10 @@ export interface Section {
     status: string;
     position: number;
     article_type?: string;
+    guest_access?: GuestAccessInfo | null;
   }[];
   subsections: Section[];
+  guest_access?: GuestAccessInfo | null;
   owner_id?: number | null;
   parent_section_id?: number | null;
   space_id?: number;
@@ -1183,7 +1193,7 @@ export async function deleteGuestAccess(id: number): Promise<void> {
 }
 
 // ACCESS CHECK
-export async function checkAccess(params: { sectionId?: number; articleId?: number }): Promise<{ hasAccess: boolean }> {
+export async function checkAccess(params: { sectionId?: number; articleId?: number }): Promise<{ hasAccess: boolean; guestAccess?: GuestAccessInfo | null }> {
   const q = new URLSearchParams();
   if (params.sectionId) q.set('sectionId', String(params.sectionId));
   if (params.articleId) q.set('articleId', String(params.articleId));

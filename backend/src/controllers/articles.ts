@@ -13,6 +13,80 @@ import { canCreateInSections, canEditArticle, getUserCapabilities } from '../ser
 
 const execFileAsync = promisify(execFile);
 
+type GuestAccessGrant = {
+  article_id: number | null;
+  section_id: number | null;
+  expires_at: Date | string;
+};
+
+type GuestAccessInfo = {
+  type: 'article' | 'section';
+  expires_at: string;
+  article_id: number | null;
+  section_id: number | null;
+};
+
+const toIsoString = (value: Date | string) => new Date(value).toISOString();
+
+const getActiveGuestAccessGrants = async (userId: number): Promise<GuestAccessGrant[]> => {
+  if (!userId) return [];
+
+  const result = await query(
+    `SELECT article_id, section_id, expires_at
+     FROM guest_access
+     WHERE user_id = $1
+       AND status = 'Active'
+       AND expires_at > CURRENT_TIMESTAMP`,
+    [userId]
+  );
+
+  return result.rows;
+};
+
+const getGuestAccessInfoForArticle = (
+  grants: GuestAccessGrant[],
+  articleId: number,
+  sectionIds: number[] = []
+): GuestAccessInfo | null => {
+  const normalizedSectionIds = sectionIds.map(Number);
+  const matching = grants
+    .filter((grant) => {
+      const grantArticleId = grant.article_id ? Number(grant.article_id) : null;
+      const grantSectionId = grant.section_id ? Number(grant.section_id) : null;
+      return grantArticleId === Number(articleId) || (grantSectionId !== null && normalizedSectionIds.includes(grantSectionId));
+    })
+    .sort((a, b) => new Date(b.expires_at).getTime() - new Date(a.expires_at).getTime());
+
+  if (!matching.length) return null;
+
+  const grant = matching[0];
+  return {
+    type: grant.article_id ? 'article' : 'section',
+    expires_at: toIsoString(grant.expires_at),
+    article_id: grant.article_id ? Number(grant.article_id) : null,
+    section_id: grant.section_id ? Number(grant.section_id) : null,
+  };
+};
+
+const getGuestAccessInfoForSection = (
+  grants: GuestAccessGrant[],
+  sectionId: number
+): GuestAccessInfo | null => {
+  const matching = grants
+    .filter((grant) => grant.section_id && Number(grant.section_id) === Number(sectionId))
+    .sort((a, b) => new Date(b.expires_at).getTime() - new Date(a.expires_at).getTime());
+
+  if (!matching.length) return null;
+
+  const grant = matching[0];
+  return {
+    type: 'section',
+    expires_at: toIsoString(grant.expires_at),
+    article_id: null,
+    section_id: Number(grant.section_id),
+  };
+};
+
 // Получение списка разрешенных разделов для запроса
 const getAllowedSectionsForRequest = async (req: Request): Promise<number[]> => {
   const authReq = req as AuthenticatedRequest;
@@ -31,6 +105,7 @@ export const getArticles = async (req: Request, res: Response) => {
     const employeeId = authReq.user ? authReq.user.employee_id : null;
 
     const allowedSectionIds = await getUserAllowedSections(employeeId, role, userId);
+    const activeGuestGrants = userId ? await getActiveGuestAccessGrants(userId) : [];
     const { capabilities } = await getUserCapabilities(userId || null, role);
     const canManageCatalog =
       !!authReq.user &&
@@ -51,7 +126,7 @@ export const getArticles = async (req: Request, res: Response) => {
       allowedStatuses = ['published', 'requires_verification', 'archived', 'expired'];
     }
 
-    let articles = [];
+    let articles: any[] = [];
     if (filter === 'new') {
       const resData = await query(
         `SELECT a.*, u.name as author_name,
@@ -132,6 +207,38 @@ export const getArticles = async (req: Request, res: Response) => {
         authorId: canEditCatalog ? userId : undefined
       });
     }
+
+    const directGuestArticleIds = Array.from(new Set(
+      activeGuestGrants
+        .map((grant) => grant.article_id ? Number(grant.article_id) : null)
+        .filter((id): id is number => id !== null)
+    ));
+    const existingArticleIds = new Set(articles.map((article) => Number(article.id)));
+    const missingDirectGuestArticleIds = directGuestArticleIds.filter((id) => !existingArticleIds.has(id));
+
+    if (missingDirectGuestArticleIds.length > 0) {
+      const directGuestArticlesRes = await query(
+        `SELECT a.*, u.name as author_name,
+                COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
+                COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
+         FROM articles a
+         LEFT JOIN users u ON a.author_id = u.id
+         LEFT JOIN article_tags t ON a.id = t.article_id
+         LEFT JOIN article_sections axs ON a.id = axs.article_id
+         WHERE a.id = ANY($1::int[])
+           AND a.is_visible = true
+           AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
+         GROUP BY a.id, u.name
+         ORDER BY a.position ASC, a.created_at DESC`,
+        [missingDirectGuestArticleIds, allowedStatuses, userId]
+      );
+      articles = [...articles, ...directGuestArticlesRes.rows];
+    }
+
+    articles = articles.map((article) => ({
+      ...article,
+      guest_access: getGuestAccessInfoForArticle(activeGuestGrants, article.id, article.section_ids || [])
+    }));
     
     res.json(articles);
   } catch (error: any) {
@@ -159,23 +266,14 @@ export const getArticle = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Article not found' });
     }
 
+    const activeGuestGrants = userId ? await getActiveGuestAccessGrants(userId) : [];
+    const articleGuestAccess = getGuestAccessInfoForArticle(activeGuestGrants, article.id, article.section_ids || []);
+
     // Проверка доступа к разделам и статусу статьи
     if (role !== 'Admin') {
       const allowedSections = await getUserAllowedSections(employeeId, role, userId);
       const hasSectionAccess = article.section_ids.some(id => allowedSections.includes(id));
-      
-      let hasGuestAccess = false;
-      if (userId) {
-        const guestAccessRes = await query(
-          `SELECT id FROM guest_access 
-           WHERE user_id = $1 
-             AND (article_id = $2 OR section_id = ANY($3::int[])) 
-             AND status = 'Active' 
-             AND expires_at > CURRENT_TIMESTAMP`,
-          [userId, article.id, article.section_ids]
-        );
-        hasGuestAccess = (guestAccessRes.rowCount ?? 0) > 0;
-      }
+      const hasGuestAccess = !!articleGuestAccess;
       
       if (!hasSectionAccess && !hasGuestAccess && article.section_ids.length > 0) {
         return res.status(403).json({ error: 'Доступ ограничен: У вас нет прав на просмотр этой статьи.' });
@@ -233,7 +331,8 @@ export const getArticle = async (req: Request, res: Response) => {
 
     res.json({
       ...article,
-      latest_change: latestChange
+      latest_change: latestChange,
+      guest_access: articleGuestAccess
     });
   } catch (error: any) {
     console.error('Error fetching article:', error);
@@ -1015,8 +1114,27 @@ export const getNavigationTree = async (req: Request, res: Response) => {
     const employeeId = authReq.user ? authReq.user.employee_id : null;
 
     const allowedSectionIds = await getUserAllowedSections(employeeId, role, userId);
+    const activeGuestGrants = userId ? await getActiveGuestAccessGrants(userId) : [];
+    const directGuestArticleIds = Array.from(new Set(
+      activeGuestGrants
+        .map((grant) => grant.article_id ? Number(grant.article_id) : null)
+        .filter((id): id is number => id !== null)
+    ));
 
-    if (allowedSectionIds.length === 0) {
+    let directGuestSectionIds: number[] = [];
+    if (directGuestArticleIds.length > 0) {
+      const directGuestSectionsRes = await query(
+        `SELECT DISTINCT section_id
+         FROM article_sections
+         WHERE article_id = ANY($1::int[])`,
+        [directGuestArticleIds]
+      );
+      directGuestSectionIds = directGuestSectionsRes.rows.map((row) => Number(row.section_id));
+    }
+
+    const navigationSectionIds = Array.from(new Set([...allowedSectionIds, ...directGuestSectionIds]));
+
+    if (navigationSectionIds.length === 0) {
       return res.json([]);
     }
 
@@ -1026,7 +1144,7 @@ export const getNavigationTree = async (req: Request, res: Response) => {
        FROM sections s
        WHERE s.id = ANY($1::int[]) AND s.status = 'Active'
        ORDER BY s.id ASC`,
-      [allowedSectionIds]
+      [navigationSectionIds]
     );
     const sections = sectionsRes.rows;
 
@@ -1058,11 +1176,11 @@ export const getNavigationTree = async (req: Request, res: Response) => {
       `SELECT a.id, a.title, a.slug, a.status, a.position, a.article_type, axs.section_id
        FROM articles a
        JOIN article_sections axs ON a.id = axs.article_id
-       WHERE axs.section_id = ANY($1::int[]) 
+       WHERE (axs.section_id = ANY($1::int[]) OR a.id = ANY($4::int[]))
          AND a.is_visible = true
          AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
        ORDER BY (CASE WHEN a.article_type = 'job_description' THEN 0 ELSE 1 END) ASC, a.position ASC, a.created_at DESC`,
-      [allowedSectionIds, allowedStatuses, userId]
+      [allowedSectionIds, allowedStatuses, userId, directGuestArticleIds]
     );
     const articles = articlesRes.rows;
 
@@ -1078,7 +1196,8 @@ export const getNavigationTree = async (req: Request, res: Response) => {
         slug: art.slug,
         status: art.status,
         position: art.position,
-        article_type: art.article_type
+        article_type: art.article_type,
+        guest_access: getGuestAccessInfoForArticle(activeGuestGrants, art.id, [Number(art.section_id)])
       });
     });
 
@@ -1092,11 +1211,13 @@ export const getNavigationTree = async (req: Request, res: Response) => {
         .filter(s => s.space_id === spaceId && s.parent_section_id === parentId)
         .map(s => {
           const children = buildSectionTree(allSections, s.id, spaceId);
+          const sectionGuestAccess = getGuestAccessInfoForSection(activeGuestGrants, s.id);
           return {
             id: s.id,
             name: s.name,
             description: s.description,
             position_id: s.position_id,
+            guest_access: sectionGuestAccess,
             articles: articlesBySection[s.id] || [],
             subsections: children
           };
@@ -1112,11 +1233,13 @@ export const getNavigationTree = async (req: Request, res: Response) => {
 
       const sectionTree = rootSections.map(s => {
         const children = buildSectionTree(spaceSections, s.id, sp.id);
+        const sectionGuestAccess = getGuestAccessInfoForSection(activeGuestGrants, s.id);
         return {
           id: s.id,
           name: s.name,
           description: s.description,
           position_id: s.position_id,
+          guest_access: sectionGuestAccess,
           articles: articlesBySection[s.id] || [],
           subsections: children
         };
@@ -1151,33 +1274,25 @@ export const checkAccess = async (req: Request, res: Response) => {
       return res.json({ hasAccess: true });
     }
 
+    const activeGuestGrants = userId ? await getActiveGuestAccessGrants(userId) : [];
+
     if (articleId) {
       const article = await ArticleModel.getArticleById(Number(articleId));
       if (!article) return res.status(404).json({ error: 'Article not found' });
       
       const allowedSections = await getUserAllowedSections(employeeId, role, userId);
       const hasSectionAccess = article.section_ids.some(id => allowedSections.includes(id));
+      const guestAccess = getGuestAccessInfoForArticle(activeGuestGrants, article.id, article.section_ids || []);
+      const hasGuestAccess = !!guestAccess;
       
-      let hasGuestAccess = false;
-      if (userId) {
-        const guestAccessRes = await query(
-          `SELECT id FROM guest_access 
-           WHERE user_id = $1 
-             AND (article_id = $2 OR section_id = ANY($3::int[])) 
-             AND status = 'Active' 
-             AND expires_at > CURRENT_TIMESTAMP`,
-          [userId, article.id, article.section_ids]
-        );
-        hasGuestAccess = (guestAccessRes.rowCount ?? 0) > 0;
-      }
-      
-      return res.json({ hasAccess: hasSectionAccess || hasGuestAccess });
+      return res.json({ hasAccess: hasSectionAccess || hasGuestAccess, guestAccess });
     }
 
     if (sectionId) {
       const allowedSections = await getUserAllowedSections(employeeId, role, userId);
-      const hasAccess = allowedSections.includes(Number(sectionId));
-      return res.json({ hasAccess });
+      const guestAccess = getGuestAccessInfoForSection(activeGuestGrants, Number(sectionId));
+      const hasAccess = allowedSections.includes(Number(sectionId)) || !!guestAccess;
+      return res.json({ hasAccess, guestAccess });
     }
 
     return res.status(400).json({ error: 'sectionId or articleId required' });

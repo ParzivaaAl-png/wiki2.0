@@ -15,6 +15,7 @@ import {
 import { CategoryIcon } from '../components/icon';
 import { SearchModal } from '../components/search-modal';
 import { useAuth } from '../lib/auth-context';
+import GuestAccessTimer from '../components/guest-access-timer';
 
 const PRESET_COLORS = ['#6366f1', '#8b5cf6', '#7c3aed', '#10b981', '#f43f5e', '#f59e0b', '#06b6d4'];
 const PRESET_ICONS = ['file-text', 'book', 'layers', 'layout', 'database', 'settings', 'cpu', 'terminal', 'search'];
@@ -766,6 +767,16 @@ export default function Home() {
                         {art.title}
                       </h3>
                     </div>
+
+                    {art.guest_access && (
+                      <div className="mb-2">
+                        <GuestAccessTimer
+                          expiresAt={art.guest_access.expires_at}
+                          scope={art.guest_access.type}
+                          compact
+                        />
+                      </div>
+                    )}
 
                     <p className="text-neutral-500 dark:text-neutral-400 text-[10px] line-clamp-2 leading-relaxed font-light">
                       {art.summary || 'Краткое содержание статьи отсутствует.'}
