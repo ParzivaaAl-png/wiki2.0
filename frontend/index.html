@@ -26,10 +26,11 @@
         document.documentElement.classList.toggle('dark', theme === 'dark');
         document.documentElement.dataset.theme = theme;
         document.documentElement.style.colorScheme = theme;
+        document.documentElement.style.backgroundColor = theme === 'dark' ? '#0B0D10' : '#FCFCFD';
       })();
     </script>
   </head>
-  <body class="min-h-screen bg-background text-foreground font-sans antialiased">
+  <body class="min-h-screen bg-background text-foreground font-sans antialiased" style="margin: 0;">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

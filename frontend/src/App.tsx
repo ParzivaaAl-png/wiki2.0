@@ -62,7 +62,7 @@ function Header() {
   const location = useLocation();
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border glass-header transition-colors duration-300">
+    <header className="sticky top-0 z-40 w-full border-b border-border bg-background glass-header transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
         
         <Link to="/" className={`flex items-center gap-2 shrink-0 group ${user ? 'ml-11 lg:ml-0' : ''}`}>
@@ -195,7 +195,7 @@ function AppContent() {
   }, [user]);
 
   return (
-    <div className={`flex flex-col min-h-screen bg-background text-foreground transition-all duration-300 ${user ? 'lg:pl-[56px] pl-0' : ''} ${isUser ? 'select-none' : ''}`}>
+    <div className={`flex flex-col min-h-screen min-h-dvh bg-background text-foreground transition-all duration-300 ${user ? 'lg:pl-[56px] pl-0' : ''} ${isUser ? 'select-none' : ''}`}>
       <Header />
       {user && (
         <BookSidebar 
@@ -204,7 +204,7 @@ function AppContent() {
           onClose={() => setIsSidebarOpen(false)} 
         />
       )}
-      <main className="flex-1 relative overflow-x-hidden">
+      <main className="flex-1 relative min-h-0 overflow-x-hidden bg-background">
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
             {/* Login Route (Public, but will redirect if user is already logged in) */}
