@@ -80,6 +80,8 @@ type ArticleSpaceGroup = {
   articleCount: number;
 };
 
+type ArticleStatusFilter = 'all' | 'published' | 'draft' | 'requires_verification' | 'on_approval' | 'archived' | 'expired';
+
 export default function Admin() {
   const { user, isAdmin, isEditor, isStaff } = useAuth();
   const navigate = useNavigate();
@@ -88,7 +90,8 @@ export default function Admin() {
   const [isLoading, setIsLoading] = React.useState(true);
   
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [statusFilter, setStatusFilter] = React.useState<'all' | 'published' | 'drafts'>('all');
+  const [statusFilter, setStatusFilter] = React.useState<ArticleStatusFilter>('all');
+  const [authorFilter, setAuthorFilter] = React.useState('all');
   const [spaceFilter, setSpaceFilter] = React.useState('all');
   const [sectionFilter, setSectionFilter] = React.useState('all');
   const [activeTab, setActiveTab] = React.useState<'articles' | 'archive' | 'analytics' | 'news' | 'team' | 'wiki'>('articles');
@@ -340,6 +343,14 @@ export default function Admin() {
     ))
   ), [sectionMeta.options, spaceFilter]);
 
+  const authorFilterOptions = React.useMemo(() => {
+    const names = new Set<string>();
+    articles.forEach((article) => {
+      names.add(article.author_name || 'Не указан');
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [articles]);
+
   React.useEffect(() => {
     if (sectionFilter === 'all') return;
     const selected = sectionMeta.byId.get(Number(sectionFilter));
@@ -375,6 +386,22 @@ export default function Admin() {
     }
     return true;
   }, [sectionFilter, sectionMeta.byId, spaceFilter]);
+
+  const getArticleStatusKey = React.useCallback((article: Article): Exclude<ArticleStatusFilter, 'all'> => {
+    const rawStatus = article.status || (article.published ? 'published' : 'draft');
+    if (article.is_visible === false || rawStatus === 'archived') return 'archived';
+    if (rawStatus === 'requires_verification') return 'requires_verification';
+    if (rawStatus === 'on_approval') return 'on_approval';
+    if (rawStatus === 'expired') return 'expired';
+    if (rawStatus === 'draft' || !article.published) return 'draft';
+    return 'published';
+  }, []);
+
+  const articleMatchesStatusAndAuthor = React.useCallback((article: Article) => {
+    if (statusFilter !== 'all' && getArticleStatusKey(article) !== statusFilter) return false;
+    if (authorFilter !== 'all' && (article.author_name || 'Не указан') !== authorFilter) return false;
+    return true;
+  }, [authorFilter, getArticleStatusKey, statusFilter]);
 
   const articleMatchesSearch = React.useCallback((article: Article, meta: SectionMeta | null, query: string) => {
     if (!query) return true;
@@ -421,8 +448,8 @@ export default function Admin() {
       if (!group) {
         group = {
           id,
-          title: meta?.path || 'Без раздела',
-          description: meta?.section.description || 'Статьи без выбранной должности или раздела.',
+          title: meta?.section.name || 'Без раздела',
+          description: meta?.section.description || (meta ? `Раздел для должности ${meta.section.name}` : 'Статьи без выбранной должности или раздела.'),
           section: meta?.section || null,
           articles: [],
         };
@@ -473,15 +500,13 @@ export default function Admin() {
   const activeArticles = React.useMemo(() => (
     articles.filter((art) => {
       if (art.is_visible === false) return false;
-      if (statusFilter === 'published' && !art.published) return false;
-      if (statusFilter === 'drafts' && art.published) return false;
-      return true;
+      return articleMatchesStatusAndAuthor(art);
     })
-  ), [articles, statusFilter]);
+  ), [articleMatchesStatusAndAuthor, articles]);
 
   const archivedArticles = React.useMemo(() => (
-    articles.filter((art) => art.is_visible === false)
-  ), [articles]);
+    articles.filter((art) => art.is_visible === false && articleMatchesStatusAndAuthor(art))
+  ), [articleMatchesStatusAndAuthor, articles]);
 
   const activeArticleTree = React.useMemo(() => buildArticleTree(activeArticles), [activeArticles, buildArticleTree]);
   const archivedArticleTree = React.useMemo(() => buildArticleTree(archivedArticles), [archivedArticles, buildArticleTree]);
@@ -492,7 +517,12 @@ export default function Admin() {
     archivedArticleTree.reduce((sum, space) => sum + space.articleCount, 0)
   ), [archivedArticleTree]);
 
-  const forceTreeExpanded = Boolean(searchQuery.trim()) || spaceFilter !== 'all' || sectionFilter !== 'all';
+  const forceTreeExpanded =
+    Boolean(searchQuery.trim()) ||
+    spaceFilter !== 'all' ||
+    sectionFilter !== 'all' ||
+    statusFilter !== 'all' ||
+    authorFilter !== 'all';
 
   const toggleSpaceCollapsed = (id: string) => {
     setCollapsedSpaceIds((prev) => {
@@ -522,43 +552,90 @@ export default function Admin() {
     })
   );
 
-  const renderArticleStatusBadge = (article: Article) => (
-    article.published ? (
-      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-semibold uppercase tracking-wider">
-        Опубликовано
+  const formatViews = (views: number) => `${new Intl.NumberFormat('ru-RU').format(Number(views || 0))} просмотров`;
+
+  const statusFilterOptions: Array<{ value: ArticleStatusFilter; label: string }> = [
+    { value: 'all', label: 'Все статусы' },
+    { value: 'published', label: 'Опубликовано' },
+    { value: 'draft', label: 'Черновик' },
+    { value: 'requires_verification', label: 'Требует проверки' },
+    { value: 'on_approval', label: 'На согласовании' },
+    { value: 'archived', label: 'Архив' },
+    { value: 'expired', label: 'Истёк срок' },
+  ];
+
+  const getArticleStatusMeta = (article: Article) => {
+    switch (getArticleStatusKey(article)) {
+      case 'draft':
+        return {
+          label: 'Черновик',
+          className: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+        };
+      case 'requires_verification':
+        return {
+          label: 'Требует проверки',
+          className: 'border-orange-500/25 bg-orange-500/10 text-orange-700 dark:text-orange-300',
+        };
+      case 'on_approval':
+        return {
+          label: 'На согласовании',
+          className: 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+        };
+      case 'archived':
+        return {
+          label: 'Архив',
+          className: 'border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300',
+        };
+      case 'expired':
+        return {
+          label: 'Истёк срок',
+          className: 'border-neutral-400/30 bg-neutral-500/10 text-neutral-600 dark:text-neutral-300',
+        };
+      case 'published':
+      default:
+        return {
+          label: 'Опубликовано',
+          className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+        };
+    }
+  };
+
+  const renderArticleStatusBadge = (article: Article) => {
+    const status = getArticleStatusMeta(article);
+    return (
+      <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${status.className}`}>
+        {status.label}
       </span>
-    ) : (
-      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 font-semibold uppercase tracking-wider">
-        Черновик
-      </span>
-    )
-  );
+    );
+  };
 
   const renderArticleActions = (article: Article, mode: 'active' | 'archive') => {
+    const actionButtonClass = 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors cursor-pointer';
+
     if (mode === 'archive') {
       return (
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
+        <div className="flex items-center justify-end gap-1.5">
           <button
             onClick={() => handleRestoreArticle(article)}
-            className="px-2.5 py-1 text-[10px] font-bold text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-md transition-colors cursor-pointer"
+            className={`${actionButtonClass} hover:text-emerald-600 dark:hover:text-emerald-300`}
             title="Восстановить статью"
           >
-            Восстановить
+            <RotateCcw className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => navigate(`/admin/editor/${article.id}`)}
-            className="px-2.5 py-1 text-[10px] font-bold text-indigo-600 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-md transition-colors cursor-pointer"
+            className={actionButtonClass}
             title="Редактировать статью"
           >
-            Изменить
+            <Edit3 className="w-3.5 h-3.5" />
           </button>
           {isAdmin && (
             <button
               onClick={() => handleDeleteForever(article.id, article.title)}
-              className="px-2.5 py-1 text-[10px] font-bold text-red-600 bg-red-500/10 hover:bg-red-500/20 rounded-md transition-colors cursor-pointer"
+              className={`${actionButtonClass} hover:text-red-600 dark:hover:text-red-300`}
               title="Удалить навсегда из базы данных"
             >
-              Удалить
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
@@ -566,13 +643,13 @@ export default function Admin() {
     }
 
     return (
-      <div className="flex items-center justify-end gap-1">
+      <div className="flex items-center justify-end gap-1.5">
         {article.source_url && (
           <>
             <button
               onClick={() => handleSyncArticle(article.id)}
               disabled={!!syncingArticleIds[article.id]}
-              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-card transition-colors cursor-pointer"
+              className={actionButtonClass}
               title="Синхронизировать сейчас"
             >
               {syncingArticleIds[article.id] ? (
@@ -583,7 +660,7 @@ export default function Admin() {
             </button>
             <button
               onClick={() => handleOpenHistory(article)}
-              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-card transition-colors cursor-pointer"
+              className={actionButtonClass}
               title="История синхронизации"
             >
               <History className="w-3.5 h-3.5" />
@@ -592,21 +669,21 @@ export default function Admin() {
         )}
         <button
           onClick={() => setSelectedArticleForPreview(article)}
-          className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-card transition-colors cursor-pointer"
+          className={actionButtonClass}
           title="Предпросмотр статьи"
         >
           <Eye className="w-3.5 h-3.5" />
         </button>
         <Link
           to={`/admin/editor/${article.id}`}
-          className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-card transition-colors"
+          className={actionButtonClass}
           title="Редактировать статью"
         >
           <Edit3 className="w-3.5 h-3.5" />
         </Link>
         <button
           onClick={() => handleArchiveArticle(article)}
-          className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-red-500 dark:hover:text-red-400 hover:bg-card transition-colors cursor-pointer"
+          className={`${actionButtonClass} hover:text-red-600 dark:hover:text-red-300`}
           title="Архивировать статью"
         >
           <Trash2 className="w-3.5 h-3.5" />
@@ -622,40 +699,40 @@ export default function Admin() {
 
     if (tree.length === 0) {
       return (
-        <div className="text-center p-12 text-muted-foreground italic">
+        <div className="m-4 rounded-2xl border border-dashed border-border bg-muted/20 p-12 text-center text-sm text-muted-foreground">
           {emptyText}
         </div>
       );
     }
 
     return (
-      <div className="divide-y divide-border">
+      <div className="space-y-4 bg-muted/20 p-3 sm:p-4">
         {tree.map((spaceGroup) => {
           const spaceOpen = forceTreeExpanded || !collapsedSpaceIds.has(spaceGroup.id);
           return (
-            <div key={spaceGroup.id} className="bg-card">
+            <div key={spaceGroup.id} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
               <button
                 type="button"
                 onClick={() => toggleSpaceCollapsed(spaceGroup.id)}
                 className="w-full flex items-center justify-between gap-4 px-4 py-4 text-left hover:bg-muted/35 transition-colors"
               >
                 <div className="flex items-start gap-3 min-w-0">
-                  <span className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-indigo-500/20 bg-indigo-500/10 text-indigo-500 shrink-0">
+                  <span className="mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-500 shrink-0">
                     <Building2 className="w-4.5 h-4.5" />
                   </span>
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-bold text-foreground truncate">{spaceGroup.title}</h3>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-border bg-muted text-muted-foreground">
-                        {spaceGroup.sections.length} разделов
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 text-indigo-500">
-                        {spaceGroup.articleCount} статей
-                      </span>
-                    </div>
+                    <h3 className="font-outfit text-base font-bold text-foreground truncate">{spaceGroup.title}</h3>
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                       {spaceGroup.description || 'Раздел Wiki без описания.'}
                     </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+                        {spaceGroup.sections.length} разделов
+                      </span>
+                      <span className="inline-flex items-center whitespace-nowrap rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                        {spaceGroup.articleCount} статей
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground shrink-0">
@@ -664,123 +741,148 @@ export default function Admin() {
               </button>
 
               {spaceOpen && (
-                <div className="px-3 pb-4 space-y-3">
+                <div className="border-t border-border bg-muted/15 px-3 py-3 sm:px-4 sm:py-4">
                   {spaceGroup.sections.map((sectionGroup) => {
                     const sectionOpen = forceTreeExpanded || !collapsedSectionIds.has(sectionGroup.id);
                     return (
-                      <div key={sectionGroup.id} className="ml-0 sm:ml-8 rounded-xl border border-border bg-background/60 overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => toggleSectionCollapsed(sectionGroup.id)}
-                          className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/35 transition-colors"
-                        >
-                          <div className="flex items-start gap-2 min-w-0">
-                            <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-500/20 bg-sky-500/10 text-sky-500 shrink-0">
-                              <Briefcase className="w-4 h-4" />
-                            </span>
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <h4 className="font-bold text-sm text-foreground truncate">{sectionGroup.title}</h4>
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-border bg-muted text-muted-foreground">
-                                  {sectionGroup.articles.length} статей
-                                </span>
+                      <div key={sectionGroup.id} className="relative pl-0 sm:pl-6 [&+&]:mt-3">
+                        <div className="absolute left-2 top-0 hidden h-full w-px bg-border sm:block" />
+                        <div className="overflow-hidden rounded-xl border border-border bg-background/80">
+                          <button
+                            type="button"
+                            onClick={() => toggleSectionCollapsed(sectionGroup.id)}
+                            className="w-full flex items-center justify-between gap-3 px-3 py-3 text-left hover:bg-muted/35 transition-colors sm:px-4"
+                          >
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-500/20 bg-sky-500/10 text-sky-600 dark:text-sky-300 shrink-0">
+                                <Briefcase className="w-4 h-4" />
+                              </span>
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h4 className="font-outfit text-sm font-bold text-foreground truncate">{sectionGroup.title}</h4>
+                                  <span className="inline-flex items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+                                    {sectionGroup.articles.length} статей
+                                  </span>
+                                </div>
+                                <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
+                                  {sectionGroup.description || `Раздел для должности ${sectionGroup.title}`}
+                                </p>
                               </div>
-                              {sectionGroup.description && (
-                                <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{sectionGroup.description}</p>
-                              )}
                             </div>
-                          </div>
-                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground shrink-0">
-                            {sectionOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                          </span>
-                        </button>
+                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shrink-0">
+                              {sectionOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                            </span>
+                          </button>
 
-                        {sectionOpen && (
-                          <div className="border-t border-border divide-y divide-border">
-                            {sectionGroup.articles.map((article) => {
-                              const extraSections = Math.max((article.section_ids?.length || 0) - 1, 0);
-                              return (
-                                <div key={`${sectionGroup.id}-${article.id}`} className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_160px_150px_170px] gap-3 px-4 py-3 hover:bg-muted/25 transition-colors">
-                                  <div className="min-w-0">
-                                    <div className="flex items-start gap-2">
-                                      <FileText className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                          {sectionOpen && (
+                            <div className="border-t border-border bg-card">
+                              <div className="hidden xl:grid xl:grid-cols-[minmax(280px,1fr)_150px_150px_145px_120px_140px] gap-3 border-b border-border bg-muted/35 px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                                <div>Статья</div>
+                                <div>Автор</div>
+                                <div>{mode === 'archive' ? 'Архивировано' : 'Обновлено'}</div>
+                                <div>Статус</div>
+                                <div>Просмотры</div>
+                                <div className="text-right">Действия</div>
+                              </div>
+
+                              <div className="divide-y divide-border">
+                                {sectionGroup.articles.map((article) => {
+                                  const extraSections = Math.max((article.section_ids?.length || 0) - 1, 0);
+                                  return (
+                                    <div
+                                      key={`${sectionGroup.id}-${article.id}`}
+                                      className="grid grid-cols-1 gap-3 px-3 py-3 transition-colors hover:bg-muted/25 sm:px-4 xl:grid-cols-[minmax(280px,1fr)_150px_150px_145px_120px_140px] xl:items-center"
+                                    >
                                       <div className="min-w-0">
-                                        {mode === 'active' ? (
-                                          <Link
-                                            to={`/articles/${article.slug}`}
-                                            className="font-bold text-sm text-foreground hover:text-indigo-500 hover:underline inline-flex items-center gap-1"
-                                          >
-                                            <span className="truncate">{article.title}</span>
-                                            <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0" />
-                                          </Link>
-                                        ) : (
-                                          <div className="font-bold text-sm text-foreground truncate">{article.title}</div>
-                                        )}
-                                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                                          <span className="text-[10px] text-muted-foreground font-mono">/{article.slug}</span>
-                                          {extraSections > 0 && (
-                                            <span className="text-[10px] font-bold text-indigo-500 bg-indigo-500/10 px-1.5 py-0.5 rounded">
-                                              +{extraSections} связ.
-                                            </span>
-                                          )}
-                                          {article.source_url && mode === 'active' && (
-                                            <a
-                                              href={article.source_url}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="inline-flex items-center gap-1 text-[9px] text-indigo-500 hover:text-indigo-600 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium bg-indigo-500/5 dark:bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/15"
-                                            >
-                                              <ExternalLink className="w-2.5 h-2.5" />
-                                              <span>Источник</span>
-                                            </a>
-                                          )}
+                                        <div className="flex items-start gap-2.5">
+                                          <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground shrink-0">
+                                            <FileText className="w-4 h-4" />
+                                          </span>
+                                          <div className="min-w-0">
+                                            {mode === 'active' ? (
+                                              <Link
+                                                to={`/articles/${article.slug}`}
+                                                className="inline-flex max-w-full items-center gap-1 font-bold text-sm text-foreground hover:text-indigo-600 dark:hover:text-indigo-300 hover:underline"
+                                              >
+                                                <span className="truncate">{article.title}</span>
+                                                <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0" />
+                                              </Link>
+                                            ) : (
+                                              <div className="truncate text-sm font-bold text-foreground">{article.title}</div>
+                                            )}
+                                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                                              <span className="max-w-full truncate text-[10px] text-muted-foreground font-mono">/{article.slug}</span>
+                                              {extraSections > 0 && (
+                                                <span className="rounded-full bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                                                  +{extraSections} разделов
+                                                </span>
+                                              )}
+                                              {article.source_url && mode === 'active' && (
+                                                <a
+                                                  href={article.source_url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="inline-flex items-center gap-1 rounded-full border border-indigo-500/15 bg-indigo-500/5 px-1.5 py-0.5 text-[9px] font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-300 dark:hover:text-indigo-200"
+                                                >
+                                                  <ExternalLink className="w-2.5 h-2.5" />
+                                                  Источник
+                                                </a>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="hidden min-w-0 text-[11px] text-muted-foreground xl:block">
+                                        <span className="block truncate font-medium text-foreground/85">{article.author_name || 'Не указан'}</span>
+                                      </div>
+
+                                      <div className="hidden whitespace-nowrap text-[11px] font-mono text-muted-foreground xl:block">
+                                        {formatDateTime(article.updated_at)}
+                                      </div>
+
+                                      <div className="hidden xl:block">
+                                        {renderArticleStatusBadge(article)}
+                                      </div>
+
+                                      <div className="hidden whitespace-nowrap text-[11px] font-medium text-muted-foreground xl:block">
+                                        {formatViews(article.views)}
+                                      </div>
+
+                                      <div className="hidden xl:flex xl:justify-end">
+                                        {renderArticleActions(article, mode)}
+                                      </div>
+
+                                      <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-muted/20 p-3 text-[11px] xl:hidden">
+                                        <div>
+                                          <div className="font-bold uppercase tracking-wide text-muted-foreground text-[9px]">Автор</div>
+                                          <div className="mt-0.5 truncate text-foreground">{article.author_name || 'Не указан'}</div>
+                                        </div>
+                                        <div>
+                                          <div className="font-bold uppercase tracking-wide text-muted-foreground text-[9px]">
+                                            {mode === 'archive' ? 'Архивировано' : 'Обновлено'}
+                                          </div>
+                                          <div className="mt-0.5 font-mono text-muted-foreground">{formatDateTime(article.updated_at)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="font-bold uppercase tracking-wide text-muted-foreground text-[9px]">Статус</div>
+                                          <div className="mt-1">{renderArticleStatusBadge(article)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="font-bold uppercase tracking-wide text-muted-foreground text-[9px]">Просмотры</div>
+                                          <div className="mt-0.5 whitespace-nowrap text-muted-foreground">{formatViews(article.views)}</div>
+                                        </div>
+                                        <div className="col-span-2 flex justify-end pt-1">
+                                          {renderArticleActions(article, mode)}
                                         </div>
                                       </div>
                                     </div>
-                                  </div>
-
-                                  <div className="text-[11px] text-muted-foreground">
-                                    <div className="font-semibold text-foreground/80">Автор</div>
-                                    <div className="truncate">{article.author_name || 'Не указан'}</div>
-                                  </div>
-
-                                  <div className="text-[11px] text-muted-foreground">
-                                    <div className="font-semibold text-foreground/80">
-                                      {mode === 'archive' ? 'Архивировано' : 'Обновлено'}
-                                    </div>
-                                    <div className="font-mono">{formatDateTime(article.updated_at)}</div>
-                                    {mode === 'active' && (
-                                      <div className="mt-1 flex items-center gap-2">
-                                        {renderArticleStatusBadge(article)}
-                                        <span className="font-mono text-[10px]">{article.views} просмотров</span>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  <div className="flex lg:justify-end items-start gap-2">
-                                    {mode === 'active' && (
-                                      <input
-                                        type="number"
-                                        key={`art-pos-${article.id}-${article.position}`}
-                                        defaultValue={article.position}
-                                        onBlur={(e) => handleArticlePositionChange(article.id, Number(e.target.value))}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') {
-                                            handleArticlePositionChange(article.id, Number((e.target as HTMLInputElement).value));
-                                            (e.target as HTMLInputElement).blur();
-                                          }
-                                        }}
-                                        className="w-12 text-center text-xs py-1.5 rounded border border-border bg-input text-foreground outline-none focus:border-indigo-500"
-                                        title="Порядок статьи"
-                                      />
-                                    )}
-                                    {renderArticleActions(article, mode)}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -1024,19 +1126,6 @@ export default function Admin() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Статус:</span>
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value as any)}
-                      className="text-xs border border-border rounded-lg px-2.5 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
-                    >
-                      <option value="all">Все</option>
-                      <option value="published">Опубликованные</option>
-                      <option value="drafts">Черновики</option>
-                    </select>
-                  </div>
-
                   <button
                     onClick={handleClearCache}
                     disabled={isClearingCache}
@@ -1053,7 +1142,7 @@ export default function Admin() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
                 <select
                   value={spaceFilter}
                   onChange={(e) => {
@@ -1078,6 +1167,27 @@ export default function Admin() {
                     <option key={section.id} value={section.id}>{section.path}</option>
                   ))}
                 </select>
+
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as ArticleStatusFilter)}
+                  className="text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+                >
+                  {statusFilterOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={authorFilter}
+                  onChange={(e) => setAuthorFilter(e.target.value)}
+                  className="text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+                >
+                  <option value="all">Все авторы</option>
+                  {authorFilterOptions.map((author) => (
+                    <option key={author} value={author}>{author}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -1086,7 +1196,7 @@ export default function Admin() {
             <div className="p-4 bg-muted border-t border-border text-[10px] text-muted-foreground flex items-center justify-between">
               <span>Показано статей: {activeDisplayedCount}</span>
               <span>
-                {searchQuery.trim() || spaceFilter !== 'all' || sectionFilter !== 'all'
+                {searchQuery.trim() || spaceFilter !== 'all' || sectionFilter !== 'all' || statusFilter !== 'all' || authorFilter !== 'all'
                   ? 'Фильтры применены'
                   : 'SaaS CMS-движок v2.0'}
               </span>
@@ -1108,7 +1218,7 @@ export default function Admin() {
               </p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_180px_220px] gap-2 w-full md:max-w-3xl shrink-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2 w-full xl:max-w-5xl shrink-0">
               <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 bg-muted/30 focus-within:border-indigo-500 transition-colors">
                 <Search className="w-4 h-4 text-muted-foreground shrink-0" />
                 <input
@@ -1142,6 +1252,27 @@ export default function Admin() {
                 <option value="all">Все должности</option>
                 {sectionFilterOptions.map((section) => (
                   <option key={section.id} value={section.id}>{section.path}</option>
+                ))}
+              </select>
+
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as ArticleStatusFilter)}
+                className="text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+              >
+                {statusFilterOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+
+              <select
+                value={authorFilter}
+                onChange={(e) => setAuthorFilter(e.target.value)}
+                className="text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+              >
+                <option value="all">Все авторы</option>
+                {authorFilterOptions.map((author) => (
+                  <option key={author} value={author}>{author}</option>
                 ))}
               </select>
             </div>
