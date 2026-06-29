@@ -204,7 +204,7 @@ function AppContent() {
           onClose={() => setIsSidebarOpen(false)} 
         />
       )}
-      <main className="flex-1 relative min-h-0 overflow-x-hidden bg-background">
+      <main className="flex-1 relative min-h-0 overflow-x-clip bg-background">
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
             {/* Login Route (Public, but will redirect if user is already logged in) */}
