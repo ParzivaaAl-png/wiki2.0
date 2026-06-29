@@ -114,7 +114,7 @@
 
   html {
     color-scheme: light;
-    overflow-x: hidden;
+    overflow-x: clip;
     overscroll-behavior-y: none;
     scrollbar-gutter: stable;
   }
@@ -129,7 +129,7 @@
     color: rgb(var(--foreground));
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    overflow-x: hidden;
+    overflow-x: clip;
     overscroll-behavior-y: none;
   }
 
