@@ -137,6 +137,17 @@
     outline-offset: 2px;
   }
 
+  :where(input[type="date"], input[type="time"], input[type="datetime-local"]) {
+    min-height: 2.75rem;
+    line-height: 1.25rem;
+  }
+
+  :where(input[type="date"], input[type="time"], input[type="datetime-local"])::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    margin: 0;
+    opacity: 0.65;
+  }
+
   .dark :where(input, textarea)::placeholder {
     color: rgb(var(--muted-foreground) / 0.8) !important;
   }

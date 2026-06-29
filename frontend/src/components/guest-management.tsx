@@ -5,6 +5,7 @@ import {
   Trash2, 
   X, 
   Calendar, 
+  Clock,
   FileText, 
   Folder 
 } from 'lucide-react';
@@ -20,6 +21,40 @@ import {
   Article, 
   Section 
 } from '../lib/api';
+
+const formatDisplayDate = (date: Date) => {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}.${month}.${year}`;
+};
+
+const maskDisplayDate = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`;
+};
+
+const parseDisplayDate = (value: string) => {
+  const match = value.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!match) return null;
+
+  const [, day, month, year] = match;
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+  const isValid =
+    parsed.getFullYear() === Number(year) &&
+    parsed.getMonth() === Number(month) - 1 &&
+    parsed.getDate() === Number(day);
+
+  return isValid ? `${year}-${month}-${day}` : null;
+};
+
+const maskTimeInput = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+};
 
 export default function GuestManagement() {
   const [guestAccesses, setGuestAccesses] = React.useState<GuestAccess[]>([]);
@@ -62,7 +97,7 @@ export default function GuestManagement() {
       // Default expiry date: tomorrow
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      setExpiryDate(tomorrow.toISOString().split('T')[0]);
+      setExpiryDate(formatDisplayDate(tomorrow));
     } catch (err) {
       console.error('Failed to load guest access list:', err);
     } finally {
@@ -98,8 +133,19 @@ export default function GuestManagement() {
       return;
     }
 
+    const isoExpiryDate = parseDisplayDate(expiryDate);
+    if (!isoExpiryDate) {
+      setFormError('Введите дату истечения в формате ДД.ММ.ГГГГ.');
+      return;
+    }
+
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(expiryTime)) {
+      setFormError('Введите время истечения в формате ЧЧ:ММ.');
+      return;
+    }
+
     // Combine date and time to ISO String
-    const expiresAt = new Date(`${expiryDate}T${expiryTime}:00`).toISOString();
+    const expiresAt = new Date(`${isoExpiryDate}T${expiryTime}:00`).toISOString();
 
     try {
       await createGuestAccess({
@@ -326,29 +372,42 @@ export default function GuestManagement() {
               )}
 
               {/* Expiry Date-time picker */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
                     Дата истечения
                   </label>
-                  <input
-                    type="date"
-                    required
-                    value={expiryDate}
-                    onChange={(e) => setExpiryDate(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      inputMode="numeric"
+                      maxLength={10}
+                      placeholder="ДД.ММ.ГГГГ"
+                      value={expiryDate}
+                      onChange={(e) => setExpiryDate(maskDisplayDate(e.target.value))}
+                      className="h-11 w-full rounded-lg border border-neutral-200 bg-neutral-50 pl-3 pr-10 text-sm leading-none text-neutral-900 outline-none transition-colors placeholder:text-neutral-400 focus:border-indigo-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white"
+                    />
+                    <Calendar className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Время истечения</label>
-                  <input
-                    type="time"
-                    required
-                    value={expiryTime}
-                    onChange={(e) => setExpiryTime(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
-                  />
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                    Время истечения
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      inputMode="numeric"
+                      maxLength={5}
+                      placeholder="ЧЧ:ММ"
+                      value={expiryTime}
+                      onChange={(e) => setExpiryTime(maskTimeInput(e.target.value))}
+                      className="h-11 w-full rounded-lg border border-neutral-200 bg-neutral-50 pl-3 pr-10 text-sm leading-none text-neutral-900 outline-none transition-colors placeholder:text-neutral-400 focus:border-indigo-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white"
+                    />
+                    <Clock className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                  </div>
                 </div>
               </div>
 

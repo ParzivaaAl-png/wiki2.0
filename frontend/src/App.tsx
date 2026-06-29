@@ -133,9 +133,9 @@ function Header() {
 function AnimatedPage({ children }: { children: React.ReactNode }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -12 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
       className="w-full"
     >
@@ -204,7 +204,7 @@ function AppContent() {
           onClose={() => setIsSidebarOpen(false)} 
         />
       )}
-      <main className="flex-1 relative overflow-hidden">
+      <main className="flex-1 relative overflow-x-hidden">
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
             {/* Login Route (Public, but will redirect if user is already logged in) */}
