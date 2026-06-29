@@ -705,12 +705,17 @@ export default function Admin() {
       );
     }
 
+    const tableGridClass = 'grid grid-cols-[minmax(260px,1.5fr)_130px_145px_130px_108px_190px] gap-3';
+    const stickyActionsClass = 'sticky right-0 z-10 bg-card pl-3 shadow-[-16px_0_20px_-20px_rgba(15,23,42,0.65)]';
+    const stickyActionsHeaderClass = 'sticky right-0 z-20 bg-muted/95 pl-3 text-right shadow-[-16px_0_20px_-20px_rgba(15,23,42,0.65)] dark:bg-neutral-900/95';
+
     return (
-      <div className="space-y-4 bg-muted/20 p-3 sm:p-4">
+      <div className="max-w-full overflow-hidden bg-muted/20 p-3 sm:p-4">
+        <div className="space-y-4">
         {tree.map((spaceGroup) => {
           const spaceOpen = forceTreeExpanded || !collapsedSpaceIds.has(spaceGroup.id);
           return (
-            <div key={spaceGroup.id} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div key={spaceGroup.id} className="max-w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
               <button
                 type="button"
                 onClick={() => toggleSpaceCollapsed(spaceGroup.id)}
@@ -745,9 +750,9 @@ export default function Admin() {
                   {spaceGroup.sections.map((sectionGroup) => {
                     const sectionOpen = forceTreeExpanded || !collapsedSectionIds.has(sectionGroup.id);
                     return (
-                      <div key={sectionGroup.id} className="relative pl-0 sm:pl-6 [&+&]:mt-3">
+                      <div key={sectionGroup.id} className="relative max-w-full pl-0 sm:pl-6 [&+&]:mt-3">
                         <div className="absolute left-2 top-0 hidden h-full w-px bg-border sm:block" />
-                        <div className="overflow-hidden rounded-xl border border-border bg-background/80">
+                        <div className="max-w-full overflow-hidden rounded-xl border border-border bg-background/80">
                           <button
                             type="button"
                             onClick={() => toggleSectionCollapsed(sectionGroup.id)}
@@ -775,23 +780,99 @@ export default function Admin() {
                           </button>
 
                           {sectionOpen && (
-                            <div className="border-t border-border bg-card">
-                              <div className="hidden xl:grid xl:grid-cols-[minmax(280px,1fr)_150px_150px_145px_120px_140px] gap-3 border-b border-border bg-muted/35 px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                                <div>Статья</div>
-                                <div>Автор</div>
-                                <div>{mode === 'archive' ? 'Архивировано' : 'Обновлено'}</div>
-                                <div>Статус</div>
-                                <div>Просмотры</div>
-                                <div className="text-right">Действия</div>
+                            <div className="max-w-full overflow-hidden border-t border-border bg-card">
+                              <div className="hidden max-w-full overflow-x-auto xl:block">
+                                <div className="min-w-[1040px]">
+                                  <div className={`${tableGridClass} border-b border-border bg-muted/35 px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground`}>
+                                    <div>Статья</div>
+                                    <div>Автор</div>
+                                    <div>{mode === 'archive' ? 'Архивировано' : 'Обновлено'}</div>
+                                    <div>Статус</div>
+                                    <div>Просмотры</div>
+                                    <div className={stickyActionsHeaderClass}>Действия</div>
+                                  </div>
+
+                                  <div className="divide-y divide-border">
+                                    {sectionGroup.articles.map((article) => {
+                                      const extraSections = Math.max((article.section_ids?.length || 0) - 1, 0);
+                                      return (
+                                        <div
+                                          key={`${sectionGroup.id}-${article.id}-table`}
+                                          className={`${tableGridClass} group items-center px-4 py-3 transition-colors hover:bg-muted/25`}
+                                        >
+                                          <div className="min-w-0">
+                                            <div className="flex min-w-0 items-center gap-2.5">
+                                              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground shrink-0">
+                                                <FileText className="w-4 h-4" />
+                                              </span>
+                                              <div className="min-w-0">
+                                                {mode === 'active' ? (
+                                                  <Link
+                                                    to={`/articles/${article.slug}`}
+                                                    className="inline-flex max-w-full min-w-0 items-center gap-1 font-bold text-sm text-foreground hover:text-indigo-600 dark:hover:text-indigo-300 hover:underline"
+                                                  >
+                                                    <span className="block min-w-0 truncate whitespace-nowrap">{article.title}</span>
+                                                    <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0" />
+                                                  </Link>
+                                                ) : (
+                                                  <div className="truncate whitespace-nowrap text-sm font-bold text-foreground">{article.title}</div>
+                                                )}
+                                                <div className="mt-1 flex min-w-0 items-center gap-2">
+                                                  <span className="min-w-0 truncate whitespace-nowrap text-[10px] text-muted-foreground font-mono">/{article.slug}</span>
+                                                  {extraSections > 0 && (
+                                                    <span className="shrink-0 rounded-full bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                                                      +{extraSections}
+                                                    </span>
+                                                  )}
+                                                  {article.source_url && mode === 'active' && (
+                                                    <a
+                                                      href={article.source_url}
+                                                      target="_blank"
+                                                      rel="noopener noreferrer"
+                                                      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-indigo-500/15 bg-indigo-500/5 px-1.5 py-0.5 text-[9px] font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-300 dark:hover:text-indigo-200"
+                                                    >
+                                                      <ExternalLink className="w-2.5 h-2.5" />
+                                                      Источник
+                                                    </a>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          <div className="min-w-0 text-[11px] text-muted-foreground">
+                                            <span className="block truncate whitespace-nowrap font-medium text-foreground/85">{article.author_name || 'Не указан'}</span>
+                                          </div>
+
+                                          <div className="whitespace-nowrap text-[11px] font-mono text-muted-foreground">
+                                            {formatDateTime(article.updated_at)}
+                                          </div>
+
+                                          <div>
+                                            {renderArticleStatusBadge(article)}
+                                          </div>
+
+                                          <div className="whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+                                            {formatViews(article.views)}
+                                          </div>
+
+                                          <div className={`${stickyActionsClass} flex justify-end group-hover:bg-muted/25`}>
+                                            {renderArticleActions(article, mode)}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
                               </div>
 
-                              <div className="divide-y divide-border">
+                              <div className="divide-y divide-border xl:hidden">
                                 {sectionGroup.articles.map((article) => {
                                   const extraSections = Math.max((article.section_ids?.length || 0) - 1, 0);
                                   return (
                                     <div
-                                      key={`${sectionGroup.id}-${article.id}`}
-                                      className="grid grid-cols-1 gap-3 px-3 py-3 transition-colors hover:bg-muted/25 sm:px-4 xl:grid-cols-[minmax(280px,1fr)_150px_150px_145px_120px_140px] xl:items-center"
+                                      key={`${sectionGroup.id}-${article.id}-card`}
+                                      className="grid grid-cols-1 gap-3 px-3 py-3 transition-colors hover:bg-muted/25 sm:px-4"
                                     >
                                       <div className="min-w-0">
                                         <div className="flex items-start gap-2.5">
@@ -802,16 +883,16 @@ export default function Admin() {
                                             {mode === 'active' ? (
                                               <Link
                                                 to={`/articles/${article.slug}`}
-                                                className="inline-flex max-w-full items-center gap-1 font-bold text-sm text-foreground hover:text-indigo-600 dark:hover:text-indigo-300 hover:underline"
+                                                className="inline-flex max-w-full min-w-0 items-center gap-1 font-bold text-sm text-foreground hover:text-indigo-600 dark:hover:text-indigo-300 hover:underline"
                                               >
-                                                <span className="truncate">{article.title}</span>
+                                                <span className="block min-w-0 truncate whitespace-nowrap">{article.title}</span>
                                                 <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0" />
                                               </Link>
                                             ) : (
-                                              <div className="truncate text-sm font-bold text-foreground">{article.title}</div>
+                                              <div className="truncate whitespace-nowrap text-sm font-bold text-foreground">{article.title}</div>
                                             )}
                                             <div className="mt-1 flex flex-wrap items-center gap-2">
-                                              <span className="max-w-full truncate text-[10px] text-muted-foreground font-mono">/{article.slug}</span>
+                                              <span className="max-w-full truncate whitespace-nowrap text-[10px] text-muted-foreground font-mono">/{article.slug}</span>
                                               {extraSections > 0 && (
                                                 <span className="rounded-full bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
                                                   +{extraSections} разделов
@@ -891,6 +972,7 @@ export default function Admin() {
             </div>
           );
         })}
+        </div>
       </div>
     );
   };
@@ -910,7 +992,7 @@ export default function Admin() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-10">
+    <div className="max-w-6xl mx-auto px-4 py-10 overflow-x-hidden">
       
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
