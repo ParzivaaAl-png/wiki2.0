@@ -634,9 +634,15 @@ export const initializeDatabase = async () => {
         source_article_id INT REFERENCES articles(id) ON DELETE CASCADE,
         target_article_id INT REFERENCES articles(id) ON DELETE CASCADE,
         link_text VARCHAR(255),
+        link_source VARCHAR(50) DEFAULT 'manual',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(source_article_id, target_article_id)
       );
+    `);
+
+    await pool.query(`
+      ALTER TABLE article_links
+      ADD COLUMN IF NOT EXISTS link_source VARCHAR(50) DEFAULT 'manual';
     `);
 
     // Create guest_access

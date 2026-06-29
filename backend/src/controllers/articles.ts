@@ -28,6 +28,90 @@ type GuestAccessInfo = {
 
 const toIsoString = (value: Date | string) => new Date(value).toISOString();
 
+const extractInternalArticleReferences = (content: string) => {
+  const articleIds = new Set<number>();
+  const slugs = new Set<string>();
+
+  const idRegex = /data-article-id=["'](\d+)["']/gi;
+  let idMatch: RegExpExecArray | null;
+  while ((idMatch = idRegex.exec(content || '')) !== null) {
+    const id = Number(idMatch[1]);
+    if (Number.isFinite(id) && id > 0) articleIds.add(id);
+  }
+
+  const hrefRegex = /href=["'][^"']*\/articles\/([^"'?#\s]+)(?:[?#][^"']*)?["']/gi;
+  let slugMatch: RegExpExecArray | null;
+  while ((slugMatch = hrefRegex.exec(content || '')) !== null) {
+    try {
+      slugs.add(decodeURIComponent(slugMatch[1]));
+    } catch {
+      slugs.add(slugMatch[1]);
+    }
+  }
+
+  return {
+    articleIds: Array.from(articleIds),
+    slugs: Array.from(slugs),
+  };
+};
+
+const syncContentArticleLinks = async (sourceArticleId: number, content: string) => {
+  const references = extractInternalArticleReferences(content);
+  const targetIds = new Set<number>(
+    references.articleIds.filter((targetId) => targetId !== sourceArticleId)
+  );
+
+  if (references.slugs.length > 0) {
+    const slugResult = await query(
+      'SELECT id FROM articles WHERE slug = ANY($1::text[]) AND id <> $2',
+      [references.slugs, sourceArticleId]
+    );
+    slugResult.rows.forEach((row) => {
+      const id = Number(row.id);
+      if (Number.isFinite(id) && id > 0) targetIds.add(id);
+    });
+  }
+
+  const targetArticleIds = Array.from(targetIds);
+
+  if (targetArticleIds.length === 0) {
+    await query(
+      `DELETE FROM article_links
+       WHERE source_article_id = $1
+         AND link_source = 'content'`,
+      [sourceArticleId]
+    );
+    return;
+  }
+
+  await query(
+    `DELETE FROM article_links
+     WHERE source_article_id = $1
+       AND link_source = 'content'
+       AND NOT (target_article_id = ANY($2::int[]))`,
+    [sourceArticleId, targetArticleIds]
+  );
+
+  await query(
+    `INSERT INTO article_links (source_article_id, target_article_id, link_text, link_source)
+     SELECT $1, target_id, $3, 'content'
+     FROM unnest($2::int[]) AS target_ids(target_id)
+     WHERE target_id <> $1
+       AND EXISTS (SELECT 1 FROM articles WHERE id = target_id)
+     ON CONFLICT (source_article_id, target_article_id)
+     DO UPDATE SET
+       link_text = CASE
+         WHEN COALESCE(article_links.link_source, 'manual') = 'content' THEN EXCLUDED.link_text
+         ELSE article_links.link_text
+       END,
+       link_source = CASE
+         WHEN COALESCE(article_links.link_source, 'manual') = 'manual' THEN article_links.link_source
+         ELSE EXCLUDED.link_source
+       END`,
+    [sourceArticleId, targetArticleIds, 'Внутренняя ссылка']
+  );
+};
+
 const getActiveGuestAccessGrants = async (userId: number): Promise<GuestAccessGrant[]> => {
   if (!userId) return [];
 
@@ -392,6 +476,12 @@ export const createArticle = async (req: Request, res: Response) => {
       approver_id: approver_id ? Number(approver_id) : null,
     });
 
+    try {
+      await syncContentArticleLinks(article.id, article.content);
+    } catch (linkSyncErr) {
+      console.error('Failed to sync internal article links (non-fatal):', linkSyncErr);
+    }
+
     // Auto-index to Meilisearch
     if (article.published && article.is_visible && article.status === 'published') {
       const doc: msService.ArticleDocument = {
@@ -479,6 +569,12 @@ export const updateArticle = async (req: Request, res: Response) => {
 
     if (!article) {
       return res.status(404).json({ error: 'Article not found' });
+    }
+
+    try {
+      await syncContentArticleLinks(article.id, article.content);
+    } catch (linkSyncErr) {
+      console.error('Failed to sync internal article links (non-fatal):', linkSyncErr);
     }
 
     // Сохранение записи в журнале изменений статьи со снимками
@@ -1305,12 +1401,61 @@ export const checkAccess = async (req: Request, res: Response) => {
 export const getArticleLinks = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const authReq = req as AuthenticatedRequest;
+    const role = authReq.user ? authReq.user.role : '';
+    const userId = authReq.user ? authReq.user.id : 0;
+    const employeeId = authReq.user ? authReq.user.employee_id : null;
+    const allowedSectionIds = await getUserAllowedSections(employeeId, role, userId);
+    const activeGuestGrants = userId ? await getActiveGuestAccessGrants(userId) : [];
+    const directGuestArticleIds = activeGuestGrants
+      .map((grant) => grant.article_id ? Number(grant.article_id) : null)
+      .filter((guestArticleId): guestArticleId is number => guestArticleId !== null);
+    const guestSectionIds = activeGuestGrants
+      .map((grant) => grant.section_id ? Number(grant.section_id) : null)
+      .filter((guestSectionId): guestSectionId is number => guestSectionId !== null);
+    const { capabilities } = await getUserCapabilities(userId || null, role);
+    const canManageCatalog =
+      !!authReq.user &&
+      (capabilities.can_manage_access || capabilities.can_manage_structure || capabilities.can_manage_users);
+    const canEditCatalog =
+      !!authReq.user &&
+      (canManageCatalog ||
+        capabilities.can_create ||
+        capabilities.can_edit ||
+        capabilities.can_publish ||
+        capabilities.can_approve);
+    let allowedStatuses = ['published', 'requires_verification'];
+    if (canManageCatalog) {
+      allowedStatuses = ['draft', 'on_approval', 'published', 'requires_verification', 'archived', 'expired'];
+    } else if (canEditCatalog) {
+      allowedStatuses = ['published', 'requires_verification', 'archived', 'expired'];
+    }
+
     const result = await query(
-      `SELECT al.*, a.title as target_title, a.slug as target_slug 
+      `SELECT al.*,
+              a.title as target_title,
+              a.slug as target_slug,
+              a.summary as target_summary,
+              a.status as target_status,
+              a.updated_at as target_updated_at,
+              COALESCE(array_agg(DISTINCT CONCAT(sp.name, ' / ', s.name)) FILTER (WHERE s.id IS NOT NULL), '{}') as target_section_paths
        FROM article_links al
        JOIN articles a ON al.target_article_id = a.id
-       WHERE al.source_article_id = $1`,
-      [id]
+       LEFT JOIN article_sections axs ON axs.article_id = a.id
+       LEFT JOIN sections s ON s.id = axs.section_id
+       LEFT JOIN spaces sp ON sp.id = s.space_id
+       WHERE al.source_article_id = $1
+         AND a.is_visible = true
+         AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
+         AND (
+           axs.section_id = ANY($4::int[])
+           OR NOT EXISTS (SELECT 1 FROM article_sections WHERE article_id = a.id)
+           OR a.id = ANY($5::int[])
+           OR axs.section_id = ANY($6::int[])
+         )
+       GROUP BY al.id, a.id
+       ORDER BY al.created_at DESC`,
+      [id, allowedStatuses, userId, allowedSectionIds, directGuestArticleIds, guestSectionIds]
     );
     res.json(result.rows);
   } catch (error: any) {
@@ -1321,14 +1466,61 @@ export const getArticleLinks = async (req: Request, res: Response) => {
 export const getArticleBacklinks = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const authReq = req as AuthenticatedRequest;
+    const role = authReq.user ? authReq.user.role : '';
+    const userId = authReq.user ? authReq.user.id : 0;
+    const employeeId = authReq.user ? authReq.user.employee_id : null;
+    const allowedSectionIds = await getUserAllowedSections(employeeId, role, userId);
+    const activeGuestGrants = userId ? await getActiveGuestAccessGrants(userId) : [];
+    const directGuestArticleIds = activeGuestGrants
+      .map((grant) => grant.article_id ? Number(grant.article_id) : null)
+      .filter((guestArticleId): guestArticleId is number => guestArticleId !== null);
+    const guestSectionIds = activeGuestGrants
+      .map((grant) => grant.section_id ? Number(grant.section_id) : null)
+      .filter((guestSectionId): guestSectionId is number => guestSectionId !== null);
+    const { capabilities } = await getUserCapabilities(userId || null, role);
+    const canManageCatalog =
+      !!authReq.user &&
+      (capabilities.can_manage_access || capabilities.can_manage_structure || capabilities.can_manage_users);
+    const canEditCatalog =
+      !!authReq.user &&
+      (canManageCatalog ||
+        capabilities.can_create ||
+        capabilities.can_edit ||
+        capabilities.can_publish ||
+        capabilities.can_approve);
+    let allowedStatuses = ['published', 'requires_verification'];
+    if (canManageCatalog) {
+      allowedStatuses = ['draft', 'on_approval', 'published', 'requires_verification', 'archived', 'expired'];
+    } else if (canEditCatalog) {
+      allowedStatuses = ['published', 'requires_verification', 'archived', 'expired'];
+    }
+
     const result = await query(
-      `SELECT al.*, a.title as source_title, a.slug as source_slug, a.summary as source_summary
+      `SELECT al.*,
+              a.title as source_title,
+              a.slug as source_slug,
+              a.summary as source_summary,
+              a.status as source_status,
+              a.updated_at as source_updated_at,
+              COALESCE(array_agg(DISTINCT CONCAT(sp.name, ' / ', s.name)) FILTER (WHERE s.id IS NOT NULL), '{}') as source_section_paths
        FROM article_links al
        JOIN articles a ON al.source_article_id = a.id
+       LEFT JOIN article_sections axs ON axs.article_id = a.id
+       LEFT JOIN sections s ON s.id = axs.section_id
+       LEFT JOIN spaces sp ON sp.id = s.space_id
        WHERE al.target_article_id = $1
          AND a.is_visible = true
+         AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
+         AND (
+           axs.section_id = ANY($4::int[])
+           OR NOT EXISTS (SELECT 1 FROM article_sections WHERE article_id = a.id)
+           OR a.id = ANY($5::int[])
+           OR axs.section_id = ANY($6::int[])
+         )
+       GROUP BY al.id, a.id
        ORDER BY al.created_at DESC`,
-      [id]
+      [id, allowedStatuses, userId, allowedSectionIds, directGuestArticleIds, guestSectionIds]
     );
     res.json(result.rows);
   } catch (error: any) {
@@ -1346,10 +1538,10 @@ export const createArticleLink = async (req: Request, res: Response) => {
     }
 
     const result = await query(
-      `INSERT INTO article_links (source_article_id, target_article_id, link_text)
-       VALUES ($1, $2, $3)
+      `INSERT INTO article_links (source_article_id, target_article_id, link_text, link_source)
+       VALUES ($1, $2, $3, 'manual')
        ON CONFLICT (source_article_id, target_article_id) 
-       DO UPDATE SET link_text = EXCLUDED.link_text
+       DO UPDATE SET link_text = EXCLUDED.link_text, link_source = 'manual'
        RETURNING *`,
       [id, target_article_id, link_text || '']
     );

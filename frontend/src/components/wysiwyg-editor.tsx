@@ -58,6 +58,15 @@ const HIGHLIGHTS = [
 
 const EMOJIS = ['😀', '😂', '👍', '❤️', '🔥', '🎉', '🚀', '💡', '📝', '✅', '❌', '⭐', '⚠️', '🛡️'];
 
+const escapeHtml = (value: string) => (
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+);
+
 export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGEditorProps) {
   const [isPreview, setIsPreview] = React.useState(false);
   const [showEmoji, setShowEmoji] = React.useState(false);
@@ -300,10 +309,13 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
   };
 
   const handleInsertInternalLink = (art: Suggestion) => {
+    const href = `/articles/${art.slug}`;
     editor
       .chain()
       .focus()
-      .insertContent(`<a href="/articles/${art.slug}" class="text-indigo-650 dark:text-indigo-400 font-semibold underline hover:text-indigo-850">${art.title}</a> `)
+      .insertContent(
+        `<a href="${escapeHtml(href)}" data-link-kind="article" data-article-id="${art.id}" class="text-indigo-650 dark:text-indigo-400 font-semibold underline hover:text-indigo-850">${escapeHtml(art.title)}</a> `
+      )
       .run();
     setShowLinkSuggestions(false);
     setLinkSearchQuery('');

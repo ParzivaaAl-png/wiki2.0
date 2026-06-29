@@ -979,12 +979,20 @@ export interface ArticleLink {
   source_article_id: number;
   target_article_id: number;
   link_text: string;
+  link_source?: 'manual' | 'content' | string;
   created_at?: string;
   target_title?: string;
   target_slug?: string;
+  target_summary?: string;
+  target_status?: string;
+  target_updated_at?: string;
+  target_section_paths?: string[];
   source_title?: string;
   source_slug?: string;
   source_summary?: string;
+  source_status?: string;
+  source_updated_at?: string;
+  source_section_paths?: string[];
 }
 
 export interface WikiCapabilities {

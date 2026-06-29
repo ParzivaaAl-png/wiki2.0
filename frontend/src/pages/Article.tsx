@@ -14,7 +14,15 @@ import {
   X,
   ShieldAlert,
   Loader2,
-  Plus
+  Plus,
+  FileText,
+  ExternalLink,
+  CornerDownRight,
+  Search,
+  Building2,
+  Briefcase,
+  Check,
+  Clock3
 } from 'lucide-react';
 import { 
   fetchArticle, 
@@ -30,7 +38,10 @@ import {
   fetchArticleBacklinks,
   createArticleLink,
   deleteArticleLink,
-  ArticleLink
+  ArticleLink,
+  fetchNavigationTree,
+  Space,
+  Section
 } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -72,8 +83,12 @@ export default function ArticlePage() {
   const [backlinks, setBacklinks] = React.useState<ArticleLink[]>([]);
   const [isLinksLoading, setIsLinksLoading] = React.useState(false);
   const [allArticles, setAllArticles] = React.useState<ArticleType[]>([]);
+  const [navigationTree, setNavigationTree] = React.useState<Space[]>([]);
   const [isAddLinkModalOpen, setIsAddLinkModalOpen] = React.useState(false);
-  const [targetArticleId, setTargetArticleId] = React.useState<number | ''>( '');
+  const [selectedLinkArticleIds, setSelectedLinkArticleIds] = React.useState<number[]>([]);
+  const [linkSearchQuery, setLinkSearchQuery] = React.useState('');
+  const [linkSpaceFilter, setLinkSpaceFilter] = React.useState('all');
+  const [linkSectionFilter, setLinkSectionFilter] = React.useState('all');
   const [linkText, setLinkText] = React.useState('');
   const [isCreatingLink, setIsCreatingLink] = React.useState(false);
 
@@ -103,9 +118,13 @@ export default function ArticlePage() {
     if (!isAddLinkModalOpen) return;
     async function loadAllArticles() {
       try {
-        const data = await fetchArticles({ all: true });
+        const [data, tree] = await Promise.all([
+          fetchArticles({ all: true }),
+          fetchNavigationTree(),
+        ]);
         // Filter out current article
         setAllArticles(data.filter(a => a.id !== article?.id));
+        setNavigationTree(tree);
       } catch (err) {
         console.error('Failed to load articles list for linking:', err);
       }
@@ -115,16 +134,22 @@ export default function ArticlePage() {
 
   const handleCreateLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!article || !targetArticleId) return;
+    if (!article || selectedLinkArticleIds.length === 0) return;
     setIsCreatingLink(true);
     try {
-      const newLink = await createArticleLink(article.id, {
-        target_article_id: Number(targetArticleId),
-        link_text: linkText.trim() || undefined
-      });
-      setLinks(prev => [...prev, newLink]);
+      await Promise.all(
+        selectedLinkArticleIds.map((selectedId) => createArticleLink(article.id, {
+          target_article_id: selectedId,
+          link_text: linkText.trim() || undefined
+        }))
+      );
+      const data = await fetchArticleLinks(article.id);
+      setLinks(data);
       setIsAddLinkModalOpen(false);
-      setTargetArticleId('');
+      setSelectedLinkArticleIds([]);
+      setLinkSearchQuery('');
+      setLinkSpaceFilter('all');
+      setLinkSectionFilter('all');
       setLinkText('');
     } catch (err: any) {
       console.error('Failed to create article link:', err);
@@ -144,6 +169,135 @@ export default function ArticlePage() {
       console.error('Failed to delete article link:', err);
       alert('Ошибка при удалении связи: ' + err.message);
     }
+  };
+
+  const closeAddLinkModal = () => {
+    setIsAddLinkModalOpen(false);
+    setSelectedLinkArticleIds([]);
+    setLinkSearchQuery('');
+    setLinkSpaceFilter('all');
+    setLinkSectionFilter('all');
+    setLinkText('');
+  };
+
+  const sectionMeta = React.useMemo(() => {
+    const byId = new Map<number, { section: Section; space: Space; path: string }>();
+    const options: Array<{ id: number; spaceId: number; path: string }> = [];
+
+    const walk = (space: Space, sections: Section[], parents: string[] = []) => {
+      sections.forEach((section) => {
+        const path = [...parents, section.name].join(' / ');
+        byId.set(section.id, { section, space, path });
+        options.push({ id: section.id, spaceId: space.id, path });
+        if (section.subsections?.length) {
+          walk(space, section.subsections, [...parents, section.name]);
+        }
+      });
+    };
+
+    navigationTree.forEach((space) => walk(space, space.sections || []));
+    return { byId, options };
+  }, [navigationTree]);
+
+  const sectionFilterOptions = React.useMemo(() => (
+    sectionMeta.options.filter((section) => (
+      linkSpaceFilter === 'all' || section.spaceId === Number(linkSpaceFilter)
+    ))
+  ), [linkSpaceFilter, sectionMeta.options]);
+
+  React.useEffect(() => {
+    if (linkSectionFilter === 'all') return;
+    const selected = sectionMeta.byId.get(Number(linkSectionFilter));
+    if (linkSpaceFilter !== 'all' && selected?.space.id !== Number(linkSpaceFilter)) {
+      setLinkSectionFilter('all');
+    }
+  }, [linkSectionFilter, linkSpaceFilter, sectionMeta.byId]);
+
+  const getPrimarySectionPath = (articleItem: Pick<ArticleType, 'section_ids'>) => {
+    const firstSectionId = articleItem.section_ids?.find((sectionId) => sectionMeta.byId.has(sectionId));
+    return firstSectionId ? sectionMeta.byId.get(firstSectionId)?.path || 'Без раздела' : 'Без раздела';
+  };
+
+  const filteredLinkArticles = React.useMemo(() => {
+    const query = linkSearchQuery.trim().toLowerCase();
+    const linkedTargetIds = new Set(links.map((link) => Number(link.target_article_id)));
+
+    return allArticles
+      .filter((item) => !linkedTargetIds.has(item.id))
+      .filter((item) => {
+        const sectionIds = item.section_ids || [];
+        if (linkSectionFilter !== 'all') return sectionIds.includes(Number(linkSectionFilter));
+        if (linkSpaceFilter !== 'all') {
+          return sectionIds.some((sectionId) => sectionMeta.byId.get(sectionId)?.space.id === Number(linkSpaceFilter));
+        }
+        return true;
+      })
+      .filter((item) => {
+        if (!query) return true;
+        const sectionText = (item.section_ids || [])
+          .map((sectionId) => sectionMeta.byId.get(sectionId)?.path || '')
+          .join(' ');
+        return [
+          item.title,
+          item.summary || '',
+          item.slug,
+          item.author_name || '',
+          ...(item.tags || []),
+          sectionText,
+        ].join(' ').toLowerCase().includes(query);
+      });
+  }, [allArticles, linkSearchQuery, linkSectionFilter, linkSpaceFilter, links, sectionMeta.byId]);
+
+  const toggleSelectedLinkArticle = (articleId: number) => {
+    setSelectedLinkArticleIds((prev) => (
+      prev.includes(articleId)
+        ? prev.filter((id) => id !== articleId)
+        : [...prev, articleId]
+    ));
+  };
+
+  const getCompactStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'draft':
+        return 'Черновик';
+      case 'on_approval':
+        return 'На согласовании';
+      case 'requires_verification':
+        return 'Требует проверки';
+      case 'archived':
+        return 'В архиве';
+      case 'expired':
+        return 'Истёк срок';
+      case 'published':
+      default:
+        return 'Опубликована';
+    }
+  };
+
+  const getCompactStatusClass = (status?: string) => {
+    switch (status) {
+      case 'draft':
+        return 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-300';
+      case 'requires_verification':
+        return 'border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-300';
+      case 'archived':
+      case 'expired':
+        return 'border-neutral-500/20 bg-neutral-500/10 text-neutral-500 dark:text-neutral-400';
+      case 'on_approval':
+        return 'border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-300';
+      case 'published':
+      default:
+        return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300';
+    }
+  };
+
+  const formatCompactDate = (value?: string) => {
+    if (!value) return 'Дата не указана';
+    return new Date(value).toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
   };
 
   const getArticleTypeBadge = (type: string) => {
@@ -680,16 +834,22 @@ export default function ArticlePage() {
           })()}
         </article>
 
-        {/* Related Articles (Links) */}
-        <div className="mt-8 pt-6 border-t border-neutral-200/60 dark:border-neutral-800/60">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider flex items-center gap-2 font-outfit">
-              🔗 Связанные статьи
-            </h3>
+        {/* Related Materials */}
+        <div className="mt-10 pt-6 border-t border-neutral-200/60 dark:border-neutral-800/60">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-sm font-bold text-neutral-900 dark:text-neutral-100 uppercase tracking-wider flex items-center gap-2 font-outfit">
+                <FileText className="w-4 h-4 text-indigo-500" />
+                Связанные материалы
+              </h3>
+              <p className="text-xs text-neutral-450 dark:text-neutral-500 mt-1">
+                Материалы, которые помогают раскрыть тему и перейти к смежным инструкциям.
+              </p>
+            </div>
             {isStaff && (
               <button
                 onClick={() => setIsAddLinkModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/25 text-indigo-650 dark:text-indigo-400 rounded-lg text-xs font-bold uppercase transition-all cursor-pointer shadow-sm select-none"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/25 text-indigo-650 dark:text-indigo-400 rounded-lg text-xs font-bold uppercase transition-all cursor-pointer shadow-sm select-none shrink-0"
               >
                 <Plus className="w-3.5 h-3.5" /> Добавить связь
               </button>
@@ -697,40 +857,91 @@ export default function ArticlePage() {
           </div>
 
           {isLinksLoading ? (
-            <div className="flex items-center gap-2 text-xs text-neutral-400">
+            <div className="flex items-center gap-2 text-xs text-neutral-400 rounded-xl border border-neutral-200/60 dark:border-neutral-850 bg-neutral-50/60 dark:bg-neutral-900/30 p-5">
               <Loader2 className="w-4 h-4 animate-spin text-indigo-500" /> Загрузка связей...
             </div>
           ) : links.length === 0 ? (
-            <p className="text-xs text-neutral-400 italic">Связанных статей пока нет.</p>
+            <div className="rounded-2xl border border-dashed border-indigo-300/70 dark:border-indigo-500/30 bg-indigo-500/[0.04] dark:bg-indigo-500/[0.08] p-6 text-center">
+              <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-500">
+                <FileText className="w-5 h-5" />
+              </div>
+              <h4 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100">
+                Связанных материалов пока нет
+              </h4>
+              <p className="mx-auto mt-1 max-w-lg text-xs text-neutral-500 dark:text-neutral-400">
+                Добавьте статьи, инструкции или регламенты, которые помогут лучше раскрыть тему.
+              </p>
+              {isStaff && (
+                <button
+                  onClick={() => setIsAddLinkModalOpen(true)}
+                  className="mt-4 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Добавить связь
+                </button>
+              )}
+            </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {links.map((link) => (
                 <div
                   key={link.id}
-                  className="group flex items-center justify-between p-3 rounded-xl border border-neutral-200/50 dark:border-neutral-850/50 bg-neutral-50/50 dark:bg-neutral-900/30 hover:border-indigo-500/30 hover:bg-white dark:hover:bg-neutral-950/20 transition-all shadow-sm"
+                  className="group relative overflow-hidden rounded-2xl border border-neutral-200/70 dark:border-neutral-850 bg-white dark:bg-neutral-950/50 hover:border-indigo-500/35 hover:shadow-premium dark:hover:shadow-premium-dark transition-all"
                 >
-                  <Link
-                    to={`/articles/${link.target_slug}`}
-                    className="flex-1 min-w-0"
-                  >
-                    <div className="font-semibold text-xs text-neutral-850 dark:text-neutral-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                      {link.target_title}
-                    </div>
-                    {link.link_text && (
-                      <div className="text-[10px] text-neutral-400 dark:text-neutral-550 truncate mt-0.5">
-                        Контекст: {link.link_text}
+                  <div className="p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-500/15 bg-indigo-500/10 text-indigo-500 shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <Link
+                            to={`/articles/${link.target_slug}`}
+                            className="font-bold text-sm text-neutral-950 dark:text-neutral-100 hover:text-indigo-600 dark:hover:text-indigo-400 line-clamp-2"
+                          >
+                            {link.target_title}
+                          </Link>
+                          {isStaff && (
+                            <button
+                              onClick={() => handleDeleteLink(link.id)}
+                              className="p-1.5 hover:bg-rose-500/10 text-neutral-400 hover:text-rose-500 rounded-lg transition-all shrink-0 cursor-pointer"
+                              title="Удалить связь"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 line-clamp-2">
+                          {link.target_summary || link.link_text || 'Краткое описание пока не заполнено.'}
+                        </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-2 py-0.5 text-[10px] font-semibold text-neutral-500 dark:text-neutral-400">
+                            <Briefcase className="w-3 h-3" />
+                            {(link.target_section_paths || [])[0] || 'Без раздела'}
+                          </span>
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${getCompactStatusClass(link.target_status)}`}>
+                            {getCompactStatusBadge(link.target_status)}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400">
+                            <Clock3 className="w-3 h-3" />
+                            {formatCompactDate(link.target_updated_at)}
+                          </span>
+                        </div>
+                        {link.link_text && (
+                          <div className="mt-3 rounded-lg border border-neutral-200/60 dark:border-neutral-850 bg-neutral-50/70 dark:bg-neutral-900/35 px-3 py-2 text-[11px] text-neutral-500 dark:text-neutral-400">
+                            {link.link_text}
+                          </div>
+                        )}
+                        <Link
+                          to={`/articles/${link.target_slug}`}
+                          className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                        >
+                          Открыть материал
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </Link>
                       </div>
-                    )}
-                  </Link>
-                  {isStaff && (
-                    <button
-                      onClick={() => handleDeleteLink(link.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-rose-500/10 text-neutral-450 hover:text-rose-550 rounded-md transition-all shrink-0 ml-2 cursor-pointer"
-                      title="Удалить связь"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -738,38 +949,70 @@ export default function ArticlePage() {
         </div>
 
         {/* Backlinks */}
-        <div className="mt-6 pt-6 border-t border-neutral-200/60 dark:border-neutral-800/60">
-          <h3 className="text-sm font-bold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider flex items-center gap-2 font-outfit mb-4">
-            ↩ На эту статью ссылаются
-          </h3>
+        <div className="mt-8 pt-6 border-t border-neutral-200/60 dark:border-neutral-800/60">
+          <div className="mb-4">
+            <h3 className="text-sm font-bold text-neutral-900 dark:text-neutral-100 uppercase tracking-wider flex items-center gap-2 font-outfit">
+              <CornerDownRight className="w-4 h-4 text-indigo-500" />
+              Эта статья упоминается в
+            </h3>
+            <p className="text-xs text-neutral-450 dark:text-neutral-500 mt-1">
+              Обратные ссылки строятся автоматически на основе связанных материалов.
+            </p>
+          </div>
 
           {isLinksLoading ? (
-            <div className="flex items-center gap-2 text-xs text-neutral-400">
+            <div className="flex items-center gap-2 text-xs text-neutral-400 rounded-xl border border-neutral-200/60 dark:border-neutral-850 bg-neutral-50/60 dark:bg-neutral-900/30 p-5">
               <Loader2 className="w-4 h-4 animate-spin text-indigo-500" /> Загрузка обратных ссылок...
             </div>
           ) : backlinks.length === 0 ? (
-            <p className="text-xs text-neutral-400 italic">Пока нет статей, которые ссылаются на этот материал.</p>
+            <div className="rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/30 p-6 text-center">
+              <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-neutral-200/70 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400">
+                <CornerDownRight className="w-5 h-5" />
+              </div>
+              <h4 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100">
+                Пока никто не ссылается на эту статью
+              </h4>
+              <p className="mx-auto mt-1 max-w-lg text-xs text-neutral-500 dark:text-neutral-400">
+                Когда другая статья будет ссылаться на этот материал, она появится здесь автоматически.
+              </p>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-2">
               {backlinks.map((link) => (
                 <Link
                   key={link.id}
                   to={`/articles/${link.source_slug}`}
-                  className="group block p-3 rounded-xl border border-neutral-200/50 dark:border-neutral-850/50 bg-neutral-50/50 dark:bg-neutral-900/30 hover:border-indigo-500/30 hover:bg-white dark:hover:bg-neutral-950/20 transition-all shadow-sm"
+                  className="group flex items-start gap-3 rounded-xl border border-neutral-200/70 dark:border-neutral-850 bg-white dark:bg-neutral-950/45 p-3 hover:border-indigo-500/35 hover:bg-neutral-50/60 dark:hover:bg-neutral-900/35 transition-all"
                 >
-                  <div className="font-semibold text-xs text-neutral-850 dark:text-neutral-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                    {link.source_title}
-                  </div>
-                  {link.link_text && (
-                    <div className="text-[10px] text-neutral-400 dark:text-neutral-550 truncate mt-0.5">
-                      Контекст: {link.link_text}
+                  <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-500 shrink-0">
+                    <FileText className="w-4 h-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                      <div className="font-bold text-sm text-neutral-900 dark:text-neutral-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                        {link.source_title}
+                      </div>
+                      <span className="text-[10px] text-neutral-400 shrink-0">
+                        {formatCompactDate(link.source_updated_at)}
+                      </span>
                     </div>
-                  )}
-                  {link.source_summary && (
-                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 line-clamp-2 mt-2">
-                      {link.source_summary}
-                    </p>
-                  )}
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-2 py-0.5 text-[10px] font-semibold text-neutral-500 dark:text-neutral-400">
+                        <Building2 className="w-3 h-3" />
+                        {(link.source_section_paths || [])[0] || 'Без раздела'}
+                      </span>
+                      {link.link_text && (
+                        <span className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
+                          Используется как: {link.link_text}
+                        </span>
+                      )}
+                    </div>
+                    {link.source_summary && (
+                      <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400 line-clamp-2">
+                        {link.source_summary}
+                      </p>
+                    )}
+                  </div>
                 </Link>
               ))}
             </div>
@@ -997,11 +1240,7 @@ export default function ArticlePage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => {
-                setIsAddLinkModalOpen(false);
-                setTargetArticleId('');
-                setLinkText('');
-              }}
+              onClick={closeAddLinkModal}
               className="absolute inset-0 bg-neutral-950/60"
             />
             {/* Modal Content */}
@@ -1009,45 +1248,127 @@ export default function ArticlePage() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="relative w-full max-w-md border border-neutral-200 dark:border-border bg-white dark:bg-card rounded-xl shadow-premium dark:shadow-premium-dark flex flex-col overflow-hidden"
+              className="relative w-full max-w-3xl border border-neutral-200 dark:border-border bg-white dark:bg-card rounded-2xl shadow-premium dark:shadow-premium-dark flex flex-col overflow-hidden max-h-[85vh]"
             >
               <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-border">
-                <h3 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
-                  🔗 Добавить связь со статьей
-                </h3>
+                <div>
+                  <h3 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-indigo-500" />
+                    Добавить связанные материалы
+                  </h3>
+                  <p className="text-xs text-neutral-450 dark:text-neutral-500 mt-1">
+                    Можно выбрать одну или несколько статей.
+                  </p>
+                </div>
                 <button
-                  onClick={() => {
-                    setIsAddLinkModalOpen(false);
-                    setTargetArticleId('');
-                    setLinkText('');
-                  }}
+                  onClick={closeAddLinkModal}
                   className="p-1 rounded-md text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleCreateLink} className="p-4 space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-450 dark:text-neutral-500">
-                    Выберите целевую статью
-                  </label>
-                  <select
-                    required
-                    value={targetArticleId}
-                    onChange={(e) => setTargetArticleId(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-background border border-neutral-200 dark:border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-neutral-800 dark:text-neutral-100"
-                  >
-                    <option value="">-- Выберите статью --</option>
-                    {allArticles.map(art => (
-                      <option key={art.id} value={art.id}>
-                        {art.title} {art.status === 'draft' ? '(Черновик)' : ''}
-                      </option>
-                    ))}
-                  </select>
+              <form onSubmit={handleCreateLink} className="flex min-h-0 flex-1 flex-col">
+                <div className="p-4 space-y-3 border-b border-neutral-100 dark:border-border">
+                  <div className="flex items-center gap-2 rounded-xl border border-neutral-200 dark:border-border bg-neutral-50 dark:bg-background px-3 py-2 focus-within:border-indigo-500 transition-colors">
+                    <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Поиск по названию, описанию, разделу..."
+                      value={linkSearchQuery}
+                      onChange={(e) => setLinkSearchQuery(e.target.value)}
+                      className="w-full bg-transparent text-xs text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <select
+                      value={linkSpaceFilter}
+                      onChange={(e) => {
+                        setLinkSpaceFilter(e.target.value);
+                        setLinkSectionFilter('all');
+                      }}
+                      className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-background border border-neutral-200 dark:border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-neutral-800 dark:text-neutral-100"
+                    >
+                      <option value="all">Все отделы</option>
+                      {navigationTree.map((space) => (
+                        <option key={space.id} value={space.id}>{space.name}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={linkSectionFilter}
+                      onChange={(e) => setLinkSectionFilter(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-neutral-50 dark:bg-background border border-neutral-200 dark:border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-neutral-800 dark:text-neutral-100"
+                    >
+                      <option value="all">Все должности / разделы</option>
+                      {sectionFilterOptions.map((section) => (
+                        <option key={section.id} value={section.id}>{section.path}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <div className="space-y-1">
+                <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                  {filteredLinkArticles.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-neutral-250 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/30 p-8 text-center">
+                      <Search className="mx-auto h-7 w-7 text-neutral-400" />
+                      <div className="mt-3 text-sm font-bold text-neutral-900 dark:text-neutral-100">
+                        Материалы не найдены
+                      </div>
+                      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                        Попробуйте изменить поиск или фильтр отдела.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {filteredLinkArticles.map((item) => {
+                        const selected = selectedLinkArticleIds.includes(item.id);
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => toggleSelectedLinkArticle(item.id)}
+                            className={`group rounded-xl border p-3 text-left transition-all ${
+                              selected
+                                ? 'border-indigo-500 bg-indigo-500/10 ring-2 ring-indigo-500/10'
+                                : 'border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950/45 hover:border-indigo-400/60 hover:bg-neutral-50 dark:hover:bg-neutral-900/35'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <span className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border shrink-0 ${
+                                selected
+                                  ? 'border-indigo-500/30 bg-indigo-500/15 text-indigo-500'
+                                  : 'border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-500'
+                              }`}>
+                                {selected ? <Check className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-bold text-sm text-neutral-900 dark:text-neutral-100 line-clamp-2">
+                                  {item.title}
+                                </div>
+                                <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 line-clamp-2">
+                                  {item.summary || 'Краткое описание пока не заполнено.'}
+                                </p>
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-2 py-0.5 text-[10px] font-semibold text-neutral-500 dark:text-neutral-400">
+                                    <Briefcase className="w-3 h-3" />
+                                    {getPrimarySectionPath(item)}
+                                  </span>
+                                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${getCompactStatusClass(item.status)}`}>
+                                    {getCompactStatusBadge(item.status)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 space-y-3 border-t border-neutral-100 dark:border-border bg-neutral-50/60 dark:bg-neutral-950/30">
+                  <div className="space-y-1">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-450 dark:text-neutral-500">
                     Текст связи / Описание контекста (необязательно)
                   </label>
@@ -1060,25 +1381,27 @@ export default function ArticlePage() {
                   />
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100 dark:border-border">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                    Выбрано: {selectedLinkArticleIds.length}
+                  </span>
+                  <div className="flex justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsAddLinkModalOpen(false);
-                      setTargetArticleId('');
-                      setLinkText('');
-                    }}
+                    onClick={closeAddLinkModal}
                     className="px-3 py-1.5 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-background border border-neutral-200 dark:border-border text-neutral-700 dark:text-neutral-300 rounded-lg transition-colors cursor-pointer"
                   >
                     Отмена
                   </button>
                   <button
                     type="submit"
-                    disabled={isCreatingLink || !targetArticleId}
+                    disabled={isCreatingLink || selectedLinkArticleIds.length === 0}
                     className="inline-flex items-center gap-1 px-4 py-1.5 bg-indigo-650 hover:bg-indigo-750 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-md shadow-indigo-650/15 transition-all cursor-pointer"
                   >
-                    {isCreatingLink ? 'Сохранение...' : 'Создать связь'}
+                    {isCreatingLink ? 'Сохранение...' : 'Добавить выбранные'}
                   </button>
+                  </div>
+                </div>
                 </div>
               </form>
             </motion.div>
