@@ -99,7 +99,7 @@ export default function AccessManagement() {
       const firstUserId = selectedUserId || data.users[0]?.id || null;
       setSelectedUserId(firstUserId);
       const selected = data.users.find((user) => user.id === firstUserId);
-      setPendingRoleIds(selected?.wiki_roles.map((role) => role.id) || []);
+      setPendingRoleIds(selected?.wiki_roles[0]?.id ? [selected.wiki_roles[0].id] : []);
     } catch (err) {
       console.error('Failed to load access overview:', err);
     } finally {
@@ -114,7 +114,7 @@ export default function AccessManagement() {
   React.useEffect(() => {
     if (!overview || !selectedUserId) return;
     const selected = overview.users.find((user) => user.id === selectedUserId);
-    setPendingRoleIds(selected?.wiki_roles.map((role) => role.id) || []);
+    setPendingRoleIds(selected?.wiki_roles[0]?.id ? [selected.wiki_roles[0].id] : []);
   }, [overview, selectedUserId]);
 
   const selectedUser = React.useMemo<AccessOverviewUser | null>(() => {
@@ -220,15 +220,15 @@ export default function AccessManagement() {
   };
 
   const handleToggleRole = (roleId: number) => {
-    setPendingRoleIds((prev) => (
-      prev.includes(roleId)
-        ? prev.filter((id) => id !== roleId)
-        : [...prev, roleId]
-    ));
+    setPendingRoleIds([roleId]);
   };
 
   const handleSaveRoles = async () => {
     if (!selectedUserId) return;
+    if (pendingRoleIds.length !== 1) {
+      alert('Выберите одну Wiki-роль пользователя.');
+      return;
+    }
     setIsSavingRoles(true);
     try {
       await updateUserWikiRoles(selectedUserId, pendingRoleIds);
@@ -525,7 +525,7 @@ export default function AccessManagement() {
           <div className="border border-border bg-card text-card-foreground rounded-lg p-4 h-fit">
             <div className="flex items-center gap-2 mb-4">
               <KeyRound className="w-4 h-4 text-indigo-500" />
-              <h3 className="font-bold text-sm text-foreground">Wiki-роли</h3>
+              <h3 className="font-bold text-sm text-foreground">Wiki-роль</h3>
             </div>
 
             {selectedUser ? (
@@ -573,6 +573,9 @@ export default function AccessManagement() {
                     );
                   })}
                 </div>
+                <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
+                  У пользователя выбирается одна Wiki-роль. Должность определяет видимые разделы, Wiki-роль определяет действия.
+                </p>
 
                 <button
                   onClick={handleSaveRoles}

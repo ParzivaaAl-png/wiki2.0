@@ -6,7 +6,9 @@ import {
   ChevronRight,
   CircleOff,
   Edit3,
+  FileText,
   KeyRound,
+  Layers,
   Loader2,
   Network,
   Plus,
@@ -21,6 +23,7 @@ import {
 } from 'lucide-react';
 import {
   AccessOverview,
+  Article,
   Department,
   Employee,
   Position,
@@ -35,6 +38,7 @@ import {
   createPosition,
   deleteEmployee,
   deletePosition,
+  fetchArticles,
   fetchAccessOverview,
   fetchDepartments,
   fetchEmployees,
@@ -43,6 +47,8 @@ import {
   updateDepartment,
   updateEmployee,
   updatePosition,
+  updateUserWikiRoles,
+  WikiRole,
 } from '../lib/api';
 import AccessManagement from './access-management';
 import GuestManagement from './guest-management';
@@ -82,6 +88,37 @@ const roleTone = (code: string) => {
   return 'border-border bg-muted text-muted-foreground';
 };
 
+type EmployeeAccessMode = 'auto' | 'manual';
+
+const wikiRoleOrder = ['reader', 'editor', 'process_owner', 'approver', 'wiki_admin'];
+
+const wikiRoleDetails: Record<string, { can: string[]; cannot?: string[] }> = {
+  reader: {
+    can: ['Просматривает опубликованные статьи в доступных разделах.'],
+    cannot: ['Не создаёт, не редактирует и не публикует статьи.'],
+  },
+  editor: {
+    can: ['Создаёт и редактирует статьи в доступных разделах.'],
+    cannot: ['Не управляет пользователями и глобальной структурой Wiki.'],
+  },
+  process_owner: {
+    can: ['Отвечает за актуальность процесса, редактирует и публикует материалы в назначенных разделах.'],
+  },
+  approver: {
+    can: ['Проверяет, утверждает или отклоняет статьи перед публикацией.'],
+  },
+  wiki_admin: {
+    can: ['Управляет структурой, пользователями, ролями, доступами и всеми статьями.'],
+  },
+};
+
+const legacyRoleForWikiRole = (role?: WikiRole | null) => {
+  if (!role) return 'User';
+  if (role.code === 'wiki_admin') return 'Admin';
+  if (['editor', 'process_owner', 'approver'].includes(role.code)) return 'Editor';
+  return 'User';
+};
+
 const readSettled = <T,>(result: PromiseSettledResult<T>, fallback: T) => (
   result.status === 'fulfilled' ? result.value : fallback
 );
@@ -101,6 +138,7 @@ export default function TeamAccessManagement() {
   const [positions, setPositions] = React.useState<Position[]>([]);
   const [employees, setEmployees] = React.useState<Employee[]>([]);
   const [users, setUsers] = React.useState<User[]>([]);
+  const [articles, setArticles] = React.useState<Article[]>([]);
   const [accessOverview, setAccessOverview] = React.useState<AccessOverview | null>(null);
   const [guestAccessCount, setGuestAccessCount] = React.useState(0);
   const [expandedDepartmentIds, setExpandedDepartmentIds] = React.useState<Set<number | 'none'>>(new Set());
@@ -118,6 +156,10 @@ export default function TeamAccessManagement() {
     accountId: null as number | null,
     username: '',
     password: '',
+    wikiRoleId: '',
+    accessMode: 'auto' as EmployeeAccessMode,
+    manualSectionIds: [] as number[],
+    manualArticleIds: [] as number[],
   });
 
   const [departmentForm, setDepartmentForm] = React.useState({
@@ -138,13 +180,14 @@ export default function TeamAccessManagement() {
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [departmentsRes, positionsRes, employeesRes, usersRes, accessRes, guestRes] = await Promise.allSettled([
+      const [departmentsRes, positionsRes, employeesRes, usersRes, accessRes, guestRes, articlesRes] = await Promise.allSettled([
         fetchDepartments(),
         fetchPositions(),
         fetchEmployees(),
         adminFetchUsers(),
         fetchAccessOverview(),
         fetchGuestAccessList(),
+        fetchArticles(),
       ]);
 
       const nextDepartments = readSettled(departmentsRes, []);
@@ -154,6 +197,7 @@ export default function TeamAccessManagement() {
       setUsers(readSettled(usersRes, []));
       setAccessOverview(readSettled(accessRes, null));
       setGuestAccessCount(readSettled(guestRes, []).length);
+      setArticles(readSettled(articlesRes, []));
 
       setExpandedDepartmentIds((prev) => {
         if (prev.size > 0) return prev;
@@ -186,6 +230,20 @@ export default function TeamAccessManagement() {
   const accessUsersById = React.useMemo(() => (
     new Map((accessOverview?.users || []).map((user) => [user.id, user]))
   ), [accessOverview]);
+  const wikiRoles = React.useMemo(() => (
+    [...(accessOverview?.roles || [])].sort((a, b) => {
+      const aIndex = wikiRoleOrder.indexOf(a.code);
+      const bIndex = wikiRoleOrder.indexOf(b.code);
+      return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
+    })
+  ), [accessOverview?.roles]);
+  const wikiRolesById = React.useMemo(() => (
+    new Map(wikiRoles.map((role) => [role.id, role]))
+  ), [wikiRoles]);
+  const defaultWikiRoleId = React.useMemo(() => {
+    const reader = wikiRoles.find((role) => role.code === 'reader');
+    return reader?.id ? String(reader.id) : (wikiRoles[0]?.id ? String(wikiRoles[0].id) : '');
+  }, [wikiRoles]);
 
   const visibleDepartments = React.useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -266,7 +324,33 @@ export default function TeamAccessManagement() {
   const selectedEmployeePosition = employeeForm.positionId
     ? positionsById.get(Number(employeeForm.positionId)) || null
     : null;
-  const derivedAccountRole = selectedEmployeePosition?.name || 'Оператор';
+  const selectedWikiRole = employeeForm.wikiRoleId
+    ? wikiRolesById.get(Number(employeeForm.wikiRoleId)) || null
+    : null;
+  const selectedPositionAccessRow = employeeForm.positionId
+    ? accessOverview?.matrix.find((row) => row.position_id === Number(employeeForm.positionId)) || null
+    : null;
+  const automaticSectionIds = React.useMemo(() => (
+    selectedPositionAccessRow?.sections.map((section) => section.id) || []
+  ), [selectedPositionAccessRow]);
+  const manualSectionIdSet = React.useMemo(() => new Set(employeeForm.manualSectionIds), [employeeForm.manualSectionIds]);
+  const manualArticleIdSet = React.useMemo(() => new Set(employeeForm.manualArticleIds), [employeeForm.manualArticleIds]);
+  const articlesBySectionId = React.useMemo(() => {
+    const map = new Map<number, Article[]>();
+    articles.forEach((article) => {
+      (article.section_ids || []).forEach((sectionId) => {
+        const list = map.get(sectionId) || [];
+        list.push(article);
+        map.set(sectionId, list);
+      });
+    });
+    return map;
+  }, [articles]);
+  const automaticArticleIds = React.useMemo(() => (
+    articles
+      .filter((article) => (article.section_ids || []).some((sectionId) => automaticSectionIds.includes(sectionId)))
+      .map((article) => article.id)
+  ), [articles, automaticSectionIds]);
 
   const toggleDepartment = (id: number | 'none') => {
     setExpandedDepartmentIds((prev) => {
@@ -279,6 +363,7 @@ export default function TeamAccessManagement() {
 
   const openEmployeeModal = (employee: Employee | null, defaultDepartmentId: number | null = null) => {
     const account = employee ? usersByEmployeeId.get(employee.id) || null : null;
+    const accessUser = account ? accessUsersById.get(account.id) || null : null;
     const departmentId = employee?.department_id ?? defaultDepartmentId ?? null;
     const departmentPositions = positions.filter((position) => position.department_id === departmentId);
     const positionId = employee?.position_id || departmentPositions[0]?.id || null;
@@ -289,6 +374,7 @@ export default function TeamAccessManagement() {
     const managerId = employee?.manager_id && eligibleManagers.some((manager) => manager.id === employee.manager_id)
       ? String(employee.manager_id)
       : '';
+    const existingWikiRoleId = accessUser?.wiki_roles[0]?.id ? String(accessUser.wiki_roles[0].id) : defaultWikiRoleId;
 
     setEmployeeForm({
       fullName: employee?.full_name || '',
@@ -298,6 +384,10 @@ export default function TeamAccessManagement() {
       accountId: account?.id || null,
       username: account?.username || employee?.email || '',
       password: shouldCreateAccount ? generateTemporaryPassword() : '',
+      wikiRoleId: existingWikiRoleId,
+      accessMode: 'auto',
+      manualSectionIds: [],
+      manualArticleIds: [],
     });
     setEmployeeModal({ employee, defaultDepartmentId });
   };
@@ -324,6 +414,7 @@ export default function TeamAccessManagement() {
   };
 
   const openEmployeeFromLegacyAccount = (account: User) => {
+    const accessUser = accessUsersById.get(account.id) || null;
     setEmployeeForm({
       fullName: account.name || account.username,
       departmentId: '',
@@ -332,6 +423,10 @@ export default function TeamAccessManagement() {
       accountId: account.id,
       username: account.username,
       password: '',
+      wikiRoleId: accessUser?.wiki_roles[0]?.id ? String(accessUser.wiki_roles[0].id) : defaultWikiRoleId,
+      accessMode: 'auto',
+      manualSectionIds: [],
+      manualArticleIds: [],
     });
     setEmployeeModal({ employee: null, defaultDepartmentId: null });
   };
@@ -364,6 +459,43 @@ export default function TeamAccessManagement() {
         positionId,
         managerId: eligibleManagers.some((manager) => manager.id === Number(prev.managerId)) ? prev.managerId : '',
       };
+    });
+  };
+
+  const handleEmployeeAccessModeChange = (mode: EmployeeAccessMode) => {
+    setEmployeeForm((prev) => ({
+      ...prev,
+      accessMode: mode,
+      manualSectionIds: mode === 'manual' && prev.manualSectionIds.length === 0
+        ? automaticSectionIds
+        : prev.manualSectionIds,
+      manualArticleIds: mode === 'manual' && prev.manualArticleIds.length === 0
+        ? automaticArticleIds
+        : prev.manualArticleIds,
+    }));
+  };
+
+  const toggleManualSections = (sectionIds: number[]) => {
+    setEmployeeForm((prev) => {
+      const next = new Set(prev.manualSectionIds);
+      const shouldSelect = sectionIds.some((id) => !next.has(id));
+      sectionIds.forEach((id) => {
+        if (shouldSelect) next.add(id);
+        else next.delete(id);
+      });
+      return { ...prev, manualSectionIds: Array.from(next) };
+    });
+  };
+
+  const toggleManualArticles = (articleIds: number[]) => {
+    setEmployeeForm((prev) => {
+      const next = new Set(prev.manualArticleIds);
+      const shouldSelect = articleIds.some((id) => !next.has(id));
+      articleIds.forEach((id) => {
+        if (shouldSelect) next.add(id);
+        else next.delete(id);
+      });
+      return { ...prev, manualArticleIds: Array.from(next) };
     });
   };
 
@@ -462,6 +594,11 @@ export default function TeamAccessManagement() {
       return;
     }
 
+    if (!employeeForm.wikiRoleId || !selectedWikiRole) {
+      alert('Выберите Wiki-роль сотрудника.');
+      return;
+    }
+
     if (!employeeForm.username.trim()) {
       alert('Логин аккаунта обязателен.');
       return;
@@ -486,7 +623,7 @@ export default function TeamAccessManagement() {
     setIsSaving(true);
     try {
       const accountLogin = employeeForm.username.trim();
-      const accountRole = derivedAccountRole;
+      const accountRole = legacyRoleForWikiRole(selectedWikiRole);
       const employeePayload = {
         full_name: employeeForm.fullName.trim(),
         email: accountLogin,
@@ -504,25 +641,33 @@ export default function TeamAccessManagement() {
         ? users.find((user) => user.id === employeeForm.accountId) || null
         : null;
 
+      let savedAccountId: number | null = currentAccount?.id || null;
+
       if (currentAccount) {
-        await adminUpdateUser(currentAccount.id, {
+        const updatedAccount = await adminUpdateUser(currentAccount.id, {
           username: accountLogin,
           name: employeeForm.fullName.trim(),
           password: employeeForm.password || undefined,
           employee_id: savedEmployee.id,
         });
+        savedAccountId = updatedAccount.id;
 
         if (currentAccount.role !== accountRole) {
           await adminChangeRole(currentAccount.id, accountRole);
         }
       } else {
-        await adminCreateUser({
+        const createdAccount = await adminCreateUser({
           username: accountLogin,
           name: employeeForm.fullName.trim(),
           password: employeeForm.password,
           role: accountRole,
           employee_id: savedEmployee.id,
         });
+        savedAccountId = createdAccount.id;
+      }
+
+      if (savedAccountId) {
+        await updateUserWikiRoles(savedAccountId, [Number(employeeForm.wikiRoleId)]);
       }
 
       setEmployeeModal(null);
@@ -635,7 +780,7 @@ export default function TeamAccessManagement() {
                           </span>
                         ))
                       ) : (
-                        <span className="text-muted-foreground">Назначаются во вкладке доступа</span>
+                        <span className="text-muted-foreground">Wiki-роль не выбрана</span>
                       )}
                     </div>
                   </td>
@@ -867,6 +1012,170 @@ export default function TeamAccessManagement() {
               ))
           )}
         </div>
+      </div>
+    );
+  };
+
+  const renderAutomaticAccessPreview = () => {
+    if (!employeeForm.positionId) {
+      return (
+        <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+          Выберите должность, чтобы увидеть автоматический периметр доступа.
+        </div>
+      );
+    }
+
+    const sections = selectedPositionAccessRow?.sections || [];
+
+    return (
+      <div className="rounded-lg border border-border bg-muted/30 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-bold text-foreground">
+              Автоматически: {selectedEmployeePosition?.name || 'должность не указана'}
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Разделы рассчитываются по иерархии должности и общим корпоративным правилам.
+            </p>
+          </div>
+          <span className="shrink-0 rounded border border-border bg-card px-2 py-1 text-[10px] font-bold text-muted-foreground">
+            {sections.length} разделов
+          </span>
+        </div>
+        {sections.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {sections.slice(0, 8).map((section) => (
+              <span key={section.id} className="rounded border border-border bg-card px-2 py-1 text-[10px] font-semibold text-foreground">
+                {section.space_name ? `${section.space_name} / ` : ''}{section.name}
+              </span>
+            ))}
+            {sections.length > 8 && (
+              <span className="rounded border border-border bg-card px-2 py-1 text-[10px] font-semibold text-muted-foreground">
+                +{sections.length - 8}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderManualAccessTree = () => {
+    if (!accessOverview) {
+      return (
+        <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+          Дерево доступа загружается вместе с матрицей Wiki.
+        </div>
+      );
+    }
+
+    return (
+      <div className="max-h-72 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3 space-y-3">
+        <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+          Ручное дерево подготовлено для выбора периметра. Сейчас применяемый доступ сохраняется автоматически по должности; персональные правила для выбранных галочек нужно подключить отдельным сохранением на бекенде.
+        </div>
+        {departments.map((department) => {
+          const departmentPositions = positions.filter((position) => position.department_id === department.id);
+          const departmentSectionIds = accessOverview.sections
+            .filter((section) => departmentPositions.some((position) => position.id === section.position_id))
+            .map((section) => section.id);
+          const isDepartmentChecked = departmentSectionIds.length > 0 && departmentSectionIds.every((id) => manualSectionIdSet.has(id));
+
+          return (
+            <div key={department.id} className="rounded-lg border border-border bg-card p-3">
+              <label className="flex items-center gap-2 text-xs font-extrabold text-foreground">
+                <input
+                  type="checkbox"
+                  checked={isDepartmentChecked}
+                  onChange={() => toggleManualSections(departmentSectionIds)}
+                  className="h-4 w-4 rounded border-border accent-indigo-600"
+                />
+                <Building2 className="h-4 w-4 text-indigo-500" />
+                {department.name}
+              </label>
+
+              <div className="mt-3 space-y-2 pl-6">
+                {departmentPositions.map((position) => {
+                  const sections = accessOverview.sections.filter((section) => section.position_id === position.id);
+                  const sectionIds = sections.map((section) => section.id);
+                  const isPositionChecked = sectionIds.length > 0 && sectionIds.every((id) => manualSectionIdSet.has(id));
+
+                  return (
+                    <div key={position.id} className="rounded-lg border border-border bg-muted/25 p-2">
+                      <label className="flex items-center gap-2 text-xs font-bold text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={isPositionChecked}
+                          onChange={() => toggleManualSections(sectionIds)}
+                          className="h-4 w-4 rounded border-border accent-indigo-600"
+                        />
+                        <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
+                        {position.name}
+                      </label>
+
+                      <div className="mt-2 space-y-2 pl-6">
+                        {sections.length === 0 ? (
+                          <div className="text-[11px] text-muted-foreground">Раздел для должности ещё не создан.</div>
+                        ) : (
+                          sections.map((section) => {
+                            const sectionArticles = articlesBySectionId.get(section.id) || [];
+                            const articleIds = sectionArticles.map((article) => article.id);
+                            const isSectionChecked = manualSectionIdSet.has(section.id);
+                            const areArticlesChecked = articleIds.length > 0 && articleIds.every((id) => manualArticleIdSet.has(id));
+
+                            return (
+                              <div key={section.id} className="space-y-1.5">
+                                <label className="flex items-center gap-2 text-[11px] font-semibold text-foreground">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSectionChecked}
+                                    onChange={() => toggleManualSections([section.id])}
+                                    className="h-3.5 w-3.5 rounded border-border accent-indigo-600"
+                                  />
+                                  <Layers className="h-3.5 w-3.5 text-violet-500" />
+                                  {section.space_name ? `${section.space_name} / ` : ''}{section.name}
+                                </label>
+                                <label className="ml-5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                                  <input
+                                    type="checkbox"
+                                    checked={areArticlesChecked}
+                                    onChange={() => toggleManualArticles(articleIds)}
+                                    disabled={articleIds.length === 0}
+                                    className="h-3.5 w-3.5 rounded border-border accent-indigo-600 disabled:opacity-40"
+                                  />
+                                  <FileText className="h-3.5 w-3.5" />
+                                  Статьи {articleIds.length > 0 ? `(${articleIds.length})` : '(нет статей)'}
+                                </label>
+                                {sectionArticles.length > 0 && (
+                                  <div className="ml-10 space-y-1">
+                                    {sectionArticles.slice(0, 5).map((article) => (
+                                      <label key={article.id} className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                        <input
+                                          type="checkbox"
+                                          checked={manualArticleIdSet.has(article.id)}
+                                          onChange={() => toggleManualArticles([article.id])}
+                                          className="h-3 w-3 rounded border-border accent-indigo-600"
+                                        />
+                                        <span className="truncate">{article.title}</span>
+                                      </label>
+                                    ))}
+                                    {sectionArticles.length > 5 && (
+                                      <div className="text-[10px] text-muted-foreground">+{sectionArticles.length - 5} статей</div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -1303,6 +1612,105 @@ export default function TeamAccessManagement() {
                     </div>
                   </label>
                 </div>
+              </section>
+
+              <section className="space-y-4 pt-5 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                  <div>
+                    <h4 className="font-bold text-sm text-foreground">Роль в системе Wiki</h4>
+                    <p className="text-[11px] text-muted-foreground">Должность задаёт место в оргструктуре, Wiki-роль задаёт действия в Wiki.</p>
+                  </div>
+                </div>
+
+                {wikiRoles.length === 0 ? (
+                  <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+                    Wiki-роли ещё не загружены. Откройте вкладку “Wiki-роли и доступ” и создайте базовую модель.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {wikiRoles.map((role) => {
+                      const isSelected = employeeForm.wikiRoleId === String(role.id);
+                      const details = wikiRoleDetails[role.code];
+
+                      return (
+                        <label
+                          key={role.id}
+                          className={`cursor-pointer rounded-lg border p-3 transition-colors ${
+                            isSelected
+                              ? 'border-indigo-500 bg-indigo-500/10 text-foreground'
+                              : 'border-border bg-card hover:bg-muted/50 text-card-foreground'
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <input
+                              type="radio"
+                              name="employeeWikiRole"
+                              checked={isSelected}
+                              onChange={() => setEmployeeForm((prev) => ({ ...prev, wikiRoleId: String(role.id) }))}
+                              className="mt-0.5 h-4 w-4 accent-indigo-600"
+                            />
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-xs font-extrabold text-foreground">{role.name}</span>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${roleTone(role.code)}`}>
+                                  {role.code}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                                {details?.can[0] || role.description || 'Права задаются матрицей Wiki.'}
+                              </p>
+                              {details?.cannot?.[0] && (
+                                <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+                                  {details.cannot[0]}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section className="space-y-4 pt-5 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-violet-500" />
+                  <div>
+                    <h4 className="font-bold text-sm text-foreground">Доступ к Wiki</h4>
+                    <p className="text-[11px] text-muted-foreground">Периметр доступа строится по должности, а действия ограничиваются выбранной Wiki-ролью.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleEmployeeAccessModeChange('auto')}
+                    className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                      employeeForm.accessMode === 'auto'
+                        ? 'border-indigo-500 bg-indigo-500/10 text-foreground'
+                        : 'border-border bg-card text-muted-foreground hover:bg-muted/50'
+                    }`}
+                  >
+                    <div className="text-xs font-extrabold">Автоматически по должности</div>
+                    <div className="mt-1 text-[10px] leading-relaxed">Иерархия: директор → руководитель → супервайзер → оператор.</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleEmployeeAccessModeChange('manual')}
+                    className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                      employeeForm.accessMode === 'manual'
+                        ? 'border-indigo-500 bg-indigo-500/10 text-foreground'
+                        : 'border-border bg-card text-muted-foreground hover:bg-muted/50'
+                    }`}
+                  >
+                    <div className="text-xs font-extrabold">Ручная настройка</div>
+                    <div className="mt-1 text-[10px] leading-relaxed">Выбор отдела, раздела/должности и статей в дереве Wiki.</div>
+                  </button>
+                </div>
+
+                {employeeForm.accessMode === 'auto' ? renderAutomaticAccessPreview() : renderManualAccessTree()}
               </section>
             </div>
 

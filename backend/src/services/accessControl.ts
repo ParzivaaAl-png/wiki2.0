@@ -181,7 +181,9 @@ export const getUserCapabilities = async (
 
   return {
     roles,
-    capabilities: mergeCapabilities(getLegacyCapabilities(legacyRole), ...roleCapabilities),
+    capabilities: roles.length > 0
+      ? mergeCapabilities(...roleCapabilities)
+      : getLegacyCapabilities(legacyRole),
   };
 };
 
@@ -415,10 +417,6 @@ export const canCreateInSections = async (
   legacyRole: string | null | undefined,
   sectionIds: number[]
 ): Promise<boolean> => {
-  if (legacyRole && (legacyAdminRoles.has(legacyRole) || legacyStaffRoles.has(legacyRole))) {
-    return true;
-  }
-
   const permissions = await getSectionPermissionsForUser(userId, legacyRole, sectionIds);
   return permissions.can_create || permissions.can_manage_access;
 };
@@ -430,10 +428,6 @@ export const canEditArticle = async (
 ): Promise<boolean> => {
   if (!userId) {
     return false;
-  }
-
-  if (legacyRole && (legacyAdminRoles.has(legacyRole) || legacyStaffRoles.has(legacyRole))) {
-    return true;
   }
 
   const { capabilities } = await getUserCapabilities(userId, legacyRole);
