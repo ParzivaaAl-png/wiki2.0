@@ -31,8 +31,8 @@ export default function Home() {
   
   const [isLoading, setIsLoading] = React.useState(true);
 
-  // Filter Tab State: 'all' | 'new' | 'popular' | 'actual' | 'trending' | 'recommended'
-  const [filterTab, setFilterTab] = React.useState<'all' | 'new' | 'popular' | 'actual' | 'trending' | 'recommended'>('all');
+  // Filter Tab State: 'all' | 'new' | 'trending' | 'recommended'
+  const [filterTab, setFilterTab] = React.useState<'all' | 'new' | 'trending' | 'recommended'>('all');
 
   // Customization States (Personal Favorites)
   const [isConfigureMode, setIsConfigureMode] = React.useState(false);
@@ -100,31 +100,22 @@ export default function Home() {
     }
 
     const visibleArticles = allArticles.filter(a => a.is_visible !== false && a.published);
+    let result = visibleArticles;
 
     if (filterTab === 'new') {
-      return [...visibleArticles]
+      result = [...visibleArticles]
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     }
 
-    if (filterTab === 'popular') {
-      return [...visibleArticles]
-        .sort((a, b) => (b.views || 0) - (a.views || 0));
-    }
-
-    if (filterTab === 'actual') {
-      return [...visibleArticles]
-        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-    }
-
     if (filterTab === 'trending') {
-      return trendingArticles.filter(a => a.is_visible !== false && a.published);
+      result = trendingArticles.filter(a => a.is_visible !== false && a.published);
     }
 
     if (filterTab === 'recommended') {
-      return recommendedArticles.filter(a => a.is_visible !== false && a.published);
+      result = recommendedArticles.filter(a => a.is_visible !== false && a.published);
     }
 
-    return visibleArticles;
+    return result.slice(0, 6);
   }, [filterTab, allArticles, trendingArticles, recommendedArticles, isEditMode]);
 
   const filteredFavs = React.useMemo(() => {
@@ -643,26 +634,7 @@ export default function Home() {
               >
                 Новые
               </button>
-              <button
-                onClick={() => setFilterTab('popular')}
-                className={`px-3.5 py-1.5 rounded-lg text-[10px] font-bold transition-all shrink-0 cursor-pointer ${
-                  filterTab === 'popular' && !isEditMode
-                    ? 'bg-indigo-500 text-white shadow'
-                    : 'text-neutral-550 hover:text-neutral-950 dark:hover:text-white'
-                }`}
-              >
-                Популярные
-              </button>
-              <button
-                onClick={() => setFilterTab('actual')}
-                className={`px-3.5 py-1.5 rounded-lg text-[10px] font-bold transition-all shrink-0 cursor-pointer ${
-                  filterTab === 'actual' && !isEditMode
-                    ? 'bg-indigo-500 text-white shadow'
-                    : 'text-neutral-550 hover:text-neutral-950 dark:hover:text-white'
-                }`}
-              >
-                Актуальные
-              </button>
+
               <button
                 onClick={() => setFilterTab('trending')}
                 className={`px-3.5 py-1.5 rounded-lg text-[10px] font-bold transition-all shrink-0 cursor-pointer ${
