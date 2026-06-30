@@ -21,6 +21,7 @@ import {
   Article, 
   Section 
 } from '../lib/api';
+import { ModalPortal } from './modal-portal';
 
 const formatDisplayDate = (date: Date) => {
   const day = String(date.getDate()).padStart(2, '0');
@@ -274,6 +275,7 @@ export default function GuestManagement() {
 
       {/* Grant Access Modal */}
       {isCreateOpen && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
           <div className="w-full max-w-md bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-2xl">
             <div className="flex justify-between items-center mb-4">
@@ -420,6 +422,7 @@ export default function GuestManagement() {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );
