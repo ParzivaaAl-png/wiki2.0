@@ -716,6 +716,30 @@ export const initializeDatabase = async () => {
     `);
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_access_settings (
+        user_id INT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        access_mode VARCHAR(20) NOT NULL DEFAULT 'auto',
+        updated_by INT REFERENCES users(id) ON DELETE SET NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CHECK (access_mode IN ('auto', 'manual'))
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_manual_access_rules (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        department_id INT REFERENCES departments(id) ON DELETE CASCADE,
+        section_id INT REFERENCES sections(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CHECK (
+          (department_id IS NOT NULL AND section_id IS NULL)
+          OR (department_id IS NULL AND section_id IS NOT NULL)
+        )
+      );
+    `);
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS access_audit_logs (
         id SERIAL PRIMARY KEY,
         actor_user_id INT REFERENCES users(id) ON DELETE SET NULL,
@@ -735,6 +759,19 @@ export const initializeDatabase = async () => {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_section_access_rules_department ON section_access_rules(department_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_section_access_rules_role ON section_access_rules(wiki_role_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_sections_visibility_scope ON sections(visibility_scope)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_user_manual_access_rules_user ON user_manual_access_rules(user_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_user_manual_access_rules_department ON user_manual_access_rules(department_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_user_manual_access_rules_section ON user_manual_access_rules(section_id)');
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_user_manual_access_unique_department
+      ON user_manual_access_rules(user_id, department_id)
+      WHERE department_id IS NOT NULL;
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_user_manual_access_unique_section
+      ON user_manual_access_rules(user_id, section_id)
+      WHERE section_id IS NOT NULL;
+    `);
     await pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_section_access_rules_unique_position
       ON section_access_rules(section_id, position_id)

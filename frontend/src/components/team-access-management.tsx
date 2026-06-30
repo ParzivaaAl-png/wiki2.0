@@ -6,7 +6,6 @@ import {
   ChevronRight,
   CircleOff,
   Edit3,
-  FileText,
   KeyRound,
   Layers,
   Loader2,
@@ -23,7 +22,6 @@ import {
 } from 'lucide-react';
 import {
   AccessOverview,
-  Article,
   Department,
   Employee,
   Position,
@@ -38,7 +36,6 @@ import {
   createPosition,
   deleteEmployee,
   deletePosition,
-  fetchArticles,
   fetchAccessOverview,
   fetchDepartments,
   fetchEmployees,
@@ -47,6 +44,7 @@ import {
   updateDepartment,
   updateEmployee,
   updatePosition,
+  updateUserAccessScope,
   updateUserWikiRoles,
   WikiRole,
 } from '../lib/api';
@@ -138,7 +136,6 @@ export default function TeamAccessManagement() {
   const [positions, setPositions] = React.useState<Position[]>([]);
   const [employees, setEmployees] = React.useState<Employee[]>([]);
   const [users, setUsers] = React.useState<User[]>([]);
-  const [articles, setArticles] = React.useState<Article[]>([]);
   const [accessOverview, setAccessOverview] = React.useState<AccessOverview | null>(null);
   const [guestAccessCount, setGuestAccessCount] = React.useState(0);
   const [expandedDepartmentIds, setExpandedDepartmentIds] = React.useState<Set<number | 'none'>>(new Set());
@@ -158,8 +155,8 @@ export default function TeamAccessManagement() {
     password: '',
     wikiRoleId: '',
     accessMode: 'auto' as EmployeeAccessMode,
+    manualDepartmentIds: [] as number[],
     manualSectionIds: [] as number[],
-    manualArticleIds: [] as number[],
   });
 
   const [departmentForm, setDepartmentForm] = React.useState({
@@ -180,14 +177,13 @@ export default function TeamAccessManagement() {
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [departmentsRes, positionsRes, employeesRes, usersRes, accessRes, guestRes, articlesRes] = await Promise.allSettled([
+      const [departmentsRes, positionsRes, employeesRes, usersRes, accessRes, guestRes] = await Promise.allSettled([
         fetchDepartments(),
         fetchPositions(),
         fetchEmployees(),
         adminFetchUsers(),
         fetchAccessOverview(),
         fetchGuestAccessList(),
-        fetchArticles(),
       ]);
 
       const nextDepartments = readSettled(departmentsRes, []);
@@ -197,7 +193,6 @@ export default function TeamAccessManagement() {
       setUsers(readSettled(usersRes, []));
       setAccessOverview(readSettled(accessRes, null));
       setGuestAccessCount(readSettled(guestRes, []).length);
-      setArticles(readSettled(articlesRes, []));
 
       setExpandedDepartmentIds((prev) => {
         if (prev.size > 0) return prev;
@@ -333,24 +328,8 @@ export default function TeamAccessManagement() {
   const automaticSectionIds = React.useMemo(() => (
     selectedPositionAccessRow?.sections.map((section) => section.id) || []
   ), [selectedPositionAccessRow]);
+  const manualDepartmentIdSet = React.useMemo(() => new Set(employeeForm.manualDepartmentIds), [employeeForm.manualDepartmentIds]);
   const manualSectionIdSet = React.useMemo(() => new Set(employeeForm.manualSectionIds), [employeeForm.manualSectionIds]);
-  const manualArticleIdSet = React.useMemo(() => new Set(employeeForm.manualArticleIds), [employeeForm.manualArticleIds]);
-  const articlesBySectionId = React.useMemo(() => {
-    const map = new Map<number, Article[]>();
-    articles.forEach((article) => {
-      (article.section_ids || []).forEach((sectionId) => {
-        const list = map.get(sectionId) || [];
-        list.push(article);
-        map.set(sectionId, list);
-      });
-    });
-    return map;
-  }, [articles]);
-  const automaticArticleIds = React.useMemo(() => (
-    articles
-      .filter((article) => (article.section_ids || []).some((sectionId) => automaticSectionIds.includes(sectionId)))
-      .map((article) => article.id)
-  ), [articles, automaticSectionIds]);
 
   const toggleDepartment = (id: number | 'none') => {
     setExpandedDepartmentIds((prev) => {
@@ -385,9 +364,9 @@ export default function TeamAccessManagement() {
       username: account?.username || employee?.email || '',
       password: shouldCreateAccount ? generateTemporaryPassword() : '',
       wikiRoleId: existingWikiRoleId,
-      accessMode: 'auto',
-      manualSectionIds: [],
-      manualArticleIds: [],
+      accessMode: accessUser?.access_mode === 'manual' ? 'manual' : 'auto',
+      manualDepartmentIds: accessUser?.manual_department_ids || [],
+      manualSectionIds: accessUser?.manual_section_ids || [],
     });
     setEmployeeModal({ employee, defaultDepartmentId });
   };
@@ -424,9 +403,9 @@ export default function TeamAccessManagement() {
       username: account.username,
       password: '',
       wikiRoleId: accessUser?.wiki_roles[0]?.id ? String(accessUser.wiki_roles[0].id) : defaultWikiRoleId,
-      accessMode: 'auto',
-      manualSectionIds: [],
-      manualArticleIds: [],
+      accessMode: accessUser?.access_mode === 'manual' ? 'manual' : 'auto',
+      manualDepartmentIds: accessUser?.manual_department_ids || [],
+      manualSectionIds: accessUser?.manual_section_ids || [],
     });
     setEmployeeModal({ employee: null, defaultDepartmentId: null });
   };
@@ -466,13 +445,20 @@ export default function TeamAccessManagement() {
     setEmployeeForm((prev) => ({
       ...prev,
       accessMode: mode,
+      manualDepartmentIds: mode === 'manual' ? prev.manualDepartmentIds : prev.manualDepartmentIds,
       manualSectionIds: mode === 'manual' && prev.manualSectionIds.length === 0
         ? automaticSectionIds
         : prev.manualSectionIds,
-      manualArticleIds: mode === 'manual' && prev.manualArticleIds.length === 0
-        ? automaticArticleIds
-        : prev.manualArticleIds,
     }));
+  };
+
+  const toggleManualDepartment = (departmentId: number) => {
+    setEmployeeForm((prev) => {
+      const next = new Set(prev.manualDepartmentIds);
+      if (next.has(departmentId)) next.delete(departmentId);
+      else next.add(departmentId);
+      return { ...prev, manualDepartmentIds: Array.from(next) };
+    });
   };
 
   const toggleManualSections = (sectionIds: number[]) => {
@@ -484,18 +470,6 @@ export default function TeamAccessManagement() {
         else next.delete(id);
       });
       return { ...prev, manualSectionIds: Array.from(next) };
-    });
-  };
-
-  const toggleManualArticles = (articleIds: number[]) => {
-    setEmployeeForm((prev) => {
-      const next = new Set(prev.manualArticleIds);
-      const shouldSelect = articleIds.some((id) => !next.has(id));
-      articleIds.forEach((id) => {
-        if (shouldSelect) next.add(id);
-        else next.delete(id);
-      });
-      return { ...prev, manualArticleIds: Array.from(next) };
     });
   };
 
@@ -668,6 +642,11 @@ export default function TeamAccessManagement() {
 
       if (savedAccountId) {
         await updateUserWikiRoles(savedAccountId, [Number(employeeForm.wikiRoleId)]);
+        await updateUserAccessScope(savedAccountId, {
+          access_mode: employeeForm.accessMode,
+          department_ids: employeeForm.accessMode === 'manual' ? employeeForm.manualDepartmentIds : [],
+          section_ids: employeeForm.accessMode === 'manual' ? employeeForm.manualSectionIds : [],
+        });
       }
 
       setEmployeeModal(null);
@@ -1071,104 +1050,69 @@ export default function TeamAccessManagement() {
 
     return (
       <div className="max-h-72 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3 space-y-3">
-        <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
-          Ручное дерево подготовлено для выбора периметра. Сейчас применяемый доступ сохраняется автоматически по должности; персональные правила для выбранных галочек нужно подключить отдельным сохранением на бекенде.
+        <div className="rounded-lg border border-border bg-card p-3 text-[11px] leading-relaxed text-muted-foreground">
+          Выберите отделы и разделы, которые будут доступны сотруднику. Все статьи внутри выбранных разделов будут доступны автоматически.
         </div>
         {departments.map((department) => {
           const departmentPositions = positions.filter((position) => position.department_id === department.id);
-          const departmentSectionIds = accessOverview.sections
-            .filter((section) => departmentPositions.some((position) => position.id === section.position_id))
-            .map((section) => section.id);
-          const isDepartmentChecked = departmentSectionIds.length > 0 && departmentSectionIds.every((id) => manualSectionIdSet.has(id));
+          const departmentPositionIds = new Set(departmentPositions.map((position) => position.id));
+          const departmentSections = accessOverview.sections.filter((section) => (
+            section.position_id && departmentPositionIds.has(section.position_id)
+          ));
+          const isDepartmentChecked = manualDepartmentIdSet.has(department.id);
+          const selectedDepartmentSections = departmentSections.filter((section) => manualSectionIdSet.has(section.id)).length;
 
           return (
             <div key={department.id} className="rounded-lg border border-border bg-card p-3">
-              <label className="flex items-center gap-2 text-xs font-extrabold text-foreground">
-                <input
-                  type="checkbox"
-                  checked={isDepartmentChecked}
-                  onChange={() => toggleManualSections(departmentSectionIds)}
-                  className="h-4 w-4 rounded border-border accent-indigo-600"
-                />
-                <Building2 className="h-4 w-4 text-indigo-500" />
-                {department.name}
-              </label>
+              <div className="flex items-start justify-between gap-3">
+                <label className="flex items-center gap-2 text-xs font-extrabold text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={isDepartmentChecked}
+                    onChange={() => toggleManualDepartment(department.id)}
+                    className="h-4 w-4 rounded border-border accent-indigo-600"
+                  />
+                  <Building2 className="h-4 w-4 text-indigo-500" />
+                  {department.name}
+                </label>
+                <span className="shrink-0 rounded border border-border bg-muted px-2 py-1 text-[10px] font-bold text-muted-foreground">
+                  {isDepartmentChecked
+                    ? 'Весь отдел'
+                    : `${selectedDepartmentSections}/${departmentSections.length} разделов`}
+                </span>
+              </div>
 
               <div className="mt-3 space-y-2 pl-6">
+                {departmentPositions.length === 0 && (
+                  <div className="rounded-lg border border-dashed border-border bg-muted/20 p-2 text-[11px] text-muted-foreground">
+                    В отделе пока нет должностей.
+                  </div>
+                )}
                 {departmentPositions.map((position) => {
                   const sections = accessOverview.sections.filter((section) => section.position_id === position.id);
                   const sectionIds = sections.map((section) => section.id);
-                  const isPositionChecked = sectionIds.length > 0 && sectionIds.every((id) => manualSectionIdSet.has(id));
+                  const isPositionChecked = isDepartmentChecked || (sectionIds.length > 0 && sectionIds.every((id) => manualSectionIdSet.has(id)));
 
                   return (
-                    <div key={position.id} className="rounded-lg border border-border bg-muted/25 p-2">
+                    <div key={position.id} className={`rounded-lg border p-2 transition-colors ${
+                      isPositionChecked
+                        ? 'border-indigo-500/25 bg-indigo-500/10'
+                        : 'border-border bg-muted/25'
+                    }`}>
                       <label className="flex items-center gap-2 text-xs font-bold text-foreground">
                         <input
                           type="checkbox"
                           checked={isPositionChecked}
+                          disabled={sectionIds.length === 0 || isDepartmentChecked}
                           onChange={() => toggleManualSections(sectionIds)}
-                          className="h-4 w-4 rounded border-border accent-indigo-600"
+                          className="h-4 w-4 rounded border-border accent-indigo-600 disabled:opacity-40"
                         />
                         <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
-                        {position.name}
+                        <span className="min-w-0 flex-1 truncate">{position.name}</span>
+                        <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">
+                          {sections.length > 0 ? `${sections.length} разделов` : 'Нет раздела'}
+                        </span>
                       </label>
-
-                      <div className="mt-2 space-y-2 pl-6">
-                        {sections.length === 0 ? (
-                          <div className="text-[11px] text-muted-foreground">Раздел для должности ещё не создан.</div>
-                        ) : (
-                          sections.map((section) => {
-                            const sectionArticles = articlesBySectionId.get(section.id) || [];
-                            const articleIds = sectionArticles.map((article) => article.id);
-                            const isSectionChecked = manualSectionIdSet.has(section.id);
-                            const areArticlesChecked = articleIds.length > 0 && articleIds.every((id) => manualArticleIdSet.has(id));
-
-                            return (
-                              <div key={section.id} className="space-y-1.5">
-                                <label className="flex items-center gap-2 text-[11px] font-semibold text-foreground">
-                                  <input
-                                    type="checkbox"
-                                    checked={isSectionChecked}
-                                    onChange={() => toggleManualSections([section.id])}
-                                    className="h-3.5 w-3.5 rounded border-border accent-indigo-600"
-                                  />
-                                  <Layers className="h-3.5 w-3.5 text-violet-500" />
-                                  {section.space_name ? `${section.space_name} / ` : ''}{section.name}
-                                </label>
-                                <label className="ml-5 flex items-center gap-2 text-[11px] text-muted-foreground">
-                                  <input
-                                    type="checkbox"
-                                    checked={areArticlesChecked}
-                                    onChange={() => toggleManualArticles(articleIds)}
-                                    disabled={articleIds.length === 0}
-                                    className="h-3.5 w-3.5 rounded border-border accent-indigo-600 disabled:opacity-40"
-                                  />
-                                  <FileText className="h-3.5 w-3.5" />
-                                  Статьи {articleIds.length > 0 ? `(${articleIds.length})` : '(нет статей)'}
-                                </label>
-                                {sectionArticles.length > 0 && (
-                                  <div className="ml-10 space-y-1">
-                                    {sectionArticles.slice(0, 5).map((article) => (
-                                      <label key={article.id} className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                        <input
-                                          type="checkbox"
-                                          checked={manualArticleIdSet.has(article.id)}
-                                          onChange={() => toggleManualArticles([article.id])}
-                                          className="h-3 w-3 rounded border-border accent-indigo-600"
-                                        />
-                                        <span className="truncate">{article.title}</span>
-                                      </label>
-                                    ))}
-                                    {sectionArticles.length > 5 && (
-                                      <div className="text-[10px] text-muted-foreground">+{sectionArticles.length - 5} статей</div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
                     </div>
                   );
                 })}
@@ -1706,7 +1650,7 @@ export default function TeamAccessManagement() {
                     }`}
                   >
                     <div className="text-xs font-extrabold">Ручная настройка</div>
-                    <div className="mt-1 text-[10px] leading-relaxed">Выбор отдела, раздела/должности и статей в дереве Wiki.</div>
+                    <div className="mt-1 text-[10px] leading-relaxed">Выбор отделов и разделов без отдельного выбора статей.</div>
                   </button>
                 </div>
 

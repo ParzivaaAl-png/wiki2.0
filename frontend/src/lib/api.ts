@@ -1025,6 +1025,9 @@ export interface AccessOverviewUser extends User {
   employee_name?: string | null;
   position_name?: string | null;
   department_name?: string | null;
+  access_mode?: 'auto' | 'manual';
+  manual_department_ids?: number[];
+  manual_section_ids?: number[];
   wiki_roles: Array<{ id: number; code: string; name: string }>;
 }
 
@@ -1235,6 +1238,17 @@ export async function updateUserWikiRoles(userId: number, roleIds: number[]): Pr
   return apiCall<EffectiveAccess['user']>(`/wiki/access/users/${userId}/wiki-roles`, {
     method: 'PUT',
     body: JSON.stringify({ role_ids: roleIds }),
+  });
+}
+
+export async function updateUserAccessScope(
+  userId: number,
+  data: { access_mode: 'auto' | 'manual'; department_ids: number[]; section_ids: number[] }
+): Promise<EffectiveAccess['user']> {
+  clearApiCache();
+  return apiCall<EffectiveAccess['user']>(`/wiki/access/users/${userId}/access-scope`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
   });
 }
 

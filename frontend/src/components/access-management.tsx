@@ -20,15 +20,17 @@ import {
 import {
   AccessOverview,
   AccessOverviewUser,
+  createDepartment,
   createPosition,
   deletePosition,
   fetchAccessOverview,
   Position,
   seedAccessDefaults,
   updatePosition,
-  updateUserWikiRoles,
   WikiCapabilities,
   WikiRole,
+  Department,
+  updateDepartment,
 } from '../lib/api';
 import { ModalPortal } from './modal-portal';
 
@@ -72,14 +74,9 @@ const roleTone = (code: string) => {
 };
 
 export default function AccessManagement() {
-  const [activeTab, setActiveTab] = React.useState<AccessTab>('matrix');
   const [overview, setOverview] = React.useState<AccessOverview | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSeeding, setIsSeeding] = React.useState(false);
-  const [isSavingRoles, setIsSavingRoles] = React.useState(false);
-  const [selectedUserId, setSelectedUserId] = React.useState<number | null>(null);
-  const [pendingRoleIds, setPendingRoleIds] = React.useState<number[]>([]);
-  const [searchQuery, setSearchQuery] = React.useState('');
   const [departmentFilterId, setDepartmentFilterId] = React.useState<string>('all');
   const [positionModal, setPositionModal] = React.useState<PositionModalState | null>(null);
   const [positionForm, setPositionForm] = React.useState({
@@ -91,48 +88,30 @@ export default function AccessManagement() {
   });
   const [isSavingPosition, setIsSavingPosition] = React.useState(false);
 
+  const [departmentModal, setDepartmentModal] = React.useState<{ department: Department | null } | null>(null);
+  const [departmentForm, setDepartmentForm] = React.useState({
+    name: '',
+    description: '',
+    parentDepartmentId: '',
+    status: 'Active',
+  });
+  const [isSavingDepartment, setIsSavingDepartment] = React.useState(false);
+
   const loadOverview = React.useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await fetchAccessOverview();
       setOverview(data);
-      const firstUserId = selectedUserId || data.users[0]?.id || null;
-      setSelectedUserId(firstUserId);
-      const selected = data.users.find((user) => user.id === firstUserId);
-      setPendingRoleIds(selected?.wiki_roles[0]?.id ? [selected.wiki_roles[0].id] : []);
     } catch (err) {
       console.error('Failed to load access overview:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [selectedUserId]);
+  }, []);
 
   React.useEffect(() => {
     loadOverview();
   }, [loadOverview]);
-
-  React.useEffect(() => {
-    if (!overview || !selectedUserId) return;
-    const selected = overview.users.find((user) => user.id === selectedUserId);
-    setPendingRoleIds(selected?.wiki_roles[0]?.id ? [selected.wiki_roles[0].id] : []);
-  }, [overview, selectedUserId]);
-
-  const selectedUser = React.useMemo<AccessOverviewUser | null>(() => {
-    if (!overview || !selectedUserId) return null;
-    return overview.users.find((user) => user.id === selectedUserId) || null;
-  }, [overview, selectedUserId]);
-
-  const filteredUsers = React.useMemo(() => {
-    if (!overview) return [];
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return overview.users;
-    return overview.users.filter((user) => (
-      user.name.toLowerCase().includes(q) ||
-      user.username.toLowerCase().includes(q) ||
-      (user.position_name || '').toLowerCase().includes(q) ||
-      (user.department_name || '').toLowerCase().includes(q)
-    ));
-  }, [overview, searchQuery]);
 
   const positionsById = React.useMemo(() => (
     new Map((overview?.positions || []).map((position) => [position.id, position]))
@@ -144,6 +123,47 @@ export default function AccessManagement() {
     const departmentId = Number(departmentFilterId);
     return overview.matrix.filter((row) => positionsById.get(row.position_id)?.department_id === departmentId);
   }, [departmentFilterId, overview, positionsById]);
+
+  const openDepartmentModal = (department: Department | null = null) => {
+    setDepartmentForm({
+      name: department?.name || '',
+      description: department?.description || '',
+      parentDepartmentId: department?.parent_department_id ? String(department.parent_department_id) : '',
+      status: department?.status || 'Active',
+    });
+    setDepartmentModal({ department });
+  };
+
+  const handleSaveDepartment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!departmentForm.name.trim()) {
+      alert('Название отдела обязательно.');
+      return;
+    }
+
+    setIsSavingDepartment(true);
+    try {
+      const payload = {
+        name: departmentForm.name.trim(),
+        description: departmentForm.description.trim() || null,
+        parent_department_id: departmentForm.parentDepartmentId ? Number(departmentForm.parentDepartmentId) : null,
+        status: departmentForm.status,
+      };
+
+      if (departmentModal?.department) {
+        await updateDepartment(departmentModal.department.id, payload);
+      } else {
+        await createDepartment(payload);
+      }
+
+      setDepartmentModal(null);
+      await loadOverview();
+    } catch (err: any) {
+      alert(err.message || 'Не удалось сохранить отдел.');
+    } finally {
+      setIsSavingDepartment(false);
+    }
+  };
 
   const openPositionModal = (position: Position | null = null) => {
     const fallbackDepartmentId = departmentFilterId !== 'all'
@@ -216,27 +236,6 @@ export default function AccessManagement() {
       alert(err.message || 'Не удалось создать каркас доступа.');
     } finally {
       setIsSeeding(false);
-    }
-  };
-
-  const handleToggleRole = (roleId: number) => {
-    setPendingRoleIds([roleId]);
-  };
-
-  const handleSaveRoles = async () => {
-    if (!selectedUserId) return;
-    if (pendingRoleIds.length !== 1) {
-      alert('Выберите одну Wiki-роль пользователя.');
-      return;
-    }
-    setIsSavingRoles(true);
-    try {
-      await updateUserWikiRoles(selectedUserId, pendingRoleIds);
-      await loadOverview();
-    } catch (err: any) {
-      alert(err.message || 'Не удалось сохранить Wiki-роли пользователя.');
-    } finally {
-      setIsSavingRoles(false);
     }
   };
 
@@ -342,63 +341,50 @@ export default function AccessManagement() {
         ))}
       </div>
 
-      <div className="flex gap-2 border-b border-border overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('matrix')}
-          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors shrink-0 ${
-            activeTab === 'matrix' ? 'border-indigo-500 text-indigo-500' : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          Матрица должностей
-        </button>
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors shrink-0 ${
-            activeTab === 'users' ? 'border-indigo-500 text-indigo-500' : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <UserCog className="w-4 h-4" />
-          Роли пользователей
-        </button>
-      </div>
-
-      {activeTab === 'matrix' && (
-        <div className="border border-border bg-card text-card-foreground rounded-lg overflow-hidden">
-          <div className="p-4 border-b border-border bg-muted/20 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <Briefcase className="w-4 h-4 text-indigo-500" />
-                <h3 className="font-bold text-sm text-foreground">Матрица должностей</h3>
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                Должности добавляются здесь и сразу привязываются к выбранному отделу.
-              </p>
+      <div className="border border-border bg-card text-card-foreground rounded-lg overflow-hidden">
+        <div className="p-4 border-b border-border bg-muted/20 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-indigo-500" />
+              <h3 className="font-bold text-sm text-foreground">Матрица должностей</h3>
             </div>
-
-            <div className="flex flex-col sm:flex-row gap-2">
-              <label className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
-                <Building2 className="w-4 h-4 text-muted-foreground" />
-                <select
-                  value={departmentFilterId}
-                  onChange={(event) => setDepartmentFilterId(event.target.value)}
-                  className="bg-transparent text-xs font-bold text-foreground outline-none"
-                >
-                  <option value="all">Все отделы</option>
-                  {overview.departments.map((department) => (
-                    <option key={department.id} value={department.id}>{department.name}</option>
-                  ))}
-                </select>
-              </label>
-              <button
-                onClick={() => openPositionModal(null)}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Должность
-              </button>
-            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Должности и отделы настраиваются в этой матрице.
+            </p>
           </div>
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <label className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
+              <Building2 className="w-4 h-4 text-muted-foreground" />
+              <select
+                value={departmentFilterId}
+                onChange={(event) => setDepartmentFilterId(event.target.value)}
+                className="bg-transparent text-xs font-bold text-foreground outline-none"
+              >
+                <option value="all">Все отделы</option>
+                {overview.departments.map((department) => (
+                  <option key={department.id} value={department.id}>{department.name}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => openDepartmentModal(null)}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted text-xs font-bold transition-colors text-foreground"
+            >
+              <Plus className="w-4 h-4" />
+              Отдел
+            </button>
+            <button
+              type="button"
+              onClick={() => openPositionModal(null)}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Должность
+            </button>
+          </div>
+        </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
@@ -475,123 +461,6 @@ export default function AccessManagement() {
             </table>
           </div>
         </div>
-      )}
-
-      {activeTab === 'users' && (
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-4">
-          <div className="border border-border bg-card text-card-foreground rounded-lg overflow-hidden">
-            <div className="p-4 border-b border-border flex items-center gap-2 bg-muted/20">
-              <Users className="w-4 h-4 text-muted-foreground" />
-              <input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Поиск пользователя"
-                className="w-full bg-transparent outline-none text-xs text-foreground placeholder-muted-foreground"
-              />
-            </div>
-            <div className="max-h-[520px] overflow-y-auto divide-y divide-border">
-              {filteredUsers.map((user) => (
-                <button
-                  key={user.id}
-                  onClick={() => setSelectedUserId(user.id)}
-                  className={`w-full text-left p-4 transition-colors ${
-                    selectedUserId === user.id ? 'bg-indigo-500/10' : 'hover:bg-muted/40'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-bold text-sm text-foreground">{user.name}</div>
-                      <div className="text-[10px] text-muted-foreground mt-1">
-                        {user.username} · {user.position_name || user.role}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap justify-end gap-1 max-w-[180px]">
-                      {user.wiki_roles.length === 0 ? (
-                        <span className="text-[10px] text-muted-foreground">Без Wiki-роли</span>
-                      ) : (
-                        user.wiki_roles.map((role) => (
-                          <span key={role.id} className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${roleTone(role.code)}`}>
-                            {role.name}
-                          </span>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="border border-border bg-card text-card-foreground rounded-lg p-4 h-fit">
-            <div className="flex items-center gap-2 mb-4">
-              <KeyRound className="w-4 h-4 text-indigo-500" />
-              <h3 className="font-bold text-sm text-foreground">Wiki-роль</h3>
-            </div>
-
-            {selectedUser ? (
-              <>
-                <div className="p-3 rounded-lg bg-muted/40 border border-border mb-4">
-                  <div className="font-bold text-sm text-foreground">{selectedUser.name}</div>
-                  <div className="text-[10px] text-muted-foreground mt-1">
-                    {selectedUser.department_name || 'Отдел не указан'} · {selectedUser.position_name || selectedUser.role}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  {overview.roles.map((role) => {
-                    const isEnabled = pendingRoleIds.includes(role.id);
-                    return (
-                      <button
-                        key={role.id}
-                        type="button"
-                        onClick={() => handleToggleRole(role.id)}
-                        className={`w-full flex items-center justify-between gap-4 p-3 rounded-lg border text-left transition-colors ${
-                          isEnabled
-                            ? 'border-indigo-500/30 bg-indigo-500/10'
-                            : 'border-border hover:bg-muted/40'
-                        }`}
-                      >
-                        <span>
-                          <span className="block text-xs font-bold text-foreground">{role.name}</span>
-                          <span className="block text-[10px] text-muted-foreground mt-0.5">{role.description}</span>
-                        </span>
-                        <span
-                          className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors ${
-                            isEnabled
-                              ? 'border-indigo-500 bg-indigo-600'
-                              : 'border-border bg-muted'
-                          }`}
-                          aria-hidden="true"
-                        >
-                          <span
-                            className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-                              isEnabled ? 'translate-x-5' : 'translate-x-1'
-                            }`}
-                          />
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
-                  У пользователя выбирается одна Wiki-роль. Должность определяет видимые разделы, Wiki-роль определяет действия.
-                </p>
-
-                <button
-                  onClick={handleSaveRoles}
-                  disabled={isSavingRoles}
-                  className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold disabled:opacity-60 transition-colors"
-                >
-                  {isSavingRoles ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Сохранить роли
-                </button>
-              </>
-            ) : (
-              <div className="text-xs text-muted-foreground">Выберите пользователя.</div>
-            )}
-          </div>
-        </div>
-      )}
 
       {positionModal && (
         <ModalPortal>
@@ -687,6 +556,82 @@ export default function AccessManagement() {
               </button>
               <button disabled={isSavingPosition} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold disabled:opacity-60">
                 {isSavingPosition && <Loader2 className="w-4 h-4 animate-spin" />}
+                Сохранить
+              </button>
+            </div>
+          </form>
+        </div>
+        </ModalPortal>
+      )}
+
+      {departmentModal && (
+        <ModalPortal>
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
+          <form onSubmit={handleSaveDepartment} className="w-full max-w-lg rounded-xl border border-border bg-card text-card-foreground p-6 shadow-2xl">
+            <div className="flex items-center justify-between gap-3 mb-5">
+              <div>
+                <h3 className="text-lg font-extrabold text-foreground">{departmentModal.department ? 'Редактировать отдел' : 'Добавить отдел'}</h3>
+                <p className="text-xs text-muted-foreground mt-1">Отдел группирует сотрудников и должности.</p>
+              </div>
+              <button type="button" onClick={() => setDepartmentModal(null)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">Название отдела</span>
+                <input
+                  value={departmentForm.name}
+                  onChange={(event) => setDepartmentForm((prev) => ({ ...prev, name: event.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">Описание</span>
+                <textarea
+                  value={departmentForm.description}
+                  onChange={(event) => setDepartmentForm((prev) => ({ ...prev, description: event.target.value }))}
+                  rows={3}
+                  className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500 resize-none"
+                />
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground">Родительский отдел</span>
+                  <select
+                    value={departmentForm.parentDepartmentId}
+                    onChange={(event) => setDepartmentForm((prev) => ({ ...prev, parentDepartmentId: event.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  >
+                    <option value="">Нет</option>
+                    {overview.departments
+                      .filter((department) => department.id !== departmentModal.department?.id)
+                      .map((department) => (
+                        <option key={department.id} value={department.id}>{department.name}</option>
+                      ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground">Статус</span>
+                  <select
+                    value={departmentForm.status}
+                    onChange={(event) => setDepartmentForm((prev) => ({ ...prev, status: event.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-border bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  >
+                    <option value="Active">Активен</option>
+                    <option value="Inactive">Неактивен</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button type="button" onClick={() => setDepartmentModal(null)} className="px-4 py-2 rounded-lg border border-border hover:bg-muted text-xs font-bold">
+                Отмена
+              </button>
+              <button disabled={isSavingDepartment} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold disabled:opacity-60">
+                {isSavingDepartment && <Loader2 className="w-4 h-4 animate-spin" />}
                 Сохранить
               </button>
             </div>

@@ -38,6 +38,15 @@ const getUsersWithRoles = async () => {
             e.full_name AS employee_name,
             p.name AS position_name,
             d.name AS department_name,
+            COALESCE(uas.access_mode, 'auto') AS access_mode,
+            COALESCE(
+              array_agg(DISTINCT umar.department_id) FILTER (WHERE umar.department_id IS NOT NULL),
+              '{}'
+            ) AS manual_department_ids,
+            COALESCE(
+              array_agg(DISTINCT umar.section_id) FILTER (WHERE umar.section_id IS NOT NULL),
+              '{}'
+            ) AS manual_section_ids,
             COALESCE(
               json_agg(
                 DISTINCT jsonb_build_object('id', wr.id, 'code', wr.code, 'name', wr.name)
@@ -50,7 +59,9 @@ const getUsersWithRoles = async () => {
      LEFT JOIN departments d ON d.id = e.department_id
      LEFT JOIN user_wiki_roles uwr ON uwr.user_id = u.id
      LEFT JOIN wiki_roles wr ON wr.id = uwr.wiki_role_id
-     GROUP BY u.id, e.full_name, p.name, d.name
+     LEFT JOIN user_access_settings uas ON uas.user_id = u.id
+     LEFT JOIN user_manual_access_rules umar ON umar.user_id = u.id
+     GROUP BY u.id, e.full_name, p.name, d.name, uas.access_mode
      ORDER BY u.id ASC`
   );
   return result.rows;
@@ -241,6 +252,95 @@ export const updateUserWikiRoles = async (req: AuthenticatedRequest, res: Respon
   } catch (error: any) {
     await client.query('ROLLBACK').catch(() => undefined);
     console.error('Failed to update user wiki roles:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  } finally {
+    client.release();
+  }
+};
+
+export const updateUserAccessScope = async (req: AuthenticatedRequest, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { access_mode, department_ids, section_ids } = req.body;
+    const userId = Number(id);
+    const accessMode = access_mode === 'manual' ? 'manual' : 'auto';
+    const departmentIds = Array.from(new Set(
+      Array.isArray(department_ids)
+        ? department_ids.map((departmentId: any) => Number(departmentId)).filter(Boolean)
+        : []
+    ));
+    const sectionIds = Array.from(new Set(
+      Array.isArray(section_ids)
+        ? section_ids.map((sectionId: any) => Number(sectionId)).filter(Boolean)
+        : []
+    ));
+
+    const userCheck = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Пользователь не найден.' });
+    }
+
+    if (departmentIds.length > 0) {
+      const departmentCheck = await client.query('SELECT id FROM departments WHERE id = ANY($1::int[])', [departmentIds]);
+      if (departmentCheck.rows.length !== departmentIds.length) {
+        return res.status(400).json({ error: 'Один или несколько отделов не найдены.' });
+      }
+    }
+
+    if (sectionIds.length > 0) {
+      const sectionCheck = await client.query('SELECT id FROM sections WHERE id = ANY($1::int[])', [sectionIds]);
+      if (sectionCheck.rows.length !== sectionIds.length) {
+        return res.status(400).json({ error: 'Один или несколько разделов не найдены.' });
+      }
+    }
+
+    await client.query('BEGIN');
+    await client.query(
+      `INSERT INTO user_access_settings (user_id, access_mode, updated_by, updated_at)
+       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+       ON CONFLICT (user_id) DO UPDATE SET
+         access_mode = EXCLUDED.access_mode,
+         updated_by = EXCLUDED.updated_by,
+         updated_at = CURRENT_TIMESTAMP`,
+      [userId, accessMode, req.user?.id || null]
+    );
+
+    await client.query('DELETE FROM user_manual_access_rules WHERE user_id = $1', [userId]);
+
+    if (accessMode === 'manual') {
+      for (const departmentId of departmentIds) {
+        await client.query(
+          `INSERT INTO user_manual_access_rules (user_id, department_id)
+           VALUES ($1, $2)
+           ON CONFLICT DO NOTHING`,
+          [userId, departmentId]
+        );
+      }
+
+      for (const sectionId of sectionIds) {
+        await client.query(
+          `INSERT INTO user_manual_access_rules (user_id, section_id)
+           VALUES ($1, $2)
+           ON CONFLICT DO NOTHING`,
+          [userId, sectionId]
+        );
+      }
+    }
+
+    await client.query(
+      `INSERT INTO access_audit_logs (actor_user_id, target_user_id, action, new_value)
+       VALUES ($1, $2, 'update_user_access_scope', $3::jsonb)`,
+      [req.user?.id || null, userId, JSON.stringify({ access_mode: accessMode, department_ids: departmentIds, section_ids: sectionIds })]
+    );
+
+    await client.query('COMMIT');
+
+    const profile = await getUserAccessProfile(userId);
+    res.json(profile);
+  } catch (error: any) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    console.error('Failed to update user access scope:', error);
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   } finally {
     client.release();

@@ -29,6 +29,9 @@ export interface UserAccessProfile {
   position_name: string | null;
   department_id: number | null;
   department_name: string | null;
+  access_mode: 'auto' | 'manual';
+  manual_department_ids: number[];
+  manual_section_ids: number[];
   wiki_roles: WikiRole[];
   capabilities: WikiCapabilities;
 }
@@ -159,6 +162,14 @@ const normalizeRoleRow = (row: any): WikiRole => ({
   }),
 });
 
+const normalizeNumberArray = (value: any): number[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(new Set(value.map((item) => Number(item)).filter(Boolean)));
+};
+
 export const getUserWikiRoles = async (userId: number): Promise<WikiRole[]> => {
   const result = await pool.query(
     `SELECT wr.*
@@ -187,6 +198,37 @@ export const getUserCapabilities = async (
   };
 };
 
+export const getUserManualAccessScope = async (userId: number): Promise<{
+  access_mode: 'auto' | 'manual';
+  manual_department_ids: number[];
+  manual_section_ids: number[];
+}> => {
+  const settingsResult = await pool.query(
+    `SELECT access_mode
+     FROM user_access_settings
+     WHERE user_id = $1`,
+    [userId]
+  );
+
+  const rulesResult = await pool.query(
+    `SELECT
+       COALESCE(array_agg(DISTINCT department_id) FILTER (WHERE department_id IS NOT NULL), '{}') AS department_ids,
+       COALESCE(array_agg(DISTINCT section_id) FILTER (WHERE section_id IS NOT NULL), '{}') AS section_ids
+     FROM user_manual_access_rules
+     WHERE user_id = $1`,
+    [userId]
+  );
+
+  const accessMode = settingsResult.rows[0]?.access_mode === 'manual' ? 'manual' : 'auto';
+  const rulesRow = rulesResult.rows[0] || {};
+
+  return {
+    access_mode: accessMode,
+    manual_department_ids: normalizeNumberArray(rulesRow.department_ids),
+    manual_section_ids: normalizeNumberArray(rulesRow.section_ids),
+  };
+};
+
 export const getUserAccessProfile = async (userId: number): Promise<UserAccessProfile | null> => {
   const userResult = await pool.query(
     `SELECT u.id, u.username, u.name, u.role, u.employee_id,
@@ -206,6 +248,7 @@ export const getUserAccessProfile = async (userId: number): Promise<UserAccessPr
 
   const row = userResult.rows[0];
   const { roles, capabilities } = await getUserCapabilities(row.id, row.role);
+  const manualAccess = await getUserManualAccessScope(Number(row.id));
 
   return {
     id: Number(row.id),
@@ -217,6 +260,9 @@ export const getUserAccessProfile = async (userId: number): Promise<UserAccessPr
     position_name: row.position_name || null,
     department_id: row.department_id ? Number(row.department_id) : null,
     department_name: row.department_name || null,
+    access_mode: manualAccess.access_mode,
+    manual_department_ids: manualAccess.manual_department_ids,
+    manual_section_ids: manualAccess.manual_section_ids,
     wiki_roles: roles,
     capabilities,
   };
@@ -268,6 +314,33 @@ export const expandSectionIdsWithDescendants = async (sectionIds: number[]): Pro
   return result.rows.map((row) => Number(row.id));
 };
 
+export const getManualAllowedSectionIds = async (
+  departmentIds: number[],
+  sectionIds: number[]
+): Promise<number[]> => {
+  const allowed = new Set<number>();
+  const directSectionIds = normalizeNumberArray(sectionIds);
+  directSectionIds.forEach((id) => allowed.add(id));
+
+  const recursiveSectionIds = await expandSectionIdsWithDescendants(directSectionIds);
+  recursiveSectionIds.forEach((id) => allowed.add(id));
+
+  const normalizedDepartmentIds = normalizeNumberArray(departmentIds);
+  if (normalizedDepartmentIds.length > 0) {
+    const departmentSectionsResult = await pool.query(
+      `SELECT s.id
+       FROM sections s
+       JOIN spaces sp ON sp.id = s.space_id
+       WHERE sp.department_id = ANY($1::int[])
+         AND s.status = 'Active'`,
+      [normalizedDepartmentIds]
+    );
+    departmentSectionsResult.rows.forEach((row) => allowed.add(Number(row.id)));
+  }
+
+  return Array.from(allowed);
+};
+
 export const getRuleAllowedSectionIds = async (userId?: number | null): Promise<number[]> => {
   const allowed = new Set<number>();
 
@@ -290,6 +363,12 @@ export const getRuleAllowedSectionIds = async (userId?: number | null): Promise<
   if (profile.capabilities.can_manage_access) {
     const allSections = await pool.query(`SELECT id FROM sections WHERE status = 'Active'`);
     return allSections.rows.map((row) => Number(row.id));
+  }
+
+  if (profile.access_mode === 'manual') {
+    const manualSectionIds = await getManualAllowedSectionIds(profile.manual_department_ids, profile.manual_section_ids);
+    manualSectionIds.forEach((id) => allowed.add(id));
+    return Array.from(allowed);
   }
 
   const positionIds = await getSubordinatePositionIds(profile.position_id);
@@ -352,20 +431,24 @@ export const getSectionPermissionsForUser = async (
     return mergeCapabilities({ can_read: capabilities.can_read });
   }
 
-  const positionIds = await getSubordinatePositionIds(profile.position_id);
+  const positionIds = profile.access_mode === 'auto'
+    ? await getSubordinatePositionIds(profile.position_id)
+    : [];
   const roleIds = profile.wiki_roles.map((role) => role.id);
 
-  const ruleResult = await pool.query(
-    `SELECT sar.can_read, sar.can_create, sar.can_edit, sar.can_publish, sar.can_approve
-     FROM section_access_rules sar
-     WHERE sar.section_id = ANY($1::int[])
-       AND (
-         (sar.position_id IS NOT NULL AND sar.position_id = ANY($2::int[]))
-         OR (sar.department_id IS NOT NULL AND sar.department_id = $3)
-         OR (sar.wiki_role_id IS NOT NULL AND sar.wiki_role_id = ANY($4::int[]))
-       )`,
-    [sectionIds, positionIds, profile.department_id, roleIds]
-  );
+  const ruleResult = profile.access_mode === 'auto'
+    ? await pool.query(
+        `SELECT sar.can_read, sar.can_create, sar.can_edit, sar.can_publish, sar.can_approve
+         FROM section_access_rules sar
+         WHERE sar.section_id = ANY($1::int[])
+           AND (
+             (sar.position_id IS NOT NULL AND sar.position_id = ANY($2::int[]))
+             OR (sar.department_id IS NOT NULL AND sar.department_id = $3)
+             OR (sar.wiki_role_id IS NOT NULL AND sar.wiki_role_id = ANY($4::int[]))
+           )`,
+        [sectionIds, positionIds, profile.department_id, roleIds]
+      )
+    : { rows: [] };
 
   const ruleCapabilities = ruleResult.rows.reduce(
     (acc, row) => mergeCapabilities(acc, row),
@@ -387,6 +470,13 @@ export const getSectionPermissionsForUser = async (
     ? mergeCapabilities({ can_read: true })
     : emptyCapabilities();
 
+  const manualAllowedSectionIds = profile.access_mode === 'manual'
+    ? await getManualAllowedSectionIds(profile.manual_department_ids, profile.manual_section_ids)
+    : [];
+  const manualScopeCapabilities = sectionIds.some((id) => manualAllowedSectionIds.includes(Number(id)))
+    ? mergeCapabilities({ can_read: true })
+    : emptyCapabilities();
+
   const ownerResult = await pool.query(
     `SELECT id FROM sections WHERE id = ANY($1::int[]) AND owner_id = $2 LIMIT 1`,
     [sectionIds, userId]
@@ -397,7 +487,7 @@ export const getSectionPermissionsForUser = async (
     ? mergeCapabilities({ can_read: true, can_create: true, can_edit: true, can_publish: true })
     : emptyCapabilities();
 
-  const scopedCapabilities = mergeCapabilities(ruleCapabilities, positionScopeCapabilities, ownerCapabilities);
+  const scopedCapabilities = mergeCapabilities(ruleCapabilities, positionScopeCapabilities, manualScopeCapabilities, ownerCapabilities);
   const canWorkInsideReadableScope = scopedCapabilities.can_read;
 
   return mergeCapabilities({
