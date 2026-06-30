@@ -30,6 +30,7 @@ import {
   WikiCapabilities,
   WikiRole,
 } from '../lib/api';
+import { ModalPortal } from './modal-portal';
 
 type AccessTab = 'matrix' | 'users';
 
@@ -590,6 +591,7 @@ export default function AccessManagement() {
       )}
 
       {positionModal && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
           <form onSubmit={handleSavePosition} className="w-full max-w-lg rounded-xl border border-border bg-card text-card-foreground p-6 shadow-2xl">
             <div className="flex items-center justify-between gap-3 mb-5">
@@ -687,6 +689,7 @@ export default function AccessManagement() {
             </div>
           </form>
         </div>
+        </ModalPortal>
       )}
 
     </div>

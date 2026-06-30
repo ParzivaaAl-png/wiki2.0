@@ -29,6 +29,7 @@ import {
   Position, 
   Employee 
 } from '../lib/api';
+import { ModalPortal } from './modal-portal';
 
 export default function OrgManagement() {
   const [activeSubTab, setActiveSubTab] = React.useState<'departments' | 'positions' | 'employees'>('departments');
@@ -505,6 +506,7 @@ export default function OrgManagement() {
 
       {/* Edit/Create Dialog */}
       {isModalOpen && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
           <div className="w-full max-w-md bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-2xl">
             <div className="flex justify-between items-center mb-4">
@@ -729,6 +731,7 @@ export default function OrgManagement() {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

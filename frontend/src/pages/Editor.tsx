@@ -8,6 +8,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { fetchArticle, createArticle, updateArticle, fetchNavigationTree, adminFetchUsers, User } from '../lib/api';
+import { ModalPortal } from '../components/modal-portal';
 import WYSIWYGEditor from '../components/wysiwyg-editor';
 
 export default function Editor() {
@@ -465,6 +466,7 @@ export default function Editor() {
         </div>
       {/* Save Prompt Modal */}
       {showSaveModal && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 animate-fadeIn">
           <div className="relative w-full max-w-md p-6 border border-border bg-card text-card-foreground rounded-2xl shadow-2xl animate-scaleUp">
             <button
@@ -538,6 +540,7 @@ export default function Editor() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
       </div>
     </div>

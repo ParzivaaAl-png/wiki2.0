@@ -54,6 +54,7 @@ import { NewsAdmin } from '../components/news-admin';
 import WikiManagement from '../components/wiki-management';
 import AnalyticsDashboard from '../components/analytics-dashboard';
 import TeamAccessManagement from '../components/team-access-management';
+import { ModalPortal } from '../components/modal-portal';
 import { AnimatePresence, motion } from 'framer-motion';
 
 type SectionMeta = {
@@ -1384,6 +1385,7 @@ export default function Admin() {
       {/* Notifications Drawer Portal / Overlay */}
       <AnimatePresence>
         {isNotificationsDrawerOpen && (
+          <ModalPortal>
           <>
             {/* Backdrop */}
             <motion.div
@@ -1447,12 +1449,14 @@ export default function Admin() {
               </div>
             </motion.div>
           </>
+          </ModalPortal>
         )}
       </AnimatePresence>
 
       {/* Sync History Modal */}
       <AnimatePresence>
         {selectedArticleForHistory && (
+          <ModalPortal>
           <>
             {/* Backdrop */}
             <motion.div
@@ -1660,6 +1664,7 @@ export default function Admin() {
               </div>
             </motion.div>
           </>
+          </ModalPortal>
         )}
       </AnimatePresence>
 

@@ -24,6 +24,7 @@ import {
   UserAuditLog
 } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
+import { ModalPortal } from './modal-portal';
 
 export default function UserManagement() {
   const { user: currentUser } = useAuth();
@@ -222,6 +223,7 @@ export default function UserManagement() {
 
       {/* Create User Dialog */}
       {isCreateOpen && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
           <div className="w-full max-w-md bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-2xl">
             <div className="flex justify-between items-center mb-4">
@@ -304,10 +306,12 @@ export default function UserManagement() {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Edit User Modal with Audit History Accordion */}
       {editUser !== null && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
           <div className="w-full max-w-md bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-2xl space-y-4">
             <div className="flex justify-between items-center">
@@ -413,6 +417,7 @@ export default function UserManagement() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Users Table */}
