@@ -94,13 +94,13 @@ export default function Home() {
 
   // COMPUTED ARTICLES LIST BASED ON ACTIVE FILTER TAB
   const displayedArticles = React.useMemo(() => {
-    // If Admin/Editor global editing mode is on, display ALL articles so they can order and hide them
-    if (isEditMode) {
-      return allArticles;
-    }
-
     const visibleArticles = allArticles.filter(a => a.is_visible !== false && a.published);
     let result = visibleArticles;
+
+    // If Admin/Editor global editing mode is on, display visible articles (no hidden/archived ones) so they can reorder them
+    if (isEditMode) {
+      return result;
+    }
 
     if (filterTab === 'new') {
       result = [...visibleArticles]
