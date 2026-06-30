@@ -38,7 +38,6 @@ import {
   Article, 
   Space,
   Section,
-  importArticle,
   clearServerCache,
   syncArticleNow,
   fetchArticleSyncHistory,
@@ -99,8 +98,6 @@ export default function Admin() {
   const [collapsedSpaceIds, setCollapsedSpaceIds] = React.useState<Set<string>>(new Set());
   const [collapsedSectionIds, setCollapsedSectionIds] = React.useState<Set<string>>(new Set());
 
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const [isImporting, setIsImporting] = React.useState(false);
   const [isClearingCache, setIsClearingCache] = React.useState(false);
 
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
@@ -277,29 +274,7 @@ export default function Admin() {
     }
   };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsImporting(true);
-    try {
-      await importArticle(file);
-      alert('Статья успешно импортирована, извлечен текст и настроено индексирование в Meilisearch!');
-      await loadAdminData();
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'Ошибка импорта документа.');
-    } finally {
-      setIsImporting(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
 
   // COMPUTE STATS
   const stats = React.useMemo(() => {
@@ -1007,26 +982,7 @@ export default function Admin() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* File import button & hidden input */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept=".docx,.pdf,.txt,.xlsx,.csv"
-            className="hidden"
-          />
-          <button
-            onClick={handleImportClick}
-            disabled={isImporting}
-            className="inline-flex items-center gap-1.5 px-4 py-2 border border-border hover:bg-muted text-foreground rounded-lg text-sm font-semibold shadow-sm transition-all text-center justify-center cursor-pointer"
-          >
-            {isImporting ? (
-              <Loader2 className="w-4.5 h-4.5 animate-spin" />
-            ) : (
-              <FileUp className="w-4.5 h-4.5" />
-            )}
-            <span>{isImporting ? 'Импорт...' : 'Импортировать файл'}</span>
-          </button>
+
 
            <button
             onClick={() => navigate('/admin/editor/new')}
