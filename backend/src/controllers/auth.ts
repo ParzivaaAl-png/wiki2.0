@@ -15,7 +15,10 @@ const INFINITE_SESSION_SECONDS = Math.floor(INFINITE_SESSION_MS / 1000);
 
 const generateTokens = (userId: number) => {
   const accessToken = jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: INFINITE_SESSION_SECONDS });
-  const refreshToken = jwt.sign({ id: userId }, REFRESH_SECRET);
+  const refreshToken = jwt.sign(
+    { id: userId, timestamp: Date.now(), nonce: Math.random().toString(36).substring(2) },
+    REFRESH_SECRET
+  );
   return { accessToken, refreshToken };
 };
 
