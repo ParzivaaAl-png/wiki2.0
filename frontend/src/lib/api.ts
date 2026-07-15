@@ -2,7 +2,7 @@ const getApiUrl = () => {
   let apiUrl = import.meta.env.VITE_API_URL || '';
   
   if (!apiUrl) {
-    apiUrl = import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://wiki-backend-combined.onrender.com/api';
+    apiUrl = import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://wiki-backend-combined-6tmd.onrender.com/api';
   }
 
   // If the API URL points to localhost, but the user is accessing the site from another device
