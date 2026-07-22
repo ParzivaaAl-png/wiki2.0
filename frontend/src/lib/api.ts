@@ -535,6 +535,18 @@ export async function fetchMe(): Promise<User> {
   return apiCallWithCache<User>('/auth/me', { cache: 'no-store' });
 }
 
+export async function updateMyAccount(data: {
+  username: string;
+  currentPassword?: string;
+  newPassword?: string;
+}): Promise<User> {
+  clearApiCache();
+  return apiCall<User>('/auth/me', {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
 // Article Import API
 export async function importArticle(file: File): Promise<Article> {
   clearApiCache();

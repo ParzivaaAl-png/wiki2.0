@@ -199,6 +199,72 @@ export const getMe = async (req: AuthenticatedRequest, res: Response) => {
   });
 };
 
+export const updateMe = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+
+    const { username, currentPassword, newPassword } = req.body;
+    const nextUsername = typeof username === 'string' ? username.trim() : '';
+    const wantsPasswordChange = typeof newPassword === 'string' && newPassword.length > 0;
+
+    if (!nextUsername) {
+      return res.status(400).json({ error: 'Логин обязателен.' });
+    }
+
+    const user = await UserModel.getUserById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'Пользователь не найден.' });
+    }
+
+    if (nextUsername !== user.username) {
+      const existingUser = await UserModel.getUserByUsername(nextUsername);
+      if (existingUser && existingUser.id !== user.id) {
+        return res.status(400).json({ error: 'Пользователь с таким логином уже существует.' });
+      }
+    }
+
+    let passwordHash: string | null = null;
+    if (wantsPasswordChange) {
+      if (!currentPassword) {
+        return res.status(400).json({ error: 'Введите текущий пароль для смены пароля.' });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'Новый пароль должен быть не менее 6 символов.' });
+      }
+
+      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password_hash);
+      if (!isCurrentPasswordValid) {
+        return res.status(400).json({ error: 'Текущий пароль указан неверно.' });
+      }
+
+      passwordHash = await bcrypt.hash(newPassword, 10);
+    }
+
+    const result = await query(
+      `UPDATE users
+       SET username = $1,
+           password_hash = COALESCE($2, password_hash),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3
+       RETURNING id, username, name, role, is_blocked, employee_id, created_at, updated_at`,
+      [nextUsername, passwordHash, user.id]
+    );
+
+    const updatedUser = result.rows[0];
+    const access = await getUserCapabilities(updatedUser.id, updatedUser.role);
+
+    res.json({
+      ...updatedUser,
+      wiki_roles: access.roles.map((role) => ({ id: role.id, code: role.code, name: role.name })),
+      capabilities: access.capabilities,
+    });
+  } catch (error: any) {
+    console.error('Profile update failed:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
 // ADMIN CONTROLLERS
 export const getUsersList = async (req: AuthenticatedRequest, res: Response) => {
   try {
