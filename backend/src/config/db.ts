@@ -91,6 +91,8 @@ export const initializeDatabase = async () => {
       );
     `;
     await pool.query(createAuditLogsTableQuery);
+
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false');
     
     // Ensure articles table has position and is_visible columns for sorting/archiving
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS position INT DEFAULT 0');

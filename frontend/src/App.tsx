@@ -18,6 +18,7 @@ import ArticlePage from './pages/Article';
 import AdminPage from './pages/Admin';
 import EditorPage from './pages/Editor';
 import LoginPage from './pages/Login';
+import ProfilePage from './pages/Profile';
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode; allowedRoles?: ('Admin' | 'Editor' | 'User')[] }) {
   const { user, isLoading, isAdmin, isEditor, isUser } = useAuth();
@@ -59,7 +60,17 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
   return <>{children}</>;
 }
 
-function ProfileSettingsModal({ user, onClose, onSaved }: { user: User; onClose: () => void; onSaved: () => Promise<void> }) {
+function ProfileSettingsModal({
+  user,
+  onClose,
+  onSaved,
+  forcePasswordChange = false,
+}: {
+  user: User;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+  forcePasswordChange?: boolean;
+}) {
   const [username, setUsername] = React.useState(user.username);
   const [currentPassword, setCurrentPassword] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
@@ -78,7 +89,7 @@ function ProfileSettingsModal({ user, onClose, onSaved }: { user: User; onClose:
     setSuccess(null);
 
     const nextUsername = username.trim();
-    const isPasswordTouched = currentPassword.length > 0 || newPassword.length > 0 || confirmPassword.length > 0;
+    const isPasswordTouched = forcePasswordChange || currentPassword.length > 0 || newPassword.length > 0 || confirmPassword.length > 0;
 
     if (!nextUsername) {
       setError('Укажите логин.');
@@ -113,7 +124,10 @@ function ProfileSettingsModal({ user, onClose, onSaved }: { user: User; onClose:
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      setSuccess('Данные профиля сохранены.');
+      setSuccess(forcePasswordChange ? 'Пароль обновлён. Можно продолжать работу.' : 'Данные профиля сохранены.');
+      if (!forcePasswordChange) {
+        onClose();
+      }
     } catch (err: any) {
       setError(err.message || 'Не удалось сохранить профиль.');
     } finally {
@@ -126,7 +140,7 @@ function ProfileSettingsModal({ user, onClose, onSaved }: { user: User; onClose:
       <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 bg-black/65">
         <form
           onSubmit={handleSubmit}
-          className="w-full max-w-lg rounded-2xl border border-border bg-card text-card-foreground shadow-2xl"
+          className="w-full max-w-lg rounded-2xl border border-border bg-card text-card-foreground shadow-2xl dark:bg-[#161A22]"
         >
           <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
             <div>
@@ -134,22 +148,33 @@ function ProfileSettingsModal({ user, onClose, onSaved }: { user: User; onClose:
                 <UserCircle className="w-4 h-4" />
                 Профиль
               </div>
-              <h2 className="mt-2 text-xl font-bold text-foreground">Логин и пароль</h2>
+              <h2 className="mt-2 text-xl font-bold text-foreground">
+                {forcePasswordChange ? 'Смените временный пароль' : 'Логин и пароль'}
+              </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Изменения применяются только к вашему аккаунту.
+                {forcePasswordChange
+                  ? 'Администратор выдал временный пароль. Задайте новый пароль для дальнейшей работы.'
+                  : 'Изменения применяются только к вашему аккаунту.'}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
-              aria-label="Закрыть"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            {!forcePasswordChange && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+                aria-label="Закрыть"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           <div className="space-y-5 px-5 py-5">
+            {forcePasswordChange && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-200">
+                Это действие обязательно: пока пароль временный, работа с Wiki будет заблокирована этим окном.
+              </div>
+            )}
             {error && (
               <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-300">
                 {error}
@@ -166,12 +191,12 @@ function ProfileSettingsModal({ user, onClose, onSaved }: { user: User; onClose:
               <input
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
-                className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-semibold text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring/35"
+                className="h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm font-semibold text-neutral-950 shadow-inner shadow-neutral-950/5 outline-none transition-colors placeholder:text-neutral-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25 dark:border-[#303746] dark:bg-[#111318] dark:text-neutral-100 dark:placeholder:text-neutral-500"
                 autoComplete="username"
               />
             </label>
 
-            <div className="rounded-xl border border-border bg-background/70 p-4">
+            <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-[#303746] dark:bg-[#111318]">
               <div className="mb-4 flex items-center gap-2">
                 <KeyRound className="w-4 h-4 text-primary" />
                 <div>
@@ -187,7 +212,7 @@ function ProfileSettingsModal({ user, onClose, onSaved }: { user: User; onClose:
                     type="password"
                     value={currentPassword}
                     onChange={(event) => setCurrentPassword(event.target.value)}
-                    className="h-11 w-full rounded-xl border border-input bg-card px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring/35"
+                    className="h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-inner shadow-neutral-950/5 outline-none transition-colors placeholder:text-neutral-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25 dark:border-[#303746] dark:bg-[#161A22] dark:text-neutral-100 dark:placeholder:text-neutral-500"
                     autoComplete="current-password"
                   />
                 </label>
@@ -199,7 +224,7 @@ function ProfileSettingsModal({ user, onClose, onSaved }: { user: User; onClose:
                       type="password"
                       value={newPassword}
                       onChange={(event) => setNewPassword(event.target.value)}
-                      className="h-11 w-full rounded-xl border border-input bg-card px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring/35"
+                      className="h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-inner shadow-neutral-950/5 outline-none transition-colors placeholder:text-neutral-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25 dark:border-[#303746] dark:bg-[#161A22] dark:text-neutral-100 dark:placeholder:text-neutral-500"
                       autoComplete="new-password"
                     />
                   </label>
@@ -209,7 +234,7 @@ function ProfileSettingsModal({ user, onClose, onSaved }: { user: User; onClose:
                       type="password"
                       value={confirmPassword}
                       onChange={(event) => setConfirmPassword(event.target.value)}
-                      className="h-11 w-full rounded-xl border border-input bg-card px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring/35"
+                      className="h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-inner shadow-neutral-950/5 outline-none transition-colors placeholder:text-neutral-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25 dark:border-[#303746] dark:bg-[#161A22] dark:text-neutral-100 dark:placeholder:text-neutral-500"
                       autoComplete="new-password"
                     />
                   </label>
@@ -219,20 +244,22 @@ function ProfileSettingsModal({ user, onClose, onSaved }: { user: User; onClose:
           </div>
 
           <div className="flex flex-col-reverse gap-2 border-t border-border px-5 py-4 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-card px-4 text-sm font-bold text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
-            >
-              Отмена
-            </button>
+            {!forcePasswordChange && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-card px-4 text-sm font-bold text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                Отмена
+              </button>
+            )}
             <button
               type="submit"
               disabled={isSaving}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Сохранить
+              {forcePasswordChange ? 'Сменить пароль' : 'Сохранить'}
             </button>
           </div>
         </form>
@@ -242,101 +269,88 @@ function ProfileSettingsModal({ user, onClose, onSaved }: { user: User; onClose:
 }
 
 function Header() {
-  const { user, logout, isStaff, refreshUser } = useAuth();
+  const { user, logout, isStaff } = useAuth();
   const location = useLocation();
-  const [isProfileOpen, setIsProfileOpen] = React.useState(false);
 
   return (
-    <>
-      <header className="sticky top-0 z-40 w-full border-b border-border bg-background glass-header transition-colors duration-300">
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
-          <Link to="/" className={`flex items-center gap-2 shrink-0 group ${user ? 'ml-11 lg:ml-0' : ''}`}>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/10 group-hover:shadow-indigo-500/20 transition-all duration-300">
-              <BookOpen className="w-4.5 h-4.5" />
-            </div>
-            <span className="hidden sm:inline font-outfit text-lg font-bold tracking-tight bg-gradient-to-r from-neutral-900 to-neutral-700 dark:from-white dark:to-neutral-300 bg-clip-text text-transparent group-hover:opacity-95 transition-all">
-              Wiki 2.0
-            </span>
-          </Link>
-
-          {/* Navigation Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-3">
-            {user && <SearchModal />}
-            {user && <NewsBell />}
-
-            {user ? (
-              <div className="flex items-center gap-1.5 sm:gap-3">
-                {isStaff && (
-                  <Link
-                    to="/admin"
-                    className="hidden h-9 sm:inline-flex items-center gap-1.5 px-3 rounded-lg border border-border bg-card text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
-                  >
-                    <ShieldAlert className="w-4 h-4 text-neutral-400" />
-                    Админ-панель
-                  </Link>
-                )}
-                {isStaff && (
-                  <Link
-                    to="/admin"
-                    className="sm:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
-                    aria-label="Админ-панель"
-                    title="Админ-панель"
-                  >
-                    <ShieldAlert className="w-4 h-4" />
-                  </Link>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setIsProfileOpen(true)}
-                  className="hidden rounded-lg px-2 py-1 text-right transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40 md:flex md:flex-col"
-                  title="Изменить логин и пароль"
-                >
-                  <span className="text-xs font-bold text-neutral-950 dark:text-neutral-100">{user.name}</span>
-                  <span className="text-[9px] text-neutral-405 dark:text-neutral-450 uppercase font-bold tracking-wider">{user.role}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsProfileOpen(true)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 md:hidden"
-                  aria-label="Профиль"
-                  title="Профиль"
-                >
-                  <UserCircle className="w-4 h-4" />
-                </button>
-
-                <button
-                  onClick={() => logout()}
-                  className="inline-flex h-9 items-center px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:bg-red-500/10 hover:text-red-500 focus-visible:ring-2 focus-visible:ring-red-500/30"
-                >
-                  Выйти
-                </button>
-              </div>
-            ) : (
-              location.pathname !== '/login' && (
-                <Link
-                  to="/login"
-                  className="inline-flex h-9 items-center gap-1.5 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold transition-colors shadow-md shadow-indigo-600/10 hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-ring/40"
-                >
-                  <LogIn className="w-4.5 h-4.5" />
-                  <span className="hidden sm:inline">Войти</span>
-                </Link>
-              )
-            )}
-
-            <ThemeToggle />
+    <header className="sticky top-0 z-40 w-full border-b border-border bg-background glass-header transition-colors duration-300">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
+        <Link to="/" className={`flex items-center gap-2 shrink-0 group ${user ? 'ml-11 lg:ml-0' : ''}`}>
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/10 group-hover:shadow-indigo-500/20 transition-all duration-300">
+            <BookOpen className="w-4.5 h-4.5" />
           </div>
-        </div>
-      </header>
+          <span className="hidden sm:inline font-outfit text-lg font-bold tracking-tight bg-gradient-to-r from-neutral-900 to-neutral-700 dark:from-white dark:to-neutral-300 bg-clip-text text-transparent group-hover:opacity-95 transition-all">
+            Wiki 2.0
+          </span>
+        </Link>
 
-      {isProfileOpen && user && (
-        <ProfileSettingsModal
-          user={user}
-          onClose={() => setIsProfileOpen(false)}
-          onSaved={refreshUser}
-        />
-      )}
-    </>
+        {/* Navigation Actions */}
+        <div className="flex items-center gap-1.5 sm:gap-3">
+          {user && <SearchModal />}
+          {user && <NewsBell />}
+
+          {user ? (
+            <div className="flex items-center gap-1.5 sm:gap-3">
+              {isStaff && (
+                <Link
+                  to="/admin"
+                  className="hidden h-9 sm:inline-flex items-center gap-1.5 px-3 rounded-lg border border-border bg-card text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
+                  <ShieldAlert className="w-4 h-4 text-neutral-400" />
+                  Админ-панель
+                </Link>
+              )}
+              {isStaff && (
+                <Link
+                  to="/admin"
+                  className="sm:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+                  aria-label="Админ-панель"
+                  title="Админ-панель"
+                >
+                  <ShieldAlert className="w-4 h-4" />
+                </Link>
+              )}
+
+              <Link
+                to="/profile"
+                className="hidden rounded-lg px-2 py-1 text-right transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40 md:flex md:flex-col"
+                title="Профиль"
+              >
+                <span className="text-xs font-bold text-neutral-950 dark:text-neutral-100">{user.name}</span>
+                <span className="text-[9px] text-neutral-405 dark:text-neutral-450 uppercase font-bold tracking-wider">{user.role}</span>
+              </Link>
+              <Link
+                to="/profile"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 md:hidden"
+                aria-label="Профиль"
+                title="Профиль"
+              >
+                <UserCircle className="w-4 h-4" />
+              </Link>
+
+              <button
+                onClick={() => logout()}
+                className="inline-flex h-9 items-center px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:bg-red-500/10 hover:text-red-500 focus-visible:ring-2 focus-visible:ring-red-500/30"
+              >
+                Выйти
+              </button>
+            </div>
+          ) : (
+            location.pathname !== '/login' && (
+              <Link
+                to="/login"
+                className="inline-flex h-9 items-center gap-1.5 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold transition-colors shadow-md shadow-indigo-600/10 hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                <LogIn className="w-4.5 h-4.5" />
+                <span className="hidden sm:inline">Войти</span>
+              </Link>
+            )
+          )}
+
+          <ThemeToggle />
+        </div>
+      </div>
+    </header>
   );
 }
 
@@ -356,7 +370,7 @@ function AnimatedPage({ children }: { children: React.ReactNode }) {
 
 function AppContent() {
   const location = useLocation();
-  const { user, isUser } = useAuth();
+  const { user, isUser, refreshUser } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -414,6 +428,14 @@ function AppContent() {
           onClose={() => setIsSidebarOpen(false)} 
         />
       )}
+      {user?.must_change_password && (
+        <ProfileSettingsModal
+          user={user}
+          onClose={() => undefined}
+          onSaved={refreshUser}
+          forcePasswordChange
+        />
+      )}
       <main className="flex-1 relative min-h-0 overflow-x-clip bg-background">
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
@@ -447,6 +469,16 @@ function AppContent() {
                   </AnimatedPage>
                 </ProtectedRoute>
               } 
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <AnimatedPage>
+                    <ProfilePage />
+                  </AnimatedPage>
+                </ProtectedRoute>
+              }
             />
 
             

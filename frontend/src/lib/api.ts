@@ -63,6 +63,7 @@ export interface User {
   name: string;
   role: string;
   is_blocked: boolean;
+  must_change_password?: boolean;
   employee_id?: number | null;
   wiki_roles?: Array<{ id: number; code: string; name: string }>;
   capabilities?: WikiCapabilities;
@@ -545,6 +546,40 @@ export async function updateMyAccount(data: {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
+}
+
+export interface MyProfileSection {
+  id: number;
+  name: string;
+  description: string | null;
+  visibility_scope: string;
+  space_name: string | null;
+  department_name: string | null;
+  position_name: string | null;
+  owner_name: string | null;
+}
+
+export interface MyProfileSession {
+  id: number;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+  last_active_at: string;
+  is_current: boolean;
+}
+
+export interface MyProfile {
+  user: AccessOverviewUser & {
+    capabilities: WikiCapabilities;
+    must_change_password?: boolean;
+  };
+  sections: MyProfileSection[];
+  section_count: number;
+  sessions: MyProfileSession[];
+}
+
+export async function fetchMyProfile(): Promise<MyProfile> {
+  return apiCall<MyProfile>('/users/me/profile', { cache: 'no-store' });
 }
 
 // Article Import API

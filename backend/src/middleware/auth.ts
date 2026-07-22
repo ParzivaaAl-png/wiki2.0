@@ -11,6 +11,7 @@ export interface AuthenticatedRequest extends Request {
     username: string;
     name: string;
     role: string;
+    must_change_password?: boolean;
     employee_id?: number | null;
   };
 }
@@ -55,6 +56,7 @@ export const requireAuth = async (
       username: user.username,
       name: user.name,
       role: user.role,
+      must_change_password: user.must_change_password,
       employee_id: (user as any).employee_id,
     };
 
@@ -147,6 +149,7 @@ export const optionalAuth = async (
           username: user.username,
           name: user.name,
           role: user.role,
+          must_change_password: user.must_change_password,
           employee_id: (user as any).employee_id,
         };
       }

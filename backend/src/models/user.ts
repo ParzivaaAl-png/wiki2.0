@@ -7,6 +7,7 @@ export interface User {
   name: string;
   role: string;
   is_blocked: boolean;
+  must_change_password: boolean;
   employee_id?: number | null;
   created_at: Date;
   updated_at: Date;
@@ -17,14 +18,15 @@ export const createUser = async (
   passwordHash: string,
   name: string,
   role: string = 'Оператор',
-  employeeId: number | null = null
+  employeeId: number | null = null,
+  mustChangePassword: boolean = false
 ): Promise<User> => {
   const query = `
-    INSERT INTO users (username, password_hash, name, role, employee_id)
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING id, username, name, role, is_blocked, employee_id, created_at, updated_at
+    INSERT INTO users (username, password_hash, name, role, employee_id, must_change_password)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING id, username, name, role, is_blocked, must_change_password, employee_id, created_at, updated_at
   `;
-  const values = [username.trim(), passwordHash, name, role, employeeId];
+  const values = [username.trim(), passwordHash, name, role, employeeId, mustChangePassword];
   const { rows } = await pool.query(query, values);
   return rows[0];
 };
@@ -42,7 +44,7 @@ export const getUserById = async (id: number): Promise<User | null> => {
 };
 
 export const getAllUsers = async (): Promise<Omit<User, 'password_hash'>[]> => {
-  const query = 'SELECT id, username, name, role, is_blocked, employee_id, created_at, updated_at FROM users ORDER BY id ASC';
+  const query = 'SELECT id, username, name, role, is_blocked, must_change_password, employee_id, created_at, updated_at FROM users ORDER BY id ASC';
   const { rows } = await pool.query(query);
   return rows;
 };
@@ -66,7 +68,7 @@ export const changeUserRole = async (id: number, role: string): Promise<boolean>
 };
 
 export const resetUserPassword = async (id: number, passwordHash: string): Promise<boolean> => {
-  const query = 'UPDATE users SET password_hash = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1';
+  const query = 'UPDATE users SET password_hash = $2, must_change_password = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1';
   const { rowCount } = await pool.query(query, [id, passwordHash]);
   return rowCount ? rowCount > 0 : false;
 };

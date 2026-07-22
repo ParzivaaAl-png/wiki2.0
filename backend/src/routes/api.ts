@@ -66,6 +66,7 @@ router.post('/auth/logout', authController.logout);
 router.post('/auth/refresh', authController.refresh);
 router.get('/auth/me', requireAuth, authController.getMe);
 router.patch('/auth/me', requireAuth, authController.updateMe);
+router.get('/users/me/profile', requireAuth, authController.getMyProfile);
 router.get('/users/me/favorites', requireAuth, authController.getFavoriteArticles);
 router.post('/users/me/favorites', requireAuth, authController.setFavoriteArticles);
 router.post('/users/me/favorites/add', requireAuth, authController.addFavoriteArticle);

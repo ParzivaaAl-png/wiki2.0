@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import * as UserModel from '../models/user';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { query, pool } from '../config/db';
-import { getUserCapabilities } from '../services/accessControl';
+import { getRuleAllowedSectionIds, getUserAccessProfile, getUserCapabilities } from '../services/accessControl';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_wiki20';
 const REFRESH_SECRET = process.env.REFRESH_SECRET || 'super_secret_refresh_key_wiki20';
@@ -118,6 +118,7 @@ export const login = async (req: Request, res: Response) => {
       name: user.name,
       role: user.role,
       is_blocked: user.is_blocked,
+      must_change_password: user.must_change_password,
       employee_id: (user as any).employee_id,
       wiki_roles: access.roles.map((role) => ({ id: role.id, code: role.code, name: role.name })),
       capabilities: access.capabilities,
@@ -199,6 +200,66 @@ export const getMe = async (req: AuthenticatedRequest, res: Response) => {
   });
 };
 
+export const getMyProfile = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+
+    const profile = await getUserAccessProfile(req.user.id);
+    if (!profile) {
+      return res.status(404).json({ error: 'Профиль пользователя не найден.' });
+    }
+
+    const allowedSectionIds = await getRuleAllowedSectionIds(req.user.id);
+    const sectionsResult = allowedSectionIds.length > 0
+      ? await query(
+          `SELECT s.id,
+                  s.name,
+                  s.description,
+                  s.visibility_scope,
+                  sp.name AS space_name,
+                  d.name AS department_name,
+                  p.name AS position_name,
+                  u.name AS owner_name
+           FROM sections s
+           LEFT JOIN spaces sp ON sp.id = s.space_id
+           LEFT JOIN departments d ON d.id = sp.department_id
+           LEFT JOIN positions p ON p.id = s.position_id
+           LEFT JOIN users u ON u.id = s.owner_id
+           WHERE s.id = ANY($1::int[])
+           ORDER BY COALESCE(d.name, sp.name) ASC, s.name ASC`,
+          [allowedSectionIds]
+        )
+      : { rows: [] };
+
+    const refreshToken = req.cookies?.refreshToken || '';
+    const sessionsResult = await query(
+      `SELECT id,
+              ip_address,
+              user_agent,
+              created_at,
+              last_active_at,
+              CASE WHEN refresh_token = $2 THEN true ELSE false END AS is_current
+       FROM user_sessions
+       WHERE user_id = $1
+       ORDER BY last_active_at DESC`,
+      [req.user.id, refreshToken]
+    );
+
+    res.json({
+      user: {
+        ...profile,
+        must_change_password: req.user.must_change_password || false,
+      },
+      sections: sectionsResult.rows,
+      section_count: sectionsResult.rows.length,
+      sessions: sessionsResult.rows,
+    });
+  } catch (error: any) {
+    console.error('Failed to load profile:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
 export const updateMe = async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
@@ -239,16 +300,19 @@ export const updateMe = async (req: AuthenticatedRequest, res: Response) => {
       }
 
       passwordHash = await bcrypt.hash(newPassword, 10);
+    } else if (user.must_change_password) {
+      return res.status(400).json({ error: 'Для входа с временным паролем нужно задать новый пароль.' });
     }
 
     const result = await query(
       `UPDATE users
        SET username = $1,
            password_hash = COALESCE($2, password_hash),
+           must_change_password = $3,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $3
-       RETURNING id, username, name, role, is_blocked, employee_id, created_at, updated_at`,
-      [nextUsername, passwordHash, user.id]
+       WHERE id = $4
+       RETURNING id, username, name, role, is_blocked, must_change_password, employee_id, created_at, updated_at`,
+      [nextUsername, passwordHash, passwordHash ? false : user.must_change_password, user.id]
     );
 
     const updatedUser = result.rows[0];
@@ -301,7 +365,7 @@ export const createUserByAdmin = async (req: AuthenticatedRequest, res: Response
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await UserModel.createUser(username, passwordHash, name, role || 'Оператор', employeeId);
+    const user = await UserModel.createUser(username, passwordHash, name, role || 'Оператор', employeeId, true);
     res.status(201).json(user);
   } catch (error: any) {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
@@ -491,7 +555,7 @@ export const updateUserByAdmin = async (req: AuthenticatedRequest, res: Response
         }
         const passwordHash = await bcrypt.hash(password, 10);
         await client.query(
-          'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          'UPDATE users SET password_hash = $1, must_change_password = true, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
           [passwordHash, id]
         );
         await client.query(
