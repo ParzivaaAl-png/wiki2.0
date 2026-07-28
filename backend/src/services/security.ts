@@ -252,6 +252,12 @@ export const updateOperatorIpRestrictionSettings = async (
   return updated;
 };
 
+export const isOperatorPosition = (positionName?: string | null, legacyRole?: string | null): boolean => {
+  const pos = (positionName || '').toLowerCase();
+  const role = (legacyRole || '').toLowerCase();
+  return pos.includes('оператор') || pos.includes('operator') || role.includes('operator') || role.includes('оператор');
+};
+
 export const isOperatorIpAllowed = (clientIp: string, settings: OperatorIpRestrictionSettings, userRole?: string | null): boolean => {
   if (!settings.enabled) return true;
 
@@ -266,4 +272,5 @@ export const isOperatorIpAllowed = (clientIp: string, settings: OperatorIpRestri
 
   return settings.allowed_ranges.some((rule) => ipMatchesRule(clientIp, rule));
 };
+
 

@@ -391,10 +391,10 @@ export default function AccessManagement() {
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-sm font-extrabold text-foreground">
               <ShieldCheck className="h-5 w-5 text-rose-500" />
-              Ограничение по IP для операторов (Читатели, Редакторы, Согласователи)
+              Ограничение по IP для должности «Оператор»
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed max-w-3xl">
-              Настройка белого списка сетей и IP-адресов, с которых операторам и персоналу разрешён доступ к Вики. Проверка выполняется на бэкенде. <strong className="text-foreground">Администраторы Wiki освобождены от ограничений.</strong>
+              Настройка белого списка IP-адресов и сетей, с которых сотрудникам на должности <strong className="text-foreground">«Оператор»</strong> разрешено работать в Wiki. На неавторизованных IP доступ Операторов заблокирован на сервере. <strong className="text-foreground">Для остальных должностей и администраторов ограничение не применяется.</strong>
             </p>
           </div>
 
@@ -421,7 +421,7 @@ export default function AccessManagement() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2 space-y-1.5">
                 <label className="block text-xs font-bold uppercase text-muted-foreground">
-                  Разрешенные IP-адреса и подсети (CIDR)
+                  Разрешенные IP-адреса для должности «Оператор» (CIDR)
                 </label>
                 <textarea
                   rows={4}
@@ -431,7 +431,7 @@ export default function AccessManagement() {
                   className="w-full resize-none rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-rose-500"
                 />
                 <p className="text-[11px] text-muted-foreground leading-normal">
-                  Каждый IP или CIDR-диапазон с новой строки. Если тумблер включён и список пуст, доступ операторам будет полностью заблокирован.
+                  Укажите IP-адрес или подсеть (одна запись на строку), с которой разрешено работать Оператору. Если тумблер включён и список пуст, доступ с должности «Оператор» будет полностью заблокирован.
                 </p>
               </div>
 
@@ -459,7 +459,7 @@ export default function AccessManagement() {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-rose-600/15 transition-all cursor-pointer"
               >
                 {isSavingOpIp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Сохранить IP-ограничения операторов
+                Сохранить IP-ограничения для Оператора
               </button>
             </div>
           </div>
