@@ -136,7 +136,76 @@ export interface Article {
   trending_views?: number | string;
   favorites_count?: number | string;
   guest_access?: GuestAccessInfo | null;
+  mandatory_ack_enabled?: boolean;
+  mandatory_ack_settings?: MandatoryAcknowledgementSettings | null;
 }
+
+export type MandatoryAcknowledgementStatus =
+  | 'not_open'
+  | 'in_progress'
+  | 'read_completed'
+  | 'acknowledged'
+  | 'overdue'
+  | 'requires_reacknowledgement'
+  | 'cancelled'
+  | 'superseded';
+
+export interface MandatoryAcknowledgementSettings {
+  enabled: boolean;
+  target_user_ids: number[];
+  target_department_ids: number[];
+  target_position_ids: number[];
+  start_at: string | null;
+  due_days: number;
+  due_at: string | null;
+  require_reacknowledgement: boolean;
+  notifications_enabled: boolean;
+  reminders_enabled: boolean;
+}
+
+export interface MandatoryAcknowledgementAssignment {
+  id: number;
+  article_id: number;
+  user_id: number;
+  employee_id: number | null;
+  article_version: string;
+  title?: string;
+  slug?: string;
+  summary?: string;
+  article_title?: string;
+  article_slug?: string;
+  article_sections?: string;
+  username?: string;
+  user_name?: string;
+  department_id: number | null;
+  department_name: string | null;
+  position_id: number | null;
+  position_name: string | null;
+  manager_name: string | null;
+  assigned_at: string;
+  start_at: string;
+  due_at: string | null;
+  first_viewed_at: string | null;
+  read_completed_at: string | null;
+  acknowledged_at: string | null;
+  status: MandatoryAcknowledgementStatus;
+  completed_in_time: boolean | null;
+  overdue_days: number;
+  article_updated_at?: string;
+  article_published_at?: string;
+  article_author?: string | null;
+}
+
+export interface ArticleMandatoryAcknowledgementState {
+  required: boolean;
+  assignment: MandatoryAcknowledgementAssignment | null;
+}
+
+export type ArticlePayload = Omit<Article, 'id' | 'created_at' | 'updated_at' | 'views'> & {
+  mandatory_acknowledgement?: MandatoryAcknowledgementSettings;
+  change_description?: string;
+  editor_comment?: string;
+};
 
 export interface OnlyOfficeImportConfig {
   enabled: boolean;
@@ -240,6 +309,29 @@ export interface AnalyticsReport {
     owner_name: string | null;
     days_without_update: number;
   }>;
+  mandatoryAcknowledgement: {
+    summary: {
+      mandatory_articles: number;
+      assigned_count: number;
+      acknowledged_count: number;
+      not_acknowledged_count: number;
+      overdue_count: number;
+      completion_percent: number;
+    };
+    rows: MandatoryAcknowledgementAssignment[];
+    byArticle: Array<{
+      article_id: number;
+      article_title: string;
+      article_slug: string;
+      article_version: string;
+      assigned_count: number;
+      acknowledged_count: number;
+      not_acknowledged_count: number;
+      overdue_count: number;
+      completion_percent: number;
+      avg_hours_to_ack: number | null;
+    }>;
+  };
 }
 
 export interface SearchResult {
@@ -454,18 +546,31 @@ export async function fetchArticles(params?: {
   tag?: string;
   all?: boolean;
   filter?: string;
+  mandatory?: boolean;
 }): Promise<Article[]> {
   const queryParams = new URLSearchParams();
   if (params?.category) queryParams.set('category', params.category);
   if (params?.tag) queryParams.set('tag', params.tag);
   if (params?.all) queryParams.set('all', 'true');
   if (params?.filter) queryParams.set('filter', params.filter);
+  if (params?.mandatory) queryParams.set('mandatory', 'true');
 
   return apiCallWithCache<Article[]>(`/articles?${queryParams.toString()}`, { cache: 'no-store' });
 }
 
-export async function fetchAnalyticsReport(days = 30, staleDays = 90): Promise<AnalyticsReport> {
+export async function fetchAnalyticsReport(days = 30, staleDays = 90, mandatoryFilters?: {
+  status?: string;
+  articleId?: number | string;
+  departmentId?: number | string;
+  positionId?: number | string;
+  employeeId?: number | string;
+}): Promise<AnalyticsReport> {
   const params = new URLSearchParams({ days: String(days), staleDays: String(staleDays) });
+  if (mandatoryFilters?.status) params.set('mandatoryStatus', mandatoryFilters.status);
+  if (mandatoryFilters?.articleId) params.set('mandatoryArticleId', String(mandatoryFilters.articleId));
+  if (mandatoryFilters?.departmentId) params.set('mandatoryDepartmentId', String(mandatoryFilters.departmentId));
+  if (mandatoryFilters?.positionId) params.set('mandatoryPositionId', String(mandatoryFilters.positionId));
+  if (mandatoryFilters?.employeeId) params.set('mandatoryEmployeeId', String(mandatoryFilters.employeeId));
   return apiCall<AnalyticsReport>(`/admin/analytics?${params.toString()}`, { cache: 'no-store' });
 }
 
@@ -489,7 +594,7 @@ export async function suggestArticles(q: string): Promise<Suggestion[]> {
   return apiCallWithCache<Suggestion[]>(`/search/suggest?q=${encodeURIComponent(q)}`, { cache: 'no-store' });
 }
 
-export async function createArticle(data: Omit<Article, 'id' | 'created_at' | 'updated_at' | 'views'>): Promise<Article> {
+export async function createArticle(data: ArticlePayload): Promise<Article> {
   clearApiCache();
   return apiCall<Article>('/articles', {
     method: 'POST',
@@ -499,7 +604,7 @@ export async function createArticle(data: Omit<Article, 'id' | 'created_at' | 'u
 
 export async function updateArticle(
   id: number,
-  data: Omit<Article, 'id' | 'created_at' | 'updated_at' | 'views'> & { change_description?: string; editor_comment?: string }
+  data: ArticlePayload
 ): Promise<Article> {
   clearApiCache();
   return apiCall<Article>(`/articles/${id}`, {
@@ -1000,6 +1105,32 @@ export async function clearReadingHistory(): Promise<void> {
   return apiCall<void>('/users/me/history/clear', {
     method: 'POST',
   });
+}
+
+export async function fetchMyMandatoryAcknowledgements(): Promise<MandatoryAcknowledgementAssignment[]> {
+  return apiCall<MandatoryAcknowledgementAssignment[]>('/users/me/mandatory-acknowledgements', { cache: 'no-store' });
+}
+
+export async function fetchMandatoryAcknowledgementCount(): Promise<number> {
+  const result = await apiCall<{ count: number }>('/users/me/mandatory-acknowledgements/count', { cache: 'no-store' });
+  return result.count;
+}
+
+export async function fetchArticleMandatoryAcknowledgement(articleId: number): Promise<ArticleMandatoryAcknowledgementState> {
+  return apiCall<ArticleMandatoryAcknowledgementState>(`/articles/${articleId}/mandatory-acknowledgement`, { cache: 'no-store' });
+}
+
+export async function markMandatoryAcknowledgementOpened(articleId: number): Promise<ArticleMandatoryAcknowledgementState> {
+  return apiCall<ArticleMandatoryAcknowledgementState>(`/articles/${articleId}/mandatory-acknowledgement/open`, { method: 'POST' });
+}
+
+export async function markMandatoryAcknowledgementReadComplete(articleId: number): Promise<ArticleMandatoryAcknowledgementState> {
+  return apiCall<ArticleMandatoryAcknowledgementState>(`/articles/${articleId}/mandatory-acknowledgement/read-complete`, { method: 'POST' });
+}
+
+export async function confirmMandatoryAcknowledgement(articleId: number): Promise<ArticleMandatoryAcknowledgementState> {
+  clearApiCache();
+  return apiCall<ArticleMandatoryAcknowledgementState>(`/articles/${articleId}/mandatory-acknowledgement/confirm`, { method: 'POST' });
 }
 
 // Article Changes

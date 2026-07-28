@@ -22,7 +22,8 @@ import {
   Building2,
   Briefcase,
   Check,
-  Clock3
+  Clock3,
+  ShieldCheck
 } from 'lucide-react';
 import { 
   fetchArticle, 
@@ -41,7 +42,12 @@ import {
   ArticleLink,
   fetchNavigationTree,
   Space,
-  Section
+  Section,
+  fetchArticleMandatoryAcknowledgement,
+  markMandatoryAcknowledgementOpened,
+  markMandatoryAcknowledgementReadComplete,
+  confirmMandatoryAcknowledgement,
+  ArticleMandatoryAcknowledgementState
 } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -91,6 +97,9 @@ export default function ArticlePage() {
   const [linkSectionFilter, setLinkSectionFilter] = React.useState('all');
   const [linkText, setLinkText] = React.useState('');
   const [isCreatingLink, setIsCreatingLink] = React.useState(false);
+  const [mandatoryAckState, setMandatoryAckState] = React.useState<ArticleMandatoryAcknowledgementState | null>(null);
+  const [hasReachedArticleEnd, setHasReachedArticleEnd] = React.useState(false);
+  const [isConfirmingAck, setIsConfirmingAck] = React.useState(false);
 
   // Fetch article links when article is loaded
   React.useEffect(() => {
@@ -439,6 +448,72 @@ export default function ArticlePage() {
     return () => clearTimeout(timer);
   }, [article, isLoading, location.search]);
 
+  React.useEffect(() => {
+    if (!article || !user) return;
+    const articleId = article.id;
+    let cancelled = false;
+
+    async function loadMandatoryState() {
+      try {
+        const state = await fetchArticleMandatoryAcknowledgement(articleId);
+        if (cancelled) return;
+        setMandatoryAckState(state);
+        if (state.required && !state.assignment?.first_viewed_at && !state.assignment?.acknowledged_at) {
+          const opened = await markMandatoryAcknowledgementOpened(articleId);
+          if (!cancelled) setMandatoryAckState(opened);
+        }
+      } catch (err) {
+        console.error('Failed to load mandatory acknowledgement state:', err);
+      }
+    }
+
+    loadMandatoryState();
+    return () => {
+      cancelled = true;
+    };
+  }, [article, user]);
+
+  React.useEffect(() => {
+    if (!article || !mandatoryAckState?.required || mandatoryAckState.assignment?.acknowledged_at) return;
+
+    let sentReadComplete = !!mandatoryAckState.assignment?.read_completed_at;
+    const onScroll = async () => {
+      const scrollBottom = window.innerHeight + window.scrollY;
+      const pageHeight = document.documentElement.scrollHeight;
+      const reachedEnd = scrollBottom >= pageHeight - 80;
+      if (!reachedEnd) return;
+
+      setHasReachedArticleEnd(true);
+      if (!sentReadComplete) {
+        sentReadComplete = true;
+        try {
+          const updated = await markMandatoryAcknowledgementReadComplete(article.id);
+          setMandatoryAckState(updated);
+        } catch (err) {
+          console.error('Failed to mark mandatory acknowledgement read complete:', err);
+        }
+      }
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [article, mandatoryAckState?.required, mandatoryAckState?.assignment?.acknowledged_at, mandatoryAckState?.assignment?.read_completed_at]);
+
+  const handleConfirmMandatoryAcknowledgement = async () => {
+    if (!article || isConfirmingAck) return;
+    setIsConfirmingAck(true);
+    try {
+      const updated = await confirmMandatoryAcknowledgement(article.id);
+      setMandatoryAckState(updated);
+      alert('Ознакомление подтверждено.');
+    } catch (err: any) {
+      alert(err.message || 'Не удалось подтвердить ознакомление.');
+    } finally {
+      setIsConfirmingAck(false);
+    }
+  };
+
   // Parse Headings for Table of Contents
   const headings = React.useMemo(() => {
     if (!article) return [];
@@ -544,6 +619,18 @@ export default function ArticlePage() {
         );
       default:
         return null;
+    }
+  };
+
+  const getMandatoryStatusLabel = (status?: string | null) => {
+    switch (status) {
+      case 'not_open': return 'Не открыта';
+      case 'in_progress': return 'В процессе чтения';
+      case 'read_completed': return 'Прочитана до конца';
+      case 'acknowledged': return 'Ознакомлен';
+      case 'overdue': return 'Просрочена';
+      case 'requires_reacknowledgement': return 'Требует повторного ознакомления';
+      default: return 'Назначено';
     }
   };
 
@@ -690,6 +777,56 @@ export default function ArticlePage() {
                 expiresAt={article.guest_access.expires_at}
                 scope={article.guest_access.type}
               />
+            </div>
+          )}
+
+          {mandatoryAckState?.required && mandatoryAckState.assignment && (
+            <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-5 shadow-premium dark:shadow-premium-dark">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-extrabold text-foreground">
+                    <ShieldCheck className="h-5 w-5 text-amber-500" />
+                    Требуется обязательное ознакомление
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span className="rounded-full border border-border bg-card px-2 py-1 font-bold text-foreground">
+                      {getMandatoryStatusLabel(mandatoryAckState.assignment.status)}
+                    </span>
+                    <span>
+                      Срок: {mandatoryAckState.assignment.due_at ? new Date(mandatoryAckState.assignment.due_at).toLocaleDateString('ru-RU') : 'не указан'}
+                    </span>
+                    {mandatoryAckState.assignment.overdue_days > 0 && (
+                      <span className="font-bold text-rose-600 dark:text-rose-300">
+                        Просрочка: {mandatoryAckState.assignment.overdue_days} дн.
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                    Открытие статьи фиксируется как просмотр. Подтверждение станет доступно только после прокрутки материала до конца.
+                  </p>
+                </div>
+                <button
+                  onClick={handleConfirmMandatoryAcknowledgement}
+                  disabled={
+                    isConfirmingAck ||
+                    !!mandatoryAckState.assignment.acknowledged_at ||
+                    (!hasReachedArticleEnd && !mandatoryAckState.assignment.read_completed_at)
+                  }
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+                >
+                  {mandatoryAckState.assignment.acknowledged_at ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      Ознакомление подтверждено
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="h-4 w-4" />
+                      Подтверждаю ознакомление
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
 

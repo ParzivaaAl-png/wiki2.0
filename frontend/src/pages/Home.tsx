@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Sparkles, Clock, ChevronRight, ChevronLeft, Check, Plus, Star, X } from 'lucide-react';
+import { Search, Sparkles, Clock, ChevronRight, ChevronLeft, Check, Plus, Star, X, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   fetchArticles, 
@@ -10,6 +10,8 @@ import {
   saveFavoriteArticles, 
   fetchReadingHistory,
   clearReadingHistory,
+  fetchMyMandatoryAcknowledgements,
+  MandatoryAcknowledgementAssignment,
   Article
 } from '../lib/api';
 import { CategoryIcon } from '../components/icon';
@@ -27,12 +29,13 @@ export default function Home() {
   const [recommendedArticles, setRecommendedArticles] = React.useState<Article[]>([]);
   const [favoriteArticles, setFavoriteArticles] = React.useState<Article[]>([]);
   const [readingHistory, setReadingHistory] = React.useState<Article[]>([]);
+  const [mandatoryAcknowledgements, setMandatoryAcknowledgements] = React.useState<MandatoryAcknowledgementAssignment[]>([]);
 
   
   const [isLoading, setIsLoading] = React.useState(true);
 
-  // Filter Tab State: 'all' | 'new' | 'trending' | 'recommended'
-  const [filterTab, setFilterTab] = React.useState<'all' | 'new' | 'trending' | 'recommended'>('all');
+  // Filter Tab State: 'all' | 'new' | 'trending' | 'recommended' | 'mandatory'
+  const [filterTab, setFilterTab] = React.useState<'all' | 'new' | 'trending' | 'recommended' | 'mandatory'>('all');
 
   // Customization States (Personal Favorites)
   const [isConfigureMode, setIsConfigureMode] = React.useState(false);
@@ -62,15 +65,18 @@ export default function Home() {
       setRecommendedArticles(recommendedArts.filter(art => !art.slug.startsWith('auto-list-')));
 
       if (user) {
-        const [favs, history] = await Promise.all([
+        const [favs, history, mandatory] = await Promise.all([
           fetchFavoriteArticles(),
-          fetchReadingHistory()
+          fetchReadingHistory(),
+          fetchMyMandatoryAcknowledgements()
         ]);
         setFavoriteArticles(favs);
         setReadingHistory(history);
+        setMandatoryAcknowledgements(mandatory);
       } else {
         setFavoriteArticles([]);
         setReadingHistory([]);
+        setMandatoryAcknowledgements([]);
       }
     } catch (error) {
       console.error('Home data load failed:', error);
@@ -115,6 +121,10 @@ export default function Home() {
       result = recommendedArticles.filter(a => a.is_visible !== false && a.published);
     }
 
+    if (filterTab === 'mandatory') {
+      result = visibleArticles.filter(a => a.mandatory_ack_enabled);
+    }
+
     return result.slice(0, 6);
   }, [filterTab, allArticles, trendingArticles, recommendedArticles, isEditMode]);
 
@@ -125,6 +135,10 @@ export default function Home() {
       art.title.toLowerCase().includes(q) || (art.summary || '').toLowerCase().includes(q)
     );
   }, [favoriteArticles, searchFavQuery]);
+
+  const pendingMandatoryAcknowledgements = React.useMemo(() => (
+    mandatoryAcknowledgements.filter((item) => !item.acknowledged_at)
+  ), [mandatoryAcknowledgements]);
 
   // Drag and Drop for PERSONAL Favorites Configuration
   const handleFavDragStart = (e: React.DragEvent, id: number) => {
@@ -395,6 +409,53 @@ export default function Home() {
       {/* MAIN CONTENT CONTAINER */}
       <section className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-8 py-6 space-y-6">
 
+        {user && pendingMandatoryAcknowledgements.length > 0 && (
+          <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-5 shadow-premium dark:shadow-premium-dark">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="font-outfit text-sm font-extrabold text-foreground flex items-center gap-2 uppercase tracking-wider">
+                  <ShieldCheck className="h-5 w-5 text-amber-500" />
+                  Требуют ознакомления
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Непрочитанных обязательных материалов: {pendingMandatoryAcknowledgements.length}
+                </p>
+              </div>
+              <span className="rounded-full border border-amber-500/25 bg-card px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-300">
+                {pendingMandatoryAcknowledgements.length}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {pendingMandatoryAcknowledgements.slice(0, 4).map((item) => (
+                <Link
+                  key={item.id}
+                  to={`/articles/${item.slug || item.article_slug}`}
+                  className="group rounded-lg border border-border bg-card p-4 transition-all hover:border-amber-500/40 hover:bg-muted/40"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="truncate text-sm font-bold text-foreground group-hover:text-indigo-500">
+                        {item.title || item.article_title}
+                      </h4>
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                        {item.summary || 'Обязательная статья для подтверждения ознакомления.'}
+                      </p>
+                    </div>
+                    <ShieldCheck className="h-4 w-4 shrink-0 text-amber-500" />
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                    <span className="rounded-full bg-muted px-2 py-0.5 font-bold">
+                      {item.status === 'overdue' ? 'Просрочена' : item.status === 'in_progress' ? 'В процессе' : 'Не открыта'}
+                    </span>
+                    <span>Срок: {item.due_at ? new Date(item.due_at).toLocaleDateString('ru-RU') : 'не указан'}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ROW OF PERSONAL BLOCKS (Continue Reading + Favorites + Recent Changes) */}
         {user && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -655,6 +716,16 @@ export default function Home() {
               >
                 Рекомендуемые
               </button>
+              <button
+                onClick={() => setFilterTab('mandatory')}
+                className={`px-3.5 py-1.5 rounded-lg text-[10px] font-bold transition-all shrink-0 cursor-pointer ${
+                  filterTab === 'mandatory' && !isEditMode
+                    ? 'bg-indigo-500 text-white shadow'
+                    : 'text-neutral-550 hover:text-neutral-950 dark:hover:text-white'
+                }`}
+              >
+                Обязательные
+              </button>
             </div>
 
             <div className="flex items-center gap-2 select-none self-end md:self-auto">
@@ -735,9 +806,15 @@ export default function Home() {
                     </div>
                     
                     <div className="flex items-center gap-1.5 mb-2">
-                      <h3 className="font-outfit text-xs font-bold text-neutral-900 dark:text-neutral-100 line-clamp-2 leading-snug">
+                      <h3 className="min-w-0 flex-1 font-outfit text-xs font-bold text-neutral-900 dark:text-neutral-100 line-clamp-2 leading-snug">
                         {art.title}
                       </h3>
+                      {art.mandatory_ack_enabled && (
+                        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-300">
+                          <ShieldCheck className="h-2.5 w-2.5" />
+                          Обяз.
+                        </span>
+                      )}
                     </div>
 
                     {art.guest_access && (

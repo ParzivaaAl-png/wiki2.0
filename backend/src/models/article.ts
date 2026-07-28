@@ -28,6 +28,8 @@ export interface Article {
   last_sync_at?: Date | null;
   next_sync_at?: Date | null;
   structured_data?: any | null;
+  mandatory_ack_enabled?: boolean;
+  mandatory_ack_settings?: any | null;
 }
 
 export const getAllArticles = async (options: {

@@ -1,11 +1,12 @@
 import * as React from 'react';
 import { 
-  Bell, Pin, Search, X, Check, Inbox, MessageSquare, Video
+  Bell, Pin, Search, X, Check, Inbox, MessageSquare, Video, ShieldCheck
 } from 'lucide-react';
 import { 
   fetchNews, fetchUnreadNewsCount, searchNews, 
   News, NewsSearchResult, fetchNewsDetail,
-  fetchNotifications, markNotificationsAsRead, Notification
+  fetchNotifications, markNotificationsAsRead, Notification,
+  fetchMandatoryAcknowledgementCount
 } from '../lib/api';
 import { NewsCard } from './news-card';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -14,6 +15,7 @@ export function NewsBell() {
   const [isOpen, setIsOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<'news' | 'notifications'>('news');
   const [unreadNewsCount, setUnreadNewsCount] = React.useState(0);
+  const [mandatoryAckCount, setMandatoryAckCount] = React.useState(0);
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [newsList, setNewsList] = React.useState<News[]>([]);
   const [selectedNews, setSelectedNews] = React.useState<News | null>(null);
@@ -26,8 +28,12 @@ export function NewsBell() {
   // Poll count and fetch news/notifications
   const loadUnreadCount = async () => {
     try {
-      const count = await fetchUnreadNewsCount();
-      setUnreadNewsCount(count);
+      const [newsCount, mandatoryCount] = await Promise.all([
+        fetchUnreadNewsCount(),
+        fetchMandatoryAcknowledgementCount(),
+      ]);
+      setUnreadNewsCount(newsCount);
+      setMandatoryAckCount(mandatoryCount);
     } catch (e) {
       console.error('Failed to load unread count:', e);
     }
@@ -79,7 +85,7 @@ export function NewsBell() {
   };
 
   const unreadNotificationsCount = notifications.filter(n => !n.is_read).length;
-  const totalUnreadCount = unreadNewsCount + unreadNotificationsCount;
+  const totalUnreadCount = unreadNewsCount + unreadNotificationsCount + mandatoryAckCount;
 
   // Click outside handler
   React.useEffect(() => {
@@ -214,7 +220,7 @@ export function NewsBell() {
                     : 'border-transparent text-neutral-500 hover:text-neutral-900 dark:hover:text-white'
                 }`}
               >
-                Уведомления {unreadNotificationsCount > 0 && `(${unreadNotificationsCount})`}
+                Уведомления {(unreadNotificationsCount + mandatoryAckCount) > 0 && `(${unreadNotificationsCount + mandatoryAckCount})`}
               </button>
             </div>
 
@@ -345,6 +351,23 @@ export function NewsBell() {
               </>
             ) : (
               <>
+                {/* Notifications Tab View */}
+                {mandatoryAckCount > 0 && (
+                  <a
+                    href="/"
+                    onClick={() => setIsOpen(false)}
+                    className="mx-3 mt-3 flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-left transition-colors hover:bg-amber-500/15"
+                  >
+                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                    <span className="min-w-0">
+                      <span className="block text-xs font-bold text-neutral-900 dark:text-neutral-100">Требуют ознакомления: {mandatoryAckCount}</span>
+                      <span className="mt-0.5 block text-[10px] leading-relaxed text-neutral-500 dark:text-neutral-400">
+                        Откройте обязательные статьи и подтвердите прочтение до срока.
+                      </span>
+                    </span>
+                  </a>
+                )}
+
                 {/* Notifications Tab View */}
                 {unreadNotificationsCount > 0 && (
                   <div className="px-3.5 py-2 border-b border-neutral-100 dark:border-neutral-900 flex justify-between items-center bg-neutral-50/30 dark:bg-neutral-950 shrink-0 select-none animate-fadeIn">

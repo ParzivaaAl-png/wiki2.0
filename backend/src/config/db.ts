@@ -200,6 +200,40 @@ export const initializeDatabase = async () => {
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMP DEFAULT NULL');
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS next_sync_at TIMESTAMP DEFAULT NULL');
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS structured_data JSONB DEFAULT NULL');
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS mandatory_ack_enabled BOOLEAN DEFAULT FALSE');
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS mandatory_ack_settings JSONB DEFAULT NULL');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS mandatory_ack_assignments (
+        id SERIAL PRIMARY KEY,
+        article_id INT REFERENCES articles(id) ON DELETE CASCADE,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        employee_id INT REFERENCES employees(id) ON DELETE SET NULL,
+        article_version VARCHAR(120) NOT NULL,
+        assigned_by INT REFERENCES users(id) ON DELETE SET NULL,
+        assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        start_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        due_at TIMESTAMP,
+        first_viewed_at TIMESTAMP,
+        read_completed_at TIMESTAMP,
+        acknowledged_at TIMESTAMP,
+        status VARCHAR(50) DEFAULT 'not_open',
+        department_id INT REFERENCES departments(id) ON DELETE SET NULL,
+        department_name VARCHAR(255),
+        position_id INT REFERENCES positions(id) ON DELETE SET NULL,
+        position_name VARCHAR(255),
+        manager_id INT REFERENCES employees(id) ON DELETE SET NULL,
+        manager_name VARCHAR(255),
+        completed_in_time BOOLEAN,
+        overdue_days INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(article_id, user_id, article_version)
+      );
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_mandatory_ack_user_status ON mandatory_ack_assignments(user_id, status)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_mandatory_ack_article ON mandatory_ack_assignments(article_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_mandatory_ack_due ON mandatory_ack_assignments(due_at)');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS article_sync_history (

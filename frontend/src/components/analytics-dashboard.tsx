@@ -4,11 +4,13 @@ import {
   Activity,
   BarChart3,
   BookOpen,
+  CheckCircle2,
   Clock3,
   Download,
   FileWarning,
   Layers,
   RefreshCw,
+  ShieldCheck,
   Users,
 } from 'lucide-react';
 import { AnalyticsReport, fetchAnalyticsReport } from '../lib/api';
@@ -22,6 +24,36 @@ const formatDate = (value: string | null) => {
     month: 'short',
     year: 'numeric',
   });
+};
+
+const formatDateTime = (value: string | null | undefined) => {
+  if (!value) return 'Нет данных';
+  return new Date(value).toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const mandatoryStatusLabels: Record<string, string> = {
+  all: 'Все статусы',
+  not_open: 'Не открыта',
+  in_progress: 'В процессе чтения',
+  read_completed: 'Прочитана до конца',
+  acknowledged: 'Ознакомлен',
+  overdue: 'Просрочена',
+  requires_reacknowledgement: 'Требует повторного ознакомления',
+};
+
+const mandatoryStatusClass = (status: string) => {
+  if (status === 'acknowledged') return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300';
+  if (status === 'overdue') return 'border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-300';
+  if (status === 'read_completed') return 'border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-300';
+  if (status === 'in_progress') return 'border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-300';
+  if (status === 'requires_reacknowledgement') return 'border-violet-500/25 bg-violet-500/10 text-violet-600 dark:text-violet-300';
+  return 'border-border bg-muted text-muted-foreground';
 };
 
 type ExcelCell = string | number | null | undefined;
@@ -51,6 +83,9 @@ const excelSheet = (name: string, rows: ExcelCell[][]) => `
 export default function AnalyticsDashboard() {
   const [periodDays, setPeriodDays] = React.useState(30);
   const [staleDays, setStaleDays] = React.useState(90);
+  const [activeAnalyticsTab, setActiveAnalyticsTab] = React.useState<'overview' | 'mandatory'>('overview');
+  const [mandatoryStatus, setMandatoryStatus] = React.useState('all');
+  const [mandatoryViewMode, setMandatoryViewMode] = React.useState<'employees' | 'articles'>('employees');
   const [report, setReport] = React.useState<AnalyticsReport | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState('');
@@ -59,14 +94,14 @@ export default function AnalyticsDashboard() {
     setIsLoading(true);
     setError('');
     try {
-      setReport(await fetchAnalyticsReport(periodDays, staleDays));
+      setReport(await fetchAnalyticsReport(periodDays, staleDays, { status: mandatoryStatus }));
     } catch (err: any) {
       console.error('Failed to load analytics report:', err);
       setError(err.message || 'Не удалось загрузить аналитику.');
     } finally {
       setIsLoading(false);
     }
-  }, [periodDays, staleDays]);
+  }, [periodDays, staleDays, mandatoryStatus]);
 
   React.useEffect(() => {
     loadReport();
@@ -74,6 +109,9 @@ export default function AnalyticsDashboard() {
 
   const exportExcel = () => {
     if (!report) return;
+
+    const mandatoryRows = report.mandatoryAcknowledgement?.rows || [];
+    const mandatoryByArticle = report.mandatoryAcknowledgement?.byArticle || [];
 
     const workbook = `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -165,6 +203,74 @@ export default function AnalyticsDashboard() {
       formatDate(item.updated_at),
     ]),
   ])}
+  ${excelSheet('Обязательное ознакомление', [
+    [
+      'ID сотрудника',
+      'ФИО',
+      'логин',
+      'подразделение',
+      'должность',
+      'руководитель',
+      'название статьи',
+      'раздел статьи',
+      'версия статьи',
+      'автор статьи',
+      'дата публикации',
+      'дата назначения',
+      'срок ознакомления',
+      'дата первого просмотра',
+      'дата прокрутки до конца',
+      'дата подтверждения',
+      'статус',
+      'ознакомился в установленный срок',
+      'количество дней просрочки',
+      'дата последнего обновления статьи',
+    ],
+    ...mandatoryRows.map((item) => [
+      item.employee_id,
+      item.user_name || 'Не указан',
+      item.username || '',
+      item.department_name || 'Не указан',
+      item.position_name || 'Не указана',
+      item.manager_name || 'Не указан',
+      item.article_title || item.title || 'Без названия',
+      item.article_sections || 'Без раздела',
+      item.article_version,
+      item.article_author || 'Не указан',
+      formatDateTime(item.article_published_at),
+      formatDateTime(item.assigned_at),
+      formatDateTime(item.due_at),
+      formatDateTime(item.first_viewed_at),
+      formatDateTime(item.read_completed_at),
+      formatDateTime(item.acknowledged_at),
+      mandatoryStatusLabels[item.status] || item.status,
+      item.completed_in_time === null ? 'Нет данных' : (item.completed_in_time ? 'Да' : 'Нет'),
+      Number(item.overdue_days || 0),
+      formatDateTime(item.article_updated_at),
+    ]),
+  ])}
+  ${excelSheet('Сводка по обязательным статьям', [
+    [
+      'название статьи',
+      'версия',
+      'количество назначенных сотрудников',
+      'ознакомились',
+      'не ознакомились',
+      'просрочили',
+      'процент выполнения',
+      'среднее время от назначения до ознакомления',
+    ],
+    ...mandatoryByArticle.map((item) => [
+      item.article_title,
+      item.article_version,
+      Number(item.assigned_count),
+      Number(item.acknowledged_count),
+      Number(item.not_acknowledged_count),
+      Number(item.overdue_count),
+      Number(item.completion_percent),
+      item.avg_hours_to_ack === null ? 'Нет данных' : `${Number(item.avg_hours_to_ack)} ч.`,
+    ]),
+  ])}
 </Workbook>`;
 
     const url = URL.createObjectURL(new Blob([workbook], { type: 'application/vnd.ms-excel;charset=utf-8' }));
@@ -207,6 +313,20 @@ export default function AnalyticsDashboard() {
     { label: 'Активные сотрудники', value: report.overview.active_users, detail: `из ${report.overview.total_users}`, icon: Users, color: 'text-emerald-500' },
     { label: 'Опубликовано', value: report.overview.published_articles, detail: `${report.overview.draft_articles} черновиков`, icon: BookOpen, color: 'text-sky-500' },
     { label: 'Требуют проверки', value: report.overview.stale_articles, detail: `старше ${staleDays} дней`, icon: FileWarning, color: 'text-amber-500' },
+  ];
+  const mandatorySummary = report.mandatoryAcknowledgement?.summary || {
+    mandatory_articles: 0,
+    assigned_count: 0,
+    acknowledged_count: 0,
+    not_acknowledged_count: 0,
+    overdue_count: 0,
+    completion_percent: 0,
+  };
+  const mandatoryMetrics = [
+    { label: 'Обязательных статей', value: mandatorySummary.mandatory_articles, detail: 'в базе знаний', icon: ShieldCheck, color: 'text-indigo-500' },
+    { label: 'Назначено', value: mandatorySummary.assigned_count, detail: 'ознакомлений', icon: Users, color: 'text-sky-500' },
+    { label: 'Ознакомились', value: mandatorySummary.acknowledged_count, detail: `${mandatorySummary.completion_percent || 0}% выполнения`, icon: CheckCircle2, color: 'text-emerald-500' },
+    { label: 'Просрочили', value: mandatorySummary.overdue_count, detail: `${mandatorySummary.not_acknowledged_count || 0} не завершили`, icon: FileWarning, color: 'text-red-500' },
   ];
 
   return (
@@ -263,6 +383,33 @@ export default function AnalyticsDashboard() {
         </div>
       </div>
 
+      <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1">
+        <button
+          type="button"
+          onClick={() => setActiveAnalyticsTab('overview')}
+          className={`h-8 rounded-md px-3 text-xs font-bold transition-colors ${
+            activeAnalyticsTab === 'overview'
+              ? 'bg-card text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Обзор
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveAnalyticsTab('mandatory')}
+          className={`h-8 rounded-md px-3 text-xs font-bold transition-colors ${
+            activeAnalyticsTab === 'mandatory'
+              ? 'bg-card text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Обязательное ознакомление
+        </button>
+      </div>
+
+      {activeAnalyticsTab === 'overview' && (
+        <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {metrics.map(({ label, value, detail, icon: Icon, color }) => (
           <div key={label} className="min-h-28 p-4 sm:p-5 rounded-lg border border-border bg-card shadow-premium">
@@ -362,6 +509,160 @@ export default function AnalyticsDashboard() {
           ))}
         </ReportTable>
       </div>
+
+        </>
+      )}
+
+      {activeAnalyticsTab === 'mandatory' && (
+        <div className="space-y-5">
+          <section className="rounded-lg border border-border bg-card p-4 sm:p-5 shadow-premium">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                  <ShieldCheck className="h-4 w-4 text-indigo-500" />
+                  Обязательное ознакомление
+                </h3>
+                <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
+                  Контроль назначенных материалов: кто открыл статью, дочитал до конца, подтвердил ознакомление и кто просрочил срок.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={mandatoryStatus}
+                  onChange={(event) => setMandatoryStatus(event.target.value)}
+                  className="h-9 min-w-52 rounded-lg border border-border bg-muted px-3 text-xs text-foreground outline-none focus:border-indigo-500"
+                >
+                  {Object.entries(mandatoryStatusLabels).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <div className="inline-flex rounded-lg border border-border bg-muted/50 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setMandatoryViewMode('employees')}
+                    className={`h-7 rounded-md px-3 text-[11px] font-bold ${mandatoryViewMode === 'employees' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                  >
+                    По сотрудникам
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMandatoryViewMode('articles')}
+                    className={`h-7 rounded-md px-3 text-[11px] font-bold ${mandatoryViewMode === 'articles' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                  >
+                    По статьям
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {mandatoryMetrics.map(({ label, value, detail, icon: Icon, color }) => (
+              <div key={label} className="min-h-28 rounded-lg border border-border bg-card p-4 sm:p-5 shadow-premium">
+                <div className="flex items-center justify-between gap-2 text-muted-foreground">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase">{label}</span>
+                  <Icon className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${color}`} />
+                </div>
+                <div className="mt-3 text-2xl font-bold text-foreground">{numberFormatter.format(Number(value || 0))}</div>
+                <div className="mt-1 text-[10px] text-muted-foreground">{detail}</div>
+              </div>
+            ))}
+          </div>
+
+          {mandatoryViewMode === 'employees' ? (
+            <section className="overflow-hidden rounded-lg border border-border bg-card shadow-premium">
+              <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+                <Users className="h-4 w-4 text-emerald-500" />
+                <h3 className="text-sm font-bold text-foreground">Ознакомление по сотрудникам</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-[1180px] w-full text-left text-xs">
+                  <thead className="bg-muted/50 text-muted-foreground">
+                    <tr>
+                      {['Сотрудник', 'Подразделение', 'Должность', 'Статья', 'Версия', 'Назначено', 'Первый просмотр', 'До конца', 'Подтверждено', 'Срок', 'Статус', 'Просрочка'].map((header) => (
+                        <th key={header} className="whitespace-nowrap p-3 font-semibold">{header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.mandatoryAcknowledgement.rows.length === 0 ? (
+                      <tr><td colSpan={12} className="p-8 text-center italic text-muted-foreground">Назначений пока нет</td></tr>
+                    ) : report.mandatoryAcknowledgement.rows.map((item) => (
+                      <tr key={item.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                        <td className="p-3">
+                          <div className="font-semibold text-foreground">{item.user_name || 'Не указан'}</div>
+                          <div className="text-[10px] text-muted-foreground">{item.username || 'без логина'}</div>
+                        </td>
+                        <td className="p-3 text-muted-foreground">{item.department_name || 'Не указан'}</td>
+                        <td className="p-3 text-muted-foreground">{item.position_name || 'Не указана'}</td>
+                        <td className="p-3">
+                          <Link to={`/articles/${item.article_slug}`} className="font-semibold text-foreground hover:text-indigo-500">
+                            {item.article_title || item.title || 'Без названия'}
+                          </Link>
+                          <div className="text-[10px] text-muted-foreground">{item.article_sections || 'Без раздела'}</div>
+                        </td>
+                        <td className="p-3 text-muted-foreground">{item.article_version}</td>
+                        <td className="p-3 whitespace-nowrap text-muted-foreground">{formatDateTime(item.assigned_at)}</td>
+                        <td className="p-3 whitespace-nowrap text-muted-foreground">{formatDateTime(item.first_viewed_at)}</td>
+                        <td className="p-3 whitespace-nowrap text-muted-foreground">{formatDateTime(item.read_completed_at)}</td>
+                        <td className="p-3 whitespace-nowrap text-muted-foreground">{formatDateTime(item.acknowledged_at)}</td>
+                        <td className="p-3 whitespace-nowrap text-muted-foreground">{formatDateTime(item.due_at)}</td>
+                        <td className="p-3"><MandatoryStatusPill status={item.status} /></td>
+                        <td className="p-3 whitespace-nowrap text-right text-muted-foreground">{Number(item.overdue_days || 0)} дн.</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : (
+            <section className="overflow-hidden rounded-lg border border-border bg-card shadow-premium">
+              <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+                <BookOpen className="h-4 w-4 text-indigo-500" />
+                <h3 className="text-sm font-bold text-foreground">Ознакомление по статьям</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-[860px] w-full text-left text-xs">
+                  <thead className="bg-muted/50 text-muted-foreground">
+                    <tr>
+                      {['Статья', 'Версия', 'Назначено', 'Ознакомились', 'Не ознакомились', 'Просрочили', 'Выполнение', 'Среднее время'].map((header) => (
+                        <th key={header} className="whitespace-nowrap p-3 font-semibold">{header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.mandatoryAcknowledgement.byArticle.length === 0 ? (
+                      <tr><td colSpan={8} className="p-8 text-center italic text-muted-foreground">Обязательных статей пока нет</td></tr>
+                    ) : report.mandatoryAcknowledgement.byArticle.map((item) => (
+                      <tr key={`${item.article_id}-${item.article_version}`} className="border-b border-border last:border-0 hover:bg-muted/40">
+                        <td className="p-3">
+                          <Link to={`/articles/${item.article_slug}`} className="font-semibold text-foreground hover:text-indigo-500">
+                            {item.article_title}
+                          </Link>
+                        </td>
+                        <td className="p-3 text-muted-foreground">{item.article_version}</td>
+                        <td className="p-3 text-muted-foreground">{numberFormatter.format(Number(item.assigned_count))}</td>
+                        <td className="p-3 text-emerald-600 dark:text-emerald-300">{numberFormatter.format(Number(item.acknowledged_count))}</td>
+                        <td className="p-3 text-muted-foreground">{numberFormatter.format(Number(item.not_acknowledged_count))}</td>
+                        <td className="p-3 text-red-600 dark:text-red-300">{numberFormatter.format(Number(item.overdue_count))}</td>
+                        <td className="p-3">
+                          <div className="flex min-w-36 items-center gap-2">
+                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, Number(item.completion_percent || 0))}%` }} />
+                            </div>
+                            <span className="w-11 text-right font-semibold text-foreground">{Number(item.completion_percent || 0)}%</span>
+                          </div>
+                        </td>
+                        <td className="p-3 text-muted-foreground">{item.avg_hours_to_ack === null ? 'Нет данных' : `${Number(item.avg_hours_to_ack)} ч.`}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -387,4 +688,12 @@ function ReportTable({ title, icon, headers, children }: { title: string; icon: 
 
 function EmptyRow({ columns, text }: { columns: number; text: string }) {
   return <tr><td colSpan={columns} className="p-8 text-center text-muted-foreground italic">{text}</td></tr>;
+}
+
+function MandatoryStatusPill({ status }: { status: string }) {
+  return (
+    <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-bold ${mandatoryStatusClass(status)}`}>
+      {mandatoryStatusLabels[status] || status}
+    </span>
+  );
 }

@@ -16,6 +16,11 @@ const parseStaleDays = (value: unknown) => {
 export const getAnalyticsReport = async (req: Request, res: Response) => {
   const periodDays = parsePeriod(req.query.days, 30);
   const staleDays = parseStaleDays(req.query.staleDays);
+  const mandatoryStatus = typeof req.query.mandatoryStatus === 'string' ? req.query.mandatoryStatus : 'all';
+  const mandatoryArticleId = Number(req.query.mandatoryArticleId || 0);
+  const mandatoryDepartmentId = Number(req.query.mandatoryDepartmentId || 0);
+  const mandatoryPositionId = Number(req.query.mandatoryPositionId || 0);
+  const mandatoryEmployeeId = Number(req.query.mandatoryEmployeeId || 0);
 
   try {
     const [
@@ -26,6 +31,9 @@ export const getAnalyticsReport = async (req: Request, res: Response) => {
       contributorStatsResult,
       userActivityResult,
       staleArticlesResult,
+      mandatoryRowsResult,
+      mandatoryByArticleResult,
+      mandatorySummaryResult,
     ] = await Promise.all([
       pool.query(
         `SELECT
@@ -147,6 +155,136 @@ export const getAnalyticsReport = async (req: Request, res: Response) => {
          LIMIT 50`,
         [staleDays]
       ),
+      pool.query(
+        `SELECT
+           ma.id,
+           ma.user_id,
+           ma.employee_id,
+           u.username,
+           u.name AS user_name,
+           ma.department_id,
+           ma.department_name,
+           ma.position_id,
+           ma.position_name,
+           ma.manager_name,
+           a.id AS article_id,
+           a.title AS article_title,
+           a.slug AS article_slug,
+           a.updated_at AS article_updated_at,
+           a.created_at AS article_published_at,
+           author.name AS article_author,
+           ma.article_version,
+           ma.assigned_at,
+           ma.first_viewed_at,
+           ma.read_completed_at,
+           ma.acknowledged_at,
+           ma.due_at,
+           CASE
+             WHEN ma.acknowledged_at IS NOT NULL THEN 'acknowledged'
+             WHEN ma.due_at IS NOT NULL AND ma.due_at < NOW() THEN 'overdue'
+             WHEN ma.read_completed_at IS NOT NULL THEN 'read_completed'
+             WHEN ma.first_viewed_at IS NOT NULL THEN 'in_progress'
+             ELSE ma.status
+           END AS status,
+           CASE
+             WHEN ma.due_at IS NOT NULL AND ma.acknowledged_at IS NULL AND ma.due_at < NOW()
+               THEN CEIL(EXTRACT(EPOCH FROM (NOW() - ma.due_at)) / 86400)::int
+             ELSE COALESCE(ma.overdue_days, 0)
+           END AS overdue_days,
+           COALESCE(ma.completed_in_time, false) AS completed_in_time,
+           COALESCE(string_agg(DISTINCT s.name, ', '), 'Без раздела') AS article_sections
+         FROM mandatory_ack_assignments ma
+         JOIN users u ON u.id = ma.user_id
+         JOIN articles a ON a.id = ma.article_id
+         LEFT JOIN users author ON author.id = a.author_id
+         LEFT JOIN article_sections axs ON axs.article_id = a.id
+         LEFT JOIN sections s ON s.id = axs.section_id
+         WHERE ma.status NOT IN ('cancelled', 'superseded')
+           AND ma.assigned_at >= NOW() - ($1::int * INTERVAL '1 day')
+           AND ($2::text = 'all' OR (
+             CASE
+               WHEN ma.acknowledged_at IS NOT NULL THEN 'acknowledged'
+               WHEN ma.due_at IS NOT NULL AND ma.due_at < NOW() THEN 'overdue'
+               WHEN ma.read_completed_at IS NOT NULL THEN 'read_completed'
+               WHEN ma.first_viewed_at IS NOT NULL THEN 'in_progress'
+               ELSE ma.status
+             END
+           ) = $2::text)
+           AND ($3::int = 0 OR ma.article_id = $3::int)
+           AND ($4::int = 0 OR ma.department_id = $4::int)
+           AND ($5::int = 0 OR ma.position_id = $5::int)
+           AND ($6::int = 0 OR ma.employee_id = $6::int)
+         GROUP BY ma.id, u.id, a.id, author.name
+         ORDER BY ma.due_at ASC NULLS LAST, ma.assigned_at DESC
+         LIMIT 1000`,
+        [periodDays, mandatoryStatus, mandatoryArticleId, mandatoryDepartmentId, mandatoryPositionId, mandatoryEmployeeId]
+      ),
+      pool.query(
+        `SELECT
+           a.id AS article_id,
+           a.title AS article_title,
+           a.slug AS article_slug,
+           ma.article_version,
+           COUNT(*)::int AS assigned_count,
+           COUNT(*) FILTER (WHERE ma.acknowledged_at IS NOT NULL)::int AS acknowledged_count,
+           COUNT(*) FILTER (WHERE ma.acknowledged_at IS NULL)::int AS not_acknowledged_count,
+           COUNT(*) FILTER (WHERE ma.acknowledged_at IS NULL AND ma.due_at IS NOT NULL AND ma.due_at < NOW())::int AS overdue_count,
+           ROUND(
+             CASE WHEN COUNT(*) = 0 THEN 0 ELSE COUNT(*) FILTER (WHERE ma.acknowledged_at IS NOT NULL)::numeric * 100 / COUNT(*) END,
+             1
+           )::float AS completion_percent,
+           ROUND(AVG(EXTRACT(EPOCH FROM (ma.acknowledged_at - ma.assigned_at)) / 3600) FILTER (WHERE ma.acknowledged_at IS NOT NULL), 1)::float AS avg_hours_to_ack
+         FROM mandatory_ack_assignments ma
+         JOIN articles a ON a.id = ma.article_id
+         WHERE ma.status NOT IN ('cancelled', 'superseded')
+           AND ma.assigned_at >= NOW() - ($1::int * INTERVAL '1 day')
+           AND ($2::text = 'all' OR (
+             CASE
+               WHEN ma.acknowledged_at IS NOT NULL THEN 'acknowledged'
+               WHEN ma.due_at IS NOT NULL AND ma.due_at < NOW() THEN 'overdue'
+               WHEN ma.read_completed_at IS NOT NULL THEN 'read_completed'
+               WHEN ma.first_viewed_at IS NOT NULL THEN 'in_progress'
+               ELSE ma.status
+             END
+           ) = $2::text)
+           AND ($3::int = 0 OR ma.article_id = $3::int)
+           AND ($4::int = 0 OR ma.department_id = $4::int)
+           AND ($5::int = 0 OR ma.position_id = $5::int)
+           AND ($6::int = 0 OR ma.employee_id = $6::int)
+         GROUP BY a.id, a.title, a.slug, ma.article_version
+         ORDER BY overdue_count DESC, assigned_count DESC, a.title ASC
+         LIMIT 300`,
+        [periodDays, mandatoryStatus, mandatoryArticleId, mandatoryDepartmentId, mandatoryPositionId, mandatoryEmployeeId]
+      ),
+      pool.query(
+        `SELECT
+           (SELECT COUNT(*) FROM articles WHERE mandatory_ack_enabled = true AND is_visible = true)::int AS mandatory_articles,
+           COUNT(*)::int AS assigned_count,
+           COUNT(*) FILTER (WHERE acknowledged_at IS NOT NULL)::int AS acknowledged_count,
+           COUNT(*) FILTER (WHERE acknowledged_at IS NULL)::int AS not_acknowledged_count,
+           COUNT(*) FILTER (WHERE acknowledged_at IS NULL AND due_at IS NOT NULL AND due_at < NOW())::int AS overdue_count,
+           ROUND(
+             CASE WHEN COUNT(*) = 0 THEN 0 ELSE COUNT(*) FILTER (WHERE acknowledged_at IS NOT NULL)::numeric * 100 / COUNT(*) END,
+             1
+           )::float AS completion_percent
+         FROM mandatory_ack_assignments
+         WHERE status NOT IN ('cancelled', 'superseded')
+           AND assigned_at >= NOW() - ($1::int * INTERVAL '1 day')
+           AND ($2::text = 'all' OR (
+             CASE
+               WHEN acknowledged_at IS NOT NULL THEN 'acknowledged'
+               WHEN due_at IS NOT NULL AND due_at < NOW() THEN 'overdue'
+               WHEN read_completed_at IS NOT NULL THEN 'read_completed'
+               WHEN first_viewed_at IS NOT NULL THEN 'in_progress'
+               ELSE status
+             END
+           ) = $2::text)
+           AND ($3::int = 0 OR article_id = $3::int)
+           AND ($4::int = 0 OR department_id = $4::int)
+           AND ($5::int = 0 OR position_id = $5::int)
+           AND ($6::int = 0 OR employee_id = $6::int)`,
+        [periodDays, mandatoryStatus, mandatoryArticleId, mandatoryDepartmentId, mandatoryPositionId, mandatoryEmployeeId]
+      ),
     ]);
 
     const overview = Object.fromEntries(
@@ -164,6 +302,18 @@ export const getAnalyticsReport = async (req: Request, res: Response) => {
       contributorStats: contributorStatsResult.rows,
       userActivity: userActivityResult.rows,
       staleArticles: staleArticlesResult.rows,
+      mandatoryAcknowledgement: {
+        summary: mandatorySummaryResult.rows[0] || {
+          mandatory_articles: 0,
+          assigned_count: 0,
+          acknowledged_count: 0,
+          not_acknowledged_count: 0,
+          overdue_count: 0,
+          completion_percent: 0,
+        },
+        rows: mandatoryRowsResult.rows,
+        byArticle: mandatoryByArticleResult.rows,
+      },
     });
   } catch (error) {
     console.error('Failed to build analytics report:', error);

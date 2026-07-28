@@ -73,6 +73,8 @@ router.post('/users/me/favorites/add', requireAuth, authController.addFavoriteAr
 router.post('/users/me/favorites/remove', requireAuth, authController.removeFavoriteArticle);
 router.get('/users/me/history', requireAuth, authController.getReadingHistory);
 router.post('/users/me/history/clear', requireAuth, authController.clearReadingHistory);
+router.get('/users/me/mandatory-acknowledgements', requireAuth, articlesController.getMyMandatoryAcknowledgements);
+router.get('/users/me/mandatory-acknowledgements/count', requireAuth, articlesController.getMandatoryAcknowledgementCount);
 
 // Search routes (public — no auth required; results already filtered by published=true)
 router.get('/search', articlesController.searchArticles);
@@ -92,6 +94,10 @@ router.post('/articles/import-sessions/:id/reset', requireAuth, requireRole(['Ad
 router.post('/articles/import-sessions/:id/save-draft', requireAuth, requireRole(['Admin', 'Editor']), articlesController.saveImportSessionDraft);
 router.post('/articles/import-sessions/:id/publish', requireAuth, requireRole(['Admin', 'Editor']), articlesController.publishImportSession);
 router.delete('/articles/import-sessions/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.cancelImportSession);
+router.get('/articles/:id/mandatory-acknowledgement', requireAuth, articlesController.getArticleMandatoryAcknowledgement);
+router.post('/articles/:id/mandatory-acknowledgement/open', requireAuth, articlesController.markMandatoryAcknowledgementOpened);
+router.post('/articles/:id/mandatory-acknowledgement/read-complete', requireAuth, articlesController.markMandatoryAcknowledgementReadComplete);
+router.post('/articles/:id/mandatory-acknowledgement/confirm', requireAuth, articlesController.confirmMandatoryAcknowledgement);
 router.get('/articles/:slugOrId', optionalAuth, articlesController.getArticle);
 router.post('/articles', requireAuth, requireRole(['Admin', 'Editor']), articlesController.createArticle);
 router.put('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.updateArticle);

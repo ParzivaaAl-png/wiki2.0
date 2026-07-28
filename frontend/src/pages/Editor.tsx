@@ -5,9 +5,22 @@ import {
   Save, 
   Tag as TagIcon,
   X,
-  Sparkles
+  Sparkles,
+  ShieldCheck
 } from 'lucide-react';
-import { fetchArticle, createArticle, updateArticle, fetchNavigationTree, adminFetchUsers, User } from '../lib/api';
+import {
+  fetchArticle,
+  createArticle,
+  updateArticle,
+  fetchNavigationTree,
+  adminFetchUsers,
+  fetchDepartments,
+  fetchPositions,
+  Department,
+  Position,
+  User,
+  MandatoryAcknowledgementSettings,
+} from '../lib/api';
 import { ModalPortal } from '../components/modal-portal';
 import WYSIWYGEditor from '../components/wysiwyg-editor';
 
@@ -38,6 +51,20 @@ export default function Editor() {
   const [ownerId, setOwnerId] = React.useState<number | ''>('');
   const [approverId, setApproverId] = React.useState<number | ''>('');
   const [users, setUsers] = React.useState<User[]>([]);
+  const [departments, setDepartments] = React.useState<Department[]>([]);
+  const [positions, setPositions] = React.useState<Position[]>([]);
+  const [mandatoryAck, setMandatoryAck] = React.useState<MandatoryAcknowledgementSettings>({
+    enabled: false,
+    target_user_ids: [],
+    target_department_ids: [],
+    target_position_ids: [],
+    start_at: new Date().toISOString().slice(0, 10),
+    due_days: 7,
+    due_at: null,
+    require_reacknowledgement: false,
+    notifications_enabled: true,
+    reminders_enabled: false,
+  });
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [changeDescription, setChangeDescription] = React.useState('');
@@ -55,10 +82,16 @@ export default function Editor() {
 
         // 1.5. Загружаем список пользователей
         try {
-          const userList = await adminFetchUsers();
+          const [userList, deptList, positionList] = await Promise.all([
+            adminFetchUsers(),
+            fetchDepartments(),
+            fetchPositions(),
+          ]);
           setUsers(userList);
+          setDepartments(deptList);
+          setPositions(positionList);
         } catch (uErr) {
-          console.error('Failed to load users list in editor:', uErr);
+          console.error('Failed to load users/departments/positions in editor:', uErr);
         }
 
         // 2. Если режим редактирования, загружаем данные статьи
@@ -78,6 +111,20 @@ export default function Editor() {
           setArticleType(article.article_type || 'general');
           setOwnerId(article.owner_id || '');
           setApproverId(article.approver_id || '');
+          if (article.mandatory_ack_settings) {
+            setMandatoryAck({
+              enabled: !!article.mandatory_ack_enabled,
+              target_user_ids: article.mandatory_ack_settings.target_user_ids || [],
+              target_department_ids: article.mandatory_ack_settings.target_department_ids || [],
+              target_position_ids: article.mandatory_ack_settings.target_position_ids || [],
+              start_at: article.mandatory_ack_settings.start_at ? article.mandatory_ack_settings.start_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
+              due_days: article.mandatory_ack_settings.due_days || 7,
+              due_at: article.mandatory_ack_settings.due_at || null,
+              require_reacknowledgement: !!article.mandatory_ack_settings.require_reacknowledgement,
+              notifications_enabled: article.mandatory_ack_settings.notifications_enabled !== false,
+              reminders_enabled: !!article.mandatory_ack_settings.reminders_enabled,
+            });
+          }
         } else {
           // Если новая статья, проверяем, передан ли в URL раздел по умолчанию
           const queryParams = new URLSearchParams(window.location.search);
@@ -127,6 +174,18 @@ export default function Editor() {
     setTags(tags.filter(t => t !== tagToRemove));
   };
 
+  const toggleMandatoryTarget = (
+    key: 'target_user_ids' | 'target_department_ids' | 'target_position_ids',
+    id: number
+  ) => {
+    setMandatoryAck((prev) => ({
+      ...prev,
+      [key]: prev[key].includes(id)
+        ? prev[key].filter((item) => item !== id)
+        : [...prev[key], id],
+    }));
+  };
+
   const handleSaveClick = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !slug.trim() || !content.trim()) {
@@ -162,6 +221,10 @@ export default function Editor() {
       article_type: articleType,
       owner_id: ownerId ? Number(ownerId) : null,
       approver_id: approverId ? Number(approverId) : null,
+      mandatory_acknowledgement: {
+        ...mandatoryAck,
+        due_days: Number(mandatoryAck.due_days || 7),
+      },
       ...(isEditMode && {
         change_description: changeDescription.trim() || 'Обновлено содержание статьи',
         editor_comment: editorComment.trim() || 'Редактирование статьи',
@@ -340,6 +403,139 @@ export default function Editor() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/[0.03] p-4 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-extrabold text-foreground">
+                    <ShieldCheck className="h-4 w-4 text-indigo-500" />
+                    Обязательное ознакомление
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    Назначается только сотрудникам, у которых есть доступ к выбранным разделам статьи.
+                  </p>
+                </div>
+                <label className="relative inline-flex cursor-pointer items-center">
+                  <input
+                    type="checkbox"
+                    checked={mandatoryAck.enabled}
+                    onChange={(e) => setMandatoryAck((prev) => ({ ...prev, enabled: e.target.checked }))}
+                    className="peer sr-only"
+                  />
+                  <span className="h-5 w-9 rounded-full bg-muted after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-border after:bg-white after:transition-all peer-checked:bg-indigo-600 peer-checked:after:translate-x-full" />
+                </label>
+              </div>
+
+              {mandatoryAck.enabled && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-[10px] font-bold uppercase text-muted-foreground">Дата начала</label>
+                      <input
+                        type="date"
+                        value={mandatoryAck.start_at || ''}
+                        onChange={(e) => setMandatoryAck((prev) => ({ ...prev, start_at: e.target.value }))}
+                        className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-xs text-foreground outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[10px] font-bold uppercase text-muted-foreground">Срок, дней</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={mandatoryAck.due_days}
+                        onChange={(e) => setMandatoryAck((prev) => ({ ...prev, due_days: Number(e.target.value) }))}
+                        className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-xs text-foreground outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <div className="mb-1 text-[10px] font-bold uppercase text-muted-foreground">Подразделения</div>
+                      <div className="max-h-28 overflow-y-auto rounded-lg border border-border bg-card p-2 space-y-1">
+                        {departments.map((department) => (
+                          <label key={department.id} className="flex items-center gap-2 text-[11px] font-semibold text-foreground">
+                            <input
+                              type="checkbox"
+                              checked={mandatoryAck.target_department_ids.includes(department.id)}
+                              onChange={() => toggleMandatoryTarget('target_department_ids', department.id)}
+                              className="h-3.5 w-3.5 rounded border-border text-indigo-600"
+                            />
+                            <span>{department.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="mb-1 text-[10px] font-bold uppercase text-muted-foreground">Должности</div>
+                      <div className="max-h-32 overflow-y-auto rounded-lg border border-border bg-card p-2 space-y-1">
+                        {positions.map((position) => (
+                          <label key={position.id} className="flex items-center gap-2 text-[11px] font-semibold text-foreground">
+                            <input
+                              type="checkbox"
+                              checked={mandatoryAck.target_position_ids.includes(position.id)}
+                              onChange={() => toggleMandatoryTarget('target_position_ids', position.id)}
+                              className="h-3.5 w-3.5 rounded border-border text-indigo-600"
+                            />
+                            <span>{position.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="mb-1 text-[10px] font-bold uppercase text-muted-foreground">Сотрудники</div>
+                      <div className="max-h-32 overflow-y-auto rounded-lg border border-border bg-card p-2 space-y-1">
+                        {users.map((targetUser) => (
+                          <label key={targetUser.id} className="flex items-center gap-2 text-[11px] font-semibold text-foreground">
+                            <input
+                              type="checkbox"
+                              checked={mandatoryAck.target_user_ids.includes(targetUser.id)}
+                              onChange={() => toggleMandatoryTarget('target_user_ids', targetUser.id)}
+                              className="h-3.5 w-3.5 rounded border-border text-indigo-600"
+                            />
+                            <span>{targetUser.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 border-t border-border pt-3">
+                    <label className="flex items-start gap-2 text-[11px] font-semibold text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={mandatoryAck.require_reacknowledgement}
+                        onChange={(e) => setMandatoryAck((prev) => ({ ...prev, require_reacknowledgement: e.target.checked }))}
+                        className="mt-0.5 h-3.5 w-3.5 rounded border-border text-indigo-600"
+                      />
+                      <span>Требовать повторное ознакомление после публикации новой версии</span>
+                    </label>
+                    <label className="flex items-start gap-2 text-[11px] font-semibold text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={mandatoryAck.notifications_enabled}
+                        onChange={(e) => setMandatoryAck((prev) => ({ ...prev, notifications_enabled: e.target.checked }))}
+                        className="mt-0.5 h-3.5 w-3.5 rounded border-border text-indigo-600"
+                      />
+                      <span>Отправлять уведомления при назначении</span>
+                    </label>
+                    <label className="flex items-start gap-2 text-[11px] font-semibold text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={mandatoryAck.reminders_enabled}
+                        onChange={(e) => setMandatoryAck((prev) => ({ ...prev, reminders_enabled: e.target.checked }))}
+                        className="mt-0.5 h-3.5 w-3.5 rounded border-border text-indigo-600"
+                      />
+                      <span>Включить напоминания о сроке</span>
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>

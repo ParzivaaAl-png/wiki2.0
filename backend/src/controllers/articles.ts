@@ -381,6 +381,227 @@ const indexImportedArticleIfNeeded = async (article: ArticleModel.Article) => {
   }
 };
 
+type MandatoryAckSettings = {
+  enabled: boolean;
+  target_user_ids: number[];
+  target_department_ids: number[];
+  target_position_ids: number[];
+  start_at: string | null;
+  due_days: number;
+  due_at: string | null;
+  require_reacknowledgement: boolean;
+  notifications_enabled: boolean;
+  reminders_enabled: boolean;
+};
+
+const normalizeNumberIds = (value: unknown): number[] => {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.map((item) => Number(item)).filter((id) => Number.isFinite(id) && id > 0)));
+};
+
+const normalizeMandatoryAckSettings = (input: any): MandatoryAckSettings => ({
+  enabled: !!input?.enabled,
+  target_user_ids: normalizeNumberIds(input?.target_user_ids),
+  target_department_ids: normalizeNumberIds(input?.target_department_ids),
+  target_position_ids: normalizeNumberIds(input?.target_position_ids),
+  start_at: input?.start_at || null,
+  due_days: Math.max(1, Math.min(365, Number(input?.due_days || 7))),
+  due_at: input?.due_at || null,
+  require_reacknowledgement: !!input?.require_reacknowledgement,
+  notifications_enabled: input?.notifications_enabled !== false,
+  reminders_enabled: !!input?.reminders_enabled,
+});
+
+const getArticleVersionKey = (article: Pick<ArticleModel.Article, 'id' | 'updated_at'>) => (
+  `article-${article.id}-${new Date(article.updated_at).getTime()}`
+);
+
+const getAssignmentEffectiveStatus = (assignment: any) => {
+  if (!assignment) return null;
+  if (assignment.acknowledged_at) return 'acknowledged';
+  if (assignment.due_at && new Date(assignment.due_at).getTime() < Date.now()) return 'overdue';
+  if (assignment.read_completed_at) return 'read_completed';
+  if (assignment.first_viewed_at) return 'in_progress';
+  return assignment.status || 'not_open';
+};
+
+const resolveMandatoryAckCandidates = async (settings: MandatoryAckSettings) => {
+  const result = await query(
+    `SELECT
+       u.id AS user_id,
+       u.username,
+       u.name AS user_name,
+       u.role,
+       e.id AS employee_id,
+       e.department_id,
+       d.name AS department_name,
+       e.position_id,
+       p.name AS position_name,
+       e.manager_id,
+       m.full_name AS manager_name
+     FROM users u
+     JOIN employees e ON e.id = u.employee_id
+     LEFT JOIN departments d ON d.id = e.department_id
+     LEFT JOIN positions p ON p.id = e.position_id
+     LEFT JOIN employees m ON m.id = e.manager_id
+     WHERE u.is_blocked = false AND e.is_active = true
+     ORDER BY u.name ASC`
+  );
+
+  const hasExplicitTargets =
+    settings.target_user_ids.length > 0 ||
+    settings.target_department_ids.length > 0 ||
+    settings.target_position_ids.length > 0;
+
+  if (!hasExplicitTargets) return [];
+
+  return result.rows.filter((row) => (
+    settings.target_user_ids.includes(Number(row.user_id)) ||
+    settings.target_department_ids.includes(Number(row.department_id)) ||
+    settings.target_position_ids.includes(Number(row.position_id))
+  ));
+};
+
+const userCanAccessArticleSections = async (candidate: any, articleSectionIds: number[]) => {
+  if (articleSectionIds.length === 0) return true;
+  const allowedSectionIds = await getUserAllowedSections(candidate.employee_id, candidate.role || 'User', candidate.user_id);
+  return articleSectionIds.some((sectionId) => allowedSectionIds.includes(sectionId));
+};
+
+const createMandatoryNotifications = async (assignments: any[], article: ArticleModel.Article, dueAt: Date | null) => {
+  if (assignments.length === 0) return;
+  await Promise.all(assignments.map((assignment) => query(
+    `INSERT INTO notifications (user_id, title, message, type)
+     VALUES ($1, $2, $3, 'warning')`,
+    [
+      assignment.user_id,
+      `Обязательное ознакомление: ${article.title}`,
+      `Вам назначена обязательная статья "${article.title}". Срок: ${dueAt ? dueAt.toLocaleDateString('ru-RU') : 'не указан'}.`,
+    ]
+  ).catch((err) => console.error('Failed to create mandatory acknowledgement notification:', err))));
+};
+
+const syncMandatoryAcknowledgementAssignments = async (
+  article: ArticleModel.Article,
+  rawSettings: any,
+  user: AuthenticatedRequest['user'],
+  forceNewVersion: boolean
+) => {
+  const settings = normalizeMandatoryAckSettings(rawSettings);
+  await query(
+    `UPDATE articles
+     SET mandatory_ack_enabled = $2,
+         mandatory_ack_settings = $3
+     WHERE id = $1`,
+    [article.id, settings.enabled, settings.enabled ? JSON.stringify(settings) : null]
+  );
+
+  if (!settings.enabled) {
+    await query(
+      `UPDATE mandatory_ack_assignments
+       SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+       WHERE article_id = $1 AND acknowledged_at IS NULL`,
+      [article.id]
+    );
+    return;
+  }
+
+  const existing = await query('SELECT COUNT(*)::int AS count FROM mandatory_ack_assignments WHERE article_id = $1', [article.id]);
+  const shouldCreateAssignments = forceNewVersion || Number(existing.rows[0]?.count || 0) === 0;
+  if (!shouldCreateAssignments) return;
+
+  const articleSectionIds = article.section_ids || [];
+  const candidates = await resolveMandatoryAckCandidates(settings);
+  const eligibleCandidates = [];
+  for (const candidate of candidates) {
+    if (await userCanAccessArticleSections(candidate, articleSectionIds)) {
+      eligibleCandidates.push(candidate);
+    }
+  }
+
+  const startAt = settings.start_at ? new Date(settings.start_at) : new Date();
+  const dueAt = settings.due_at
+    ? new Date(settings.due_at)
+    : new Date(startAt.getTime() + settings.due_days * 24 * 60 * 60 * 1000);
+  const version = getArticleVersionKey(article);
+  const initialStatus = forceNewVersion ? 'requires_reacknowledgement' : 'not_open';
+
+  await query(
+    `UPDATE mandatory_ack_assignments
+     SET status = 'superseded', updated_at = CURRENT_TIMESTAMP
+     WHERE article_id = $1 AND acknowledged_at IS NULL AND article_version <> $2`,
+    [article.id, version]
+  );
+
+  const insertedAssignments: any[] = [];
+  for (const candidate of eligibleCandidates) {
+    const inserted = await query(
+      `INSERT INTO mandatory_ack_assignments (
+         article_id,
+         user_id,
+         employee_id,
+         article_version,
+         assigned_by,
+         start_at,
+         due_at,
+         status,
+         department_id,
+         department_name,
+         position_id,
+         position_name,
+         manager_id,
+         manager_name
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       ON CONFLICT (article_id, user_id, article_version) DO UPDATE SET
+         start_at = EXCLUDED.start_at,
+         due_at = EXCLUDED.due_at,
+         department_id = EXCLUDED.department_id,
+         department_name = EXCLUDED.department_name,
+         position_id = EXCLUDED.position_id,
+         position_name = EXCLUDED.position_name,
+         manager_id = EXCLUDED.manager_id,
+         manager_name = EXCLUDED.manager_name,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [
+        article.id,
+        candidate.user_id,
+        candidate.employee_id,
+        version,
+        user?.id || null,
+        startAt,
+        dueAt,
+        initialStatus,
+        candidate.department_id,
+        candidate.department_name,
+        candidate.position_id,
+        candidate.position_name,
+        candidate.manager_id,
+        candidate.manager_name,
+      ]
+    );
+    insertedAssignments.push(inserted.rows[0]);
+  }
+
+  if (eligibleCandidates.length > 0) {
+    const eligibleIds = eligibleCandidates.map((candidate) => Number(candidate.user_id));
+    await query(
+      `UPDATE mandatory_ack_assignments
+       SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+       WHERE article_id = $1
+         AND article_version = $2
+         AND acknowledged_at IS NULL
+         AND NOT (user_id = ANY($3::int[]))`,
+      [article.id, version, eligibleIds]
+    );
+  }
+
+  if (settings.notifications_enabled) {
+    await createMandatoryNotifications(insertedAssignments, article, dueAt);
+  }
+};
+
 const extractInternalArticleReferences = (content: string) => {
   const articleIds = new Set<number>();
   const slugs = new Set<string>();
@@ -535,7 +756,7 @@ const getAllowedSectionsForRequest = async (req: Request): Promise<number[]> => 
 
 export const getArticles = async (req: Request, res: Response) => {
   try {
-    const { tag, all, filter } = req.query;
+    const { tag, all, filter, mandatory } = req.query;
     const authReq = req as AuthenticatedRequest;
     const role = authReq.user ? authReq.user.role : '';
     const userId = authReq.user ? authReq.user.id : 0;
@@ -672,6 +893,10 @@ export const getArticles = async (req: Request, res: Response) => {
       articles = [...articles, ...directGuestArticlesRes.rows];
     }
 
+    if (mandatory === 'true') {
+      articles = articles.filter((article) => article.mandatory_ack_enabled === true);
+    }
+
     articles = articles.map((article) => ({
       ...article,
       guest_access: getGuestAccessInfoForArticle(activeGuestGrants, article.id, article.section_ids || [])
@@ -796,6 +1021,7 @@ export const createArticle = async (req: Request, res: Response) => {
       article_type,
       owner_id,
       approver_id,
+      mandatory_acknowledgement,
     } = req.body;
     
     if (!title || !slug || !content) {
@@ -809,7 +1035,7 @@ export const createArticle = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Недостаточно прав для создания статьи в выбранных разделах.' });
     }
 
-    const article = await ArticleModel.createArticle({
+    let article = await ArticleModel.createArticle({
       title,
       slug,
       content,
@@ -833,6 +1059,18 @@ export const createArticle = async (req: Request, res: Response) => {
       await syncContentArticleLinks(article.id, article.content);
     } catch (linkSyncErr) {
       console.error('Failed to sync internal article links (non-fatal):', linkSyncErr);
+    }
+
+    try {
+      await syncMandatoryAcknowledgementAssignments(
+        article,
+        mandatory_acknowledgement,
+        authReq.user,
+        !!mandatory_acknowledgement?.enabled && article.published && article.status === 'published'
+      );
+      article = await ArticleModel.getArticleById(article.id) || article;
+    } catch (ackErr) {
+      console.error('Failed to sync mandatory acknowledgement assignments (non-fatal):', ackErr);
     }
 
     // Auto-index to Meilisearch
@@ -882,6 +1120,7 @@ export const updateArticle = async (req: Request, res: Response) => {
       approver_id,
       change_description,
       editor_comment,
+      mandatory_acknowledgement,
     } = req.body;
 
     if (!title || !slug || !content) {
@@ -901,7 +1140,7 @@ export const updateArticle = async (req: Request, res: Response) => {
     }
 
     const selectedSectionIds = Array.isArray(section_ids) ? section_ids.map((sectionId) => Number(sectionId)).filter(Boolean) : [];
-    const article = await ArticleModel.updateArticle(Number(id), {
+    let article = await ArticleModel.updateArticle(Number(id), {
       title,
       slug,
       content,
@@ -928,6 +1167,21 @@ export const updateArticle = async (req: Request, res: Response) => {
       await syncContentArticleLinks(article.id, article.content);
     } catch (linkSyncErr) {
       console.error('Failed to sync internal article links (non-fatal):', linkSyncErr);
+    }
+
+    try {
+      await syncMandatoryAcknowledgementAssignments(
+        article,
+        mandatory_acknowledgement,
+        authReq.user,
+        !!mandatory_acknowledgement?.enabled &&
+          !!mandatory_acknowledgement?.require_reacknowledgement &&
+          article.published &&
+          article.status === 'published'
+      );
+      article = await ArticleModel.getArticleById(article.id) || article;
+    } catch (ackErr) {
+      console.error('Failed to sync mandatory acknowledgement assignments (non-fatal):', ackErr);
     }
 
     // Сохранение записи в журнале изменений статьи со снимками
@@ -1673,6 +1927,181 @@ export const handleOnlyOfficeImportCallback = async (req: Request, res: Response
   } catch (error) {
     console.error('ONLYOFFICE import callback failed:', error);
     res.json({ error: 1 });
+  }
+};
+
+const getLatestMandatoryAssignmentForUser = async (articleId: number, userId: number) => {
+  const result = await query(
+    `SELECT ma.*, a.title, a.slug, a.summary, a.updated_at AS article_updated_at
+     FROM mandatory_ack_assignments ma
+     JOIN articles a ON a.id = ma.article_id
+     WHERE ma.article_id = $1
+       AND ma.user_id = $2
+       AND ma.status NOT IN ('cancelled', 'superseded')
+     ORDER BY ma.assigned_at DESC, ma.id DESC
+     LIMIT 1`,
+    [articleId, userId]
+  );
+  return result.rows[0] || null;
+};
+
+const serializeMandatoryAssignment = (assignment: any) => {
+  const status = getAssignmentEffectiveStatus(assignment);
+  const overdueDays = assignment.due_at && !assignment.acknowledged_at
+    ? Math.max(0, Math.ceil((Date.now() - new Date(assignment.due_at).getTime()) / (24 * 60 * 60 * 1000)))
+    : Number(assignment.overdue_days || 0);
+
+  return {
+    ...assignment,
+    status,
+    overdue_days: overdueDays,
+  };
+};
+
+export const getMyMandatoryAcknowledgements = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const result = await query(
+      `SELECT ma.*, a.title, a.slug, a.summary, a.updated_at AS article_updated_at, u.name AS assigned_by_name
+       FROM mandatory_ack_assignments ma
+       JOIN articles a ON a.id = ma.article_id
+       LEFT JOIN users u ON u.id = ma.assigned_by
+       WHERE ma.user_id = $1
+         AND ma.status NOT IN ('cancelled', 'superseded')
+         AND a.is_visible = true
+       ORDER BY
+         CASE WHEN ma.acknowledged_at IS NULL THEN 0 ELSE 1 END,
+         ma.due_at ASC NULLS LAST,
+         ma.assigned_at DESC`,
+      [req.user.id]
+    );
+    res.json(result.rows.map(serializeMandatoryAssignment));
+  } catch (error: any) {
+    console.error('Failed to get mandatory acknowledgements:', error);
+    res.status(500).json({ error: 'Failed to get mandatory acknowledgements', details: error.message });
+  }
+};
+
+export const getMandatoryAcknowledgementCount = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const result = await query(
+      `SELECT COUNT(*)::int AS count
+       FROM mandatory_ack_assignments ma
+       JOIN articles a ON a.id = ma.article_id
+       WHERE ma.user_id = $1
+         AND ma.acknowledged_at IS NULL
+         AND ma.status NOT IN ('cancelled', 'superseded')
+         AND a.is_visible = true`,
+      [req.user.id]
+    );
+    res.json({ count: Number(result.rows[0]?.count || 0) });
+  } catch (error: any) {
+    console.error('Failed to get mandatory acknowledgement count:', error);
+    res.status(500).json({ error: 'Failed to get mandatory acknowledgement count', details: error.message });
+  }
+};
+
+export const getArticleMandatoryAcknowledgement = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const assignment = await getLatestMandatoryAssignmentForUser(Number(req.params.id), req.user.id);
+    if (!assignment) {
+      return res.json({ required: false, assignment: null });
+    }
+    res.json({ required: true, assignment: serializeMandatoryAssignment(assignment) });
+  } catch (error: any) {
+    console.error('Failed to get article mandatory acknowledgement:', error);
+    res.status(500).json({ error: 'Failed to get article mandatory acknowledgement', details: error.message });
+  }
+};
+
+export const markMandatoryAcknowledgementOpened = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const assignment = await getLatestMandatoryAssignmentForUser(Number(req.params.id), req.user.id);
+    if (!assignment) return res.json({ required: false, assignment: null });
+    if (assignment.acknowledged_at) {
+      return res.json({ required: true, assignment: serializeMandatoryAssignment(assignment) });
+    }
+
+    const updated = await query(
+      `UPDATE mandatory_ack_assignments
+       SET first_viewed_at = COALESCE(first_viewed_at, CURRENT_TIMESTAMP),
+           status = CASE WHEN status = 'not_open' OR status = 'requires_reacknowledgement' THEN 'in_progress' ELSE status END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [assignment.id]
+    );
+    res.json({ required: true, assignment: serializeMandatoryAssignment(updated.rows[0]) });
+  } catch (error: any) {
+    console.error('Failed to mark mandatory acknowledgement opened:', error);
+    res.status(500).json({ error: 'Failed to mark mandatory acknowledgement opened', details: error.message });
+  }
+};
+
+export const markMandatoryAcknowledgementReadComplete = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const assignment = await getLatestMandatoryAssignmentForUser(Number(req.params.id), req.user.id);
+    if (!assignment) return res.json({ required: false, assignment: null });
+    if (assignment.acknowledged_at) {
+      return res.json({ required: true, assignment: serializeMandatoryAssignment(assignment) });
+    }
+
+    const updated = await query(
+      `UPDATE mandatory_ack_assignments
+       SET first_viewed_at = COALESCE(first_viewed_at, CURRENT_TIMESTAMP),
+           read_completed_at = COALESCE(read_completed_at, CURRENT_TIMESTAMP),
+           status = 'read_completed',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [assignment.id]
+    );
+    res.json({ required: true, assignment: serializeMandatoryAssignment(updated.rows[0]) });
+  } catch (error: any) {
+    console.error('Failed to mark mandatory acknowledgement read complete:', error);
+    res.status(500).json({ error: 'Failed to mark mandatory acknowledgement read complete', details: error.message });
+  }
+};
+
+export const confirmMandatoryAcknowledgement = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const assignment = await getLatestMandatoryAssignmentForUser(Number(req.params.id), req.user.id);
+    if (!assignment) return res.status(404).json({ error: 'Обязательное ознакомление для этой статьи не назначено.' });
+    if (assignment.acknowledged_at) {
+      return res.json({ required: true, assignment: serializeMandatoryAssignment(assignment) });
+    }
+    if (!assignment.read_completed_at) {
+      return res.status(400).json({ error: 'Подтверждение доступно только после прокрутки статьи до конца.' });
+    }
+
+    const now = new Date();
+    const dueAt = assignment.due_at ? new Date(assignment.due_at) : null;
+    const completedInTime = dueAt ? now.getTime() <= dueAt.getTime() : true;
+    const overdueDays = dueAt && !completedInTime
+      ? Math.max(1, Math.ceil((now.getTime() - dueAt.getTime()) / (24 * 60 * 60 * 1000)))
+      : 0;
+
+    const updated = await query(
+      `UPDATE mandatory_ack_assignments
+       SET acknowledged_at = CURRENT_TIMESTAMP,
+           status = 'acknowledged',
+           completed_in_time = $2,
+           overdue_days = $3,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND acknowledged_at IS NULL
+       RETURNING *`,
+      [assignment.id, completedInTime, overdueDays]
+    );
+
+    res.json({ required: true, assignment: serializeMandatoryAssignment(updated.rows[0] || assignment) });
+  } catch (error: any) {
+    console.error('Failed to confirm mandatory acknowledgement:', error);
+    res.status(500).json({ error: 'Failed to confirm mandatory acknowledgement', details: error.message });
   }
 };
 
