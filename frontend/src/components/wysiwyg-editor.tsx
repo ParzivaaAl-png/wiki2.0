@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import { TextStyle } from '@tiptap/extension-text-style';
@@ -39,6 +40,18 @@ const FONT_FAMILIES = [
   { name: 'Monospace (Код)', value: 'Fira Code, monospace' },
 ];
 
+const FONT_SIZES = [
+  { name: '12 px', value: '12px' },
+  { name: '14 px', value: '14px' },
+  { name: '16 px', value: '16px' },
+  { name: '18 px', value: '18px' },
+  { name: '20 px', value: '20px' },
+  { name: '24 px', value: '24px' },
+  { name: '28 px', value: '28px' },
+  { name: '32 px', value: '32px' },
+  { name: '40 px', value: '40px' },
+];
+
 const COLORS = [
   { name: 'Черный', value: '#18181b' },
   { name: 'Серый', value: '#71717a' },
@@ -67,10 +80,63 @@ const escapeHtml = (value: string) => (
     .replace(/'/g, '&#039;')
 );
 
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    fontSize: {
+      setFontSize: (fontSize: string) => ReturnType;
+      unsetFontSize: () => ReturnType;
+    };
+  }
+}
+
+const FontSize = Extension.create({
+  name: 'fontSize',
+
+  addOptions() {
+    return {
+      types: ['textStyle'],
+    };
+  },
+
+  addGlobalAttributes() {
+    return [
+      {
+        types: this.options.types,
+        attributes: {
+          fontSize: {
+            default: null,
+            parseHTML: (element) => element.style.fontSize?.replace(/['"]+/g, '') || null,
+            renderHTML: (attributes) => {
+              if (!attributes.fontSize) return {};
+              return {
+                style: `font-size: ${attributes.fontSize}`,
+              };
+            },
+          },
+        },
+      },
+    ];
+  },
+
+  addCommands() {
+    return {
+      setFontSize:
+        (fontSize: string) =>
+        ({ chain }) =>
+          chain().setMark('textStyle', { fontSize }).run(),
+      unsetFontSize:
+        () =>
+        ({ chain }) =>
+          chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run(),
+    };
+  },
+});
+
 export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGEditorProps) {
   const [isPreview, setIsPreview] = React.useState(false);
   const [showEmoji, setShowEmoji] = React.useState(false);
   const [lastAutosaved, setLastAutosaved] = React.useState<string | null>(null);
+  const [activeFontSize, setActiveFontSize] = React.useState('');
 
   // States for internal article linking autocomplete
   const [showLinkSuggestions, setShowLinkSuggestions] = React.useState(false);
@@ -100,6 +166,7 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
       }),
       Underline,
       TextStyle,
+      FontSize,
       Color,
       FontFamily,
       Highlight.configure({ multicolor: true }),
@@ -172,6 +239,23 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
       onChange(editor.getHTML());
     },
   });
+
+  React.useEffect(() => {
+    if (!editor) return;
+
+    const syncFontSize = () => {
+      setActiveFontSize(editor.getAttributes('textStyle').fontSize || '');
+    };
+
+    editor.on('selectionUpdate', syncFontSize);
+    editor.on('transaction', syncFontSize);
+    syncFontSize();
+
+    return () => {
+      editor.off('selectionUpdate', syncFontSize);
+      editor.off('transaction', syncFontSize);
+    };
+  }, [editor]);
 
   // Keep editor content in sync with external initial value once it finishes loading
   React.useEffect(() => {
@@ -473,6 +557,26 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
             >
               {FONT_FAMILIES.map(font => (
                 <option key={font.value} value={font.value}>{font.name}</option>
+              ))}
+            </select>
+
+            <select
+              value={activeFontSize}
+              onChange={(e) => {
+                const size = e.target.value;
+                setActiveFontSize(size);
+                if (size) {
+                  editor.chain().focus().setFontSize(size).run();
+                } else {
+                  editor.chain().focus().unsetFontSize().run();
+                }
+              }}
+              className="text-[10px] border border-border rounded px-1.5 py-1 bg-card text-muted-foreground outline-none cursor-pointer"
+              title="Размер текста"
+            >
+              <option value="">Размер</option>
+              {FONT_SIZES.map(size => (
+                <option key={size.value} value={size.value}>{size.name}</option>
               ))}
             </select>
           </div>
