@@ -8,8 +8,15 @@ import {
   getSubordinatePositionIds,
   getUserAccessProfile,
   getUserCapabilities,
+  isWikiAdmin,
   seedDefaultAccessModel,
 } from '../services/accessControl';
+import {
+  getClientIp,
+  getOperatorIpRestrictionSettings,
+  updateOperatorIpRestrictionSettings,
+  logSecurityEvent,
+} from '../services/security';
 
 const getRoles = async () => {
   const result = await query(
@@ -385,3 +392,53 @@ export const getEffectiveAccess = async (req: AuthenticatedRequest, res: Respons
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 };
+
+export const getOperatorIpRestrictions = async (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    if (!authReq.user) return res.status(401).json({ error: 'Authentication required' });
+    const isAdmin = await isWikiAdmin(authReq.user.id, authReq.user.role);
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Недостаточно прав для управления IP-ограничениями.' });
+    }
+
+    const settings = await getOperatorIpRestrictionSettings();
+    const clientIp = getClientIp(req);
+    res.json({ ...settings, client_ip: clientIp });
+  } catch (error: any) {
+    console.error('Failed to get operator IP restrictions:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const updateOperatorIpRestrictions = async (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    if (!authReq.user) return res.status(401).json({ error: 'Authentication required' });
+    const isAdmin = await isWikiAdmin(authReq.user.id, authReq.user.role);
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Недостаточно прав для управления IP-ограничениями.' });
+    }
+
+    const updated = await updateOperatorIpRestrictionSettings(
+      req.body,
+      authReq.user.id,
+      authReq.user.name
+    );
+
+    await logSecurityEvent({
+      req,
+      actorUserId: authReq.user.id,
+      action: 'operator_ip_restriction_updated',
+      status: 'success',
+      metadata: { settings: updated },
+    });
+
+    const clientIp = getClientIp(req);
+    res.json({ ...updated, client_ip: clientIp });
+  } catch (error: any) {
+    console.error('Failed to update operator IP restrictions:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+

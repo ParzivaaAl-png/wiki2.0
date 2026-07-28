@@ -178,3 +178,92 @@ export const isIpAllowedBySettings = (clientIp: string, settings: IpRestrictionS
   if (!settings.allowed_ranges.length) return false;
   return settings.allowed_ranges.some((rule) => ipMatchesRule(clientIp, rule));
 };
+
+export type OperatorIpRestrictionSettings = {
+  enabled: boolean;
+  allowed_ranges: string[];
+  apply_to_roles: string[];
+  apply_to_all_operators: boolean;
+  updated_at?: string;
+  updated_by_name?: string;
+};
+
+export const defaultOperatorIpRestrictionSettings = (): OperatorIpRestrictionSettings => ({
+  enabled: false,
+  allowed_ranges: [],
+  apply_to_roles: ['reader', 'editor', 'process_owner', 'approver'],
+  apply_to_all_operators: true,
+});
+
+export const getOperatorIpRestrictionSettings = async (): Promise<OperatorIpRestrictionSettings> => {
+  try {
+    const res = await query(`SELECT value FROM system_security_settings WHERE key = 'operator_ip_restriction' LIMIT 1`);
+    if (res.rows.length === 0) {
+      return defaultOperatorIpRestrictionSettings();
+    }
+    const val = res.rows[0].value;
+    return {
+      enabled: !!val?.enabled,
+      allowed_ranges: Array.isArray(val?.allowed_ranges) ? val.allowed_ranges : [],
+      apply_to_roles: Array.isArray(val?.apply_to_roles) ? val.apply_to_roles : ['reader', 'editor', 'process_owner', 'approver'],
+      apply_to_all_operators: val?.apply_to_all_operators !== false,
+      updated_at: val?.updated_at || undefined,
+      updated_by_name: val?.updated_by_name || undefined,
+    };
+  } catch (error) {
+    console.error('Failed to load operator IP restriction settings:', error);
+    return defaultOperatorIpRestrictionSettings();
+  }
+};
+
+export const updateOperatorIpRestrictionSettings = async (
+  settings: Partial<OperatorIpRestrictionSettings>,
+  userId?: number | null,
+  userName?: string | null
+): Promise<OperatorIpRestrictionSettings> => {
+  const current = await getOperatorIpRestrictionSettings();
+  const rawRanges = Array.isArray(settings.allowed_ranges)
+    ? settings.allowed_ranges
+    : typeof settings.allowed_ranges === 'string'
+    ? (settings.allowed_ranges as string).split(/[\n,]/)
+    : current.allowed_ranges;
+
+  const cleanRanges = Array.from(
+    new Set(rawRanges.map((item) => String(item || '').trim()).filter(Boolean))
+  );
+
+  const updated: OperatorIpRestrictionSettings = {
+    enabled: settings.enabled !== undefined ? !!settings.enabled : current.enabled,
+    allowed_ranges: cleanRanges,
+    apply_to_roles: Array.isArray(settings.apply_to_roles) ? settings.apply_to_roles : current.apply_to_roles,
+    apply_to_all_operators: settings.apply_to_all_operators !== undefined ? !!settings.apply_to_all_operators : current.apply_to_all_operators,
+    updated_at: new Date().toISOString(),
+    updated_by_name: userName || 'Администратор Wiki',
+  };
+
+  await query(
+    `INSERT INTO system_security_settings (key, value, updated_at, updated_by)
+     VALUES ('operator_ip_restriction', $1, NOW(), $2)
+     ON CONFLICT (key) DO UPDATE
+     SET value = EXCLUDED.value, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
+    [JSON.stringify(updated), userId || null]
+  );
+
+  return updated;
+};
+
+export const isOperatorIpAllowed = (clientIp: string, settings: OperatorIpRestrictionSettings, userRole?: string | null): boolean => {
+  if (!settings.enabled) return true;
+
+  if (!settings.allowed_ranges || settings.allowed_ranges.length === 0) {
+    return false;
+  }
+
+  // Wiki Admin bypass
+  if (userRole && (userRole === 'Admin' || userRole === 'Администратор Wiki' || userRole === 'wiki_admin')) {
+    return true;
+  }
+
+  return settings.allowed_ranges.some((rule) => ipMatchesRule(clientIp, rule));
+};
+

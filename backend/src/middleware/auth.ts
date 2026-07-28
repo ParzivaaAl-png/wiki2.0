@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { getUserById } from '../models/user';
-import { getUserCapabilities } from '../services/accessControl';
+import { getUserCapabilities, isWikiAdmin } from '../services/accessControl';
+import { getClientIp, getOperatorIpRestrictionSettings, isOperatorIpAllowed, logSecurityEvent } from '../services/security';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_wiki20';
 
@@ -50,7 +51,6 @@ export const requireAuth = async (
       return res.status(403).json({ error: 'User account is blocked' });
     }
 
-
     req.user = {
       id: user.id,
       username: user.username,
@@ -59,6 +59,30 @@ export const requireAuth = async (
       must_change_password: user.must_change_password,
       employee_id: (user as any).employee_id,
     };
+
+    // Check operator IP restriction
+    const isAdmin = await isWikiAdmin(user.id, user.role);
+    if (!isAdmin) {
+      const opIpSettings = await getOperatorIpRestrictionSettings();
+      if (opIpSettings.enabled && !req.originalUrl.includes('/api/auth/logout')) {
+        const clientIp = getClientIp(req);
+        const allowed = isOperatorIpAllowed(clientIp, opIpSettings, user.role);
+        if (!allowed) {
+          await logSecurityEvent({
+            req,
+            actorUserId: user.id,
+            action: 'operator_ip_restriction_blocked',
+            status: 'denied',
+            metadata: { client_ip: clientIp, settings: opIpSettings },
+          });
+          return res.status(403).json({
+            error: `Доступ с вашего IP-адреса (${clientIp}) ограничен администратором Wiki.`,
+            code: 'OPERATOR_IP_RESTRICTED',
+            client_ip: clientIp,
+          });
+        }
+      }
+    }
 
     if (user.must_change_password) {
       const canContinue =

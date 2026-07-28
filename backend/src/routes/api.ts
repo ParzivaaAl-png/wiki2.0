@@ -196,6 +196,8 @@ router.post('/wiki/access/seed-defaults', requireAuth, requireRole(['Admin']), a
 router.get('/wiki/access/effective', requireAuth, requireRole(['Admin']), accessControlController.getEffectiveAccess);
 router.put('/wiki/access/users/:id/wiki-roles', requireAuth, requireRole(['Admin']), accessControlController.updateUserWikiRoles);
 router.put('/wiki/access/users/:id/access-scope', requireAuth, requireRole(['Admin']), accessControlController.updateUserAccessScope);
+router.get('/wiki/access/operator-ip-restrictions', requireAuth, requireRole(['Admin']), accessControlController.getOperatorIpRestrictions);
+router.put('/wiki/access/operator-ip-restrictions', requireAuth, requireRole(['Admin']), accessControlController.updateOperatorIpRestrictions);
 
 // Article Links Routes
 router.get('/articles/:id/links', requireAuth, articlesController.getArticleLinks);

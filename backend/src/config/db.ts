@@ -110,6 +110,15 @@ export const initializeDatabase = async () => {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_security_audit_article ON security_audit_logs(article_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_security_audit_target_user ON security_audit_logs(target_user_id)');
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS system_security_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value JSONB NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_by INT REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
+
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false');
     
     // Ensure articles table has position and is_visible columns for sorting/archiving

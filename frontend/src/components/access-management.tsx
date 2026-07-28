@@ -31,6 +31,9 @@ import {
   WikiRole,
   Department,
   updateDepartment,
+  fetchOperatorIpRestrictions,
+  updateOperatorIpRestrictions,
+  OperatorIpRestrictionSettings,
 } from '../lib/api';
 import { ModalPortal } from './modal-portal';
 
@@ -97,11 +100,52 @@ export default function AccessManagement() {
   });
   const [isSavingDepartment, setIsSavingDepartment] = React.useState(false);
 
+  // Operator IP Restriction State
+  const [opIpSettings, setOpIpSettings] = React.useState<OperatorIpRestrictionSettings | null>(null);
+  const [allowedRangesInput, setAllowedRangesInput] = React.useState('');
+  const [isSavingOpIp, setIsSavingOpIp] = React.useState(false);
+
+  const loadOperatorIpSettings = React.useCallback(async () => {
+    try {
+      const data = await fetchOperatorIpRestrictions();
+      setOpIpSettings(data);
+      setAllowedRangesInput((data.allowed_ranges || []).join('\n'));
+    } catch (err) {
+      console.error('Failed to load operator IP settings:', err);
+    }
+  }, []);
+
+  const handleSaveOpIpSettings = async () => {
+    if (!opIpSettings) return;
+    setIsSavingOpIp(true);
+    try {
+      const ranges = allowedRangesInput
+        .split(/[\n,]/)
+        .map((r) => r.trim())
+        .filter(Boolean);
+
+      const updated = await updateOperatorIpRestrictions({
+        enabled: opIpSettings.enabled,
+        allowed_ranges: ranges,
+        apply_to_all_operators: true,
+      });
+
+      setOpIpSettings(updated);
+      setAllowedRangesInput((updated.allowed_ranges || []).join('\n'));
+      alert('Настройки IP-ограничений для операторов успешно сохранены.');
+    } catch (err: any) {
+      alert(err.message || 'Ошибка при сохранении IP-ограничений.');
+    } finally {
+      setIsSavingOpIp(false);
+    }
+  };
+
   const loadOverview = React.useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await fetchAccessOverview();
       setOverview(data);
+      await loadOperatorIpSettings();
     } catch (err) {
       console.error('Failed to load access overview:', err);
     } finally {
@@ -339,6 +383,87 @@ export default function AccessManagement() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Operator IP Restriction Settings (For Wiki Admin) */}
+      <div className="rounded-xl border border-rose-500/20 bg-rose-500/[0.035] dark:bg-rose-950/10 p-5 space-y-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap sm:flex-nowrap">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm font-extrabold text-foreground">
+              <ShieldCheck className="h-5 w-5 text-rose-500" />
+              Ограничение по IP для операторов (Читатели, Редакторы, Согласователи)
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed max-w-3xl">
+              Настройка белого списка сетей и IP-адресов, с которых операторам и персоналу разрешён доступ к Вики. Проверка выполняется на бэкенде. <strong className="text-foreground">Администраторы Wiki освобождены от ограничений.</strong>
+            </p>
+          </div>
+
+          {opIpSettings && (
+            <div className="flex items-center gap-3">
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${opIpSettings.enabled ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' : 'border-border bg-muted text-muted-foreground'}`}>
+                {opIpSettings.enabled ? 'Ограничение включено' : 'Ограничение отключено'}
+              </span>
+              <label className="relative inline-flex cursor-pointer items-center">
+                <input
+                  type="checkbox"
+                  checked={opIpSettings.enabled}
+                  onChange={(e) => setOpIpSettings((prev) => prev ? { ...prev, enabled: e.target.checked } : null)}
+                  className="peer sr-only"
+                />
+                <span className="h-6 w-11 rounded-full bg-muted after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-border after:bg-white after:transition-all peer-checked:bg-rose-600 peer-checked:after:translate-x-full" />
+              </label>
+            </div>
+          )}
+        </div>
+
+        {opIpSettings && (
+          <div className="space-y-3 pt-2 border-t border-rose-500/10">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-2 space-y-1.5">
+                <label className="block text-xs font-bold uppercase text-muted-foreground">
+                  Разрешенные IP-адреса и подсети (CIDR)
+                </label>
+                <textarea
+                  rows={4}
+                  value={allowedRangesInput}
+                  onChange={(e) => setAllowedRangesInput(e.target.value)}
+                  placeholder={'192.168.1.10\n10.0.0.0/24\n172.16.0.0/16'}
+                  className="w-full resize-none rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-rose-500"
+                />
+                <p className="text-[11px] text-muted-foreground leading-normal">
+                  Каждый IP или CIDR-диапазон с новой строки. Если тумблер включён и список пуст, доступ операторам будет полностью заблокирован.
+                </p>
+              </div>
+
+              <div className="space-y-3 p-3.5 rounded-lg border border-border bg-card">
+                <div className="text-xs font-bold text-foreground">Информация о подключении</div>
+                <div className="text-xs space-y-1">
+                  <div className="text-muted-foreground text-[11px]">Ваш текущий IP-адрес:</div>
+                  <div className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs">
+                    {opIpSettings.client_ip || 'неизвестно'}
+                  </div>
+                </div>
+                {opIpSettings.updated_at && (
+                  <div className="text-[10px] text-muted-foreground pt-2 border-t border-border">
+                    Обновлено: {new Date(opIpSettings.updated_at).toLocaleString('ru-RU')} ({opIpSettings.updated_by_name || 'Администратор'})
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-2">
+              <button
+                type="button"
+                onClick={handleSaveOpIpSettings}
+                disabled={isSavingOpIp}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-rose-600/15 transition-all cursor-pointer"
+              >
+                {isSavingOpIp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Сохранить IP-ограничения операторов
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="border border-border bg-card text-card-foreground rounded-lg overflow-hidden">

@@ -1465,6 +1465,30 @@ export interface EffectiveAccess {
   section_count: number;
 }
 
+export interface OperatorIpRestrictionSettings {
+  enabled: boolean;
+  allowed_ranges: string[];
+  apply_to_roles: string[];
+  apply_to_all_operators: boolean;
+  updated_at?: string;
+  updated_by_name?: string;
+  client_ip?: string;
+}
+
+export async function fetchOperatorIpRestrictions(): Promise<OperatorIpRestrictionSettings> {
+  return apiCall<OperatorIpRestrictionSettings>('/wiki/access/operator-ip-restrictions', { cache: 'no-store' });
+}
+
+export async function updateOperatorIpRestrictions(
+  data: Partial<OperatorIpRestrictionSettings>
+): Promise<OperatorIpRestrictionSettings> {
+  clearApiCache();
+  return apiCall<OperatorIpRestrictionSettings>('/wiki/access/operator-ip-restrictions', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
 // DEPARTMENTS
 export async function fetchDepartments(): Promise<Department[]> {
   return apiCall<Department[]>('/departments');
