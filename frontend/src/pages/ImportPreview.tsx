@@ -199,6 +199,7 @@ export default function ImportPreview() {
     section_ids: sectionIds,
     tags: ['импорт'],
     article_type: 'general',
+    source_url: session?.source_url || null,
   });
 
   const handleSaveDraft = async () => {
@@ -337,8 +338,20 @@ export default function ImportPreview() {
               Проверка документа перед сохранением
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Файл сохранён как оригинал и рабочая копия. Статья появится только после сохранения в черновик или публикации.
+              {session.source_url
+                ? 'Страница сайта сохранена как исходный HTML и рабочая копия. Статья появится только после сохранения в черновик или публикации.'
+                : 'Файл сохранён как оригинал и рабочая копия. Статья появится только после сохранения в черновик или публикации.'}
             </p>
+            {session.source_url && (
+              <a
+                href={session.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex max-w-full truncate text-xs font-semibold text-indigo-600 underline underline-offset-2 dark:text-indigo-300"
+              >
+                {session.source_url}
+              </a>
+            )}
           </div>
 
           <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">

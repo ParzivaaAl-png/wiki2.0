@@ -43,6 +43,7 @@ import {
   fetchArticleSyncHistory,
   fetchNotifications,
   importArticle,
+  importWebsite,
   markNotificationsAsRead,
   fetchNavigationTree,
   ArticleSyncLog,
@@ -110,6 +111,9 @@ export default function Admin() {
   const [selectedHistoryItem, setSelectedHistoryItem] = React.useState<ArticleSyncLog | null>(null);
   const [isImportingDocument, setIsImportingDocument] = React.useState(false);
   const importInputRef = React.useRef<HTMLInputElement>(null);
+  const [isWebsiteImportOpen, setIsWebsiteImportOpen] = React.useState(false);
+  const [websiteImportUrl, setWebsiteImportUrl] = React.useState('');
+  const [isImportingWebsite, setIsImportingWebsite] = React.useState(false);
 
   const loadNotifications = React.useCallback(async () => {
     if (!isStaff) return;
@@ -219,6 +223,24 @@ export default function Admin() {
     } finally {
       setIsImportingDocument(false);
       if (event.target) event.target.value = '';
+    }
+  };
+
+  const handleWebsiteImport = async () => {
+    const url = websiteImportUrl.trim();
+    if (!url) return;
+
+    setIsImportingWebsite(true);
+    try {
+      const session = await importWebsite(url);
+      setWebsiteImportUrl('');
+      setIsWebsiteImportOpen(false);
+      navigate(`/admin/import/${session.id}`);
+    } catch (err: any) {
+      console.error('Failed to import website:', err);
+      alert('Ошибка импорта с сайта: ' + err.message);
+    } finally {
+      setIsImportingWebsite(false);
     }
   };
 
@@ -1024,6 +1046,19 @@ export default function Admin() {
           </button>
 
           <button
+            onClick={() => setIsWebsiteImportOpen(true)}
+            disabled={isImportingWebsite}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-bold text-foreground shadow-sm transition-all hover:bg-muted disabled:opacity-50"
+          >
+            {isImportingWebsite ? (
+              <Loader2 className="w-4.5 h-4.5 animate-spin text-indigo-500" />
+            ) : (
+              <ExternalLink className="w-4.5 h-4.5 text-indigo-500" />
+            )}
+            <span>Импорт с сайта</span>
+          </button>
+
+          <button
             onClick={() => navigate('/admin/editor/new')}
             className="inline-flex items-center gap-1.5 px-4 py-2 border border-indigo-500/20 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-lg text-sm font-semibold shadow-sm transition-all text-center justify-center cursor-pointer font-bold"
           >
@@ -1365,6 +1400,88 @@ export default function Admin() {
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {isWebsiteImportOpen && (
+          <ModalPortal>
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => !isImportingWebsite && setIsWebsiteImportOpen(false)}
+                className="fixed inset-0 z-50 bg-black/60"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                className="fixed left-1/2 top-1/2 z-[60] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card text-card-foreground shadow-2xl"
+              >
+                <div className="flex items-start justify-between gap-4 border-b border-border p-5">
+                  <div>
+                    <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/5 px-3 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-300">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Импорт с сайта
+                    </div>
+                    <h3 className="font-outfit text-lg font-extrabold text-foreground">Скопировать страницу в Wiki</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Вставьте ссылку. Wiki сохранит исходный HTML и откроет материал на проверке перед созданием статьи.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsWebsiteImportOpen(false)}
+                    disabled={isImportingWebsite}
+                    className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 p-5">
+                  <label className="block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                    Ссылка на страницу
+                  </label>
+                  <input
+                    value={websiteImportUrl}
+                    onChange={(event) => setWebsiteImportUrl(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        handleWebsiteImport();
+                      }
+                    }}
+                    autoFocus
+                    placeholder="https://example.com/article"
+                    className="h-11 w-full rounded-lg border border-border bg-muted px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-indigo-500"
+                  />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Страница не публикуется автоматически. Сначала откроется предпросмотр, где можно поправить текст и выбрать разделы.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 border-t border-border p-5">
+                  <button
+                    onClick={() => setIsWebsiteImportOpen(false)}
+                    disabled={isImportingWebsite}
+                    className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-bold text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    onClick={handleWebsiteImport}
+                    disabled={isImportingWebsite || !websiteImportUrl.trim()}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-bold text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {isImportingWebsite ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                    Открыть на проверке
+                  </button>
+                </div>
+              </motion.div>
+            </>
+          </ModalPortal>
+        )}
+      </AnimatePresence>
 
       {/* Preview Modal */}
       {selectedArticleForPreview && (

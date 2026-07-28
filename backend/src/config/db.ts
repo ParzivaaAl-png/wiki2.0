@@ -183,6 +183,7 @@ export const initializeDatabase = async () => {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_document_import_sessions_user ON document_import_sessions(user_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_document_import_sessions_status ON document_import_sessions(status)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_document_import_sessions_expires_at ON document_import_sessions(expires_at)');
+    await pool.query('ALTER TABLE document_import_sessions ADD COLUMN IF NOT EXISTS source_url TEXT DEFAULT NULL');
 
     // Create database indexes for performance speedup
     console.log('Creating database indexes for performance speedup...');

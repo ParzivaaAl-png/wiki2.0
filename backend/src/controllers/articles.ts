@@ -1,8 +1,12 @@
 import { Request, Response } from 'express';
 import axios from 'axios';
+import * as cheerio from 'cheerio';
+import * as dns from 'dns/promises';
 import * as fs from 'fs';
+import * as net from 'net';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
+import sanitizeHtml from 'sanitize-html';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as ArticleModel from '../models/article';
@@ -45,6 +49,7 @@ type DocumentImportSessionRow = {
   summary: string | null;
   status: string;
   article_id: number | null;
+  source_url: string | null;
   created_at: Date | string;
   updated_at: Date | string;
   expires_at: Date | string;
@@ -125,6 +130,154 @@ const parseDocumentSafely = async (filePath: string, originalName: string) => {
   }
 };
 
+const isPrivateIpAddress = (address: string) => {
+  if (net.isIP(address) === 4) {
+    const parts = address.split('.').map(Number);
+    const [a, b] = parts;
+    return (
+      a === 10 ||
+      a === 127 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254) ||
+      a === 0
+    );
+  }
+
+  if (net.isIP(address) === 6) {
+    const normalized = address.toLowerCase();
+    return (
+      normalized === '::1' ||
+      normalized.startsWith('fc') ||
+      normalized.startsWith('fd') ||
+      normalized.startsWith('fe80:')
+    );
+  }
+
+  return false;
+};
+
+const validateWebsiteImportUrl = async (rawUrl: string) => {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error('Некорректная ссылка на сайт.');
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('Можно импортировать только http/https страницы.');
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '0.0.0.0' ||
+    hostname === '::1'
+  ) {
+    throw new Error('Внутренние адреса нельзя использовать для импорта.');
+  }
+
+  if (net.isIP(hostname) && isPrivateIpAddress(hostname)) {
+    throw new Error('Внутренние адреса нельзя использовать для импорта.');
+  }
+
+  const addresses = await dns.lookup(hostname, { all: true }).catch(() => []);
+  if (addresses.some((entry) => isPrivateIpAddress(entry.address))) {
+    throw new Error('Адрес сайта указывает на внутреннюю сеть, импорт заблокирован.');
+  }
+
+  return parsed;
+};
+
+const normalizeExternalUrl = (value: string | undefined, baseUrl: string) => {
+  if (!value) return value;
+  try {
+    return new URL(value, baseUrl).toString();
+  } catch {
+    return value;
+  }
+};
+
+const sanitizeImportedWebsiteHtml = (html: string) => sanitizeHtml(html, {
+  allowedTags: [
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's',
+    'blockquote', 'pre', 'code',
+    'ul', 'ol', 'li',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'a', 'img',
+    'div', 'span',
+  ],
+  allowedAttributes: {
+    a: ['href', 'title', 'target', 'rel'],
+    img: ['src', 'alt', 'title', 'width', 'height'],
+    '*': ['style', 'class'],
+  },
+  allowedSchemes: ['http', 'https', 'mailto', 'tel'],
+  allowedSchemesByTag: {
+    img: ['http', 'https', 'data'],
+  },
+  allowedStyles: {
+    '*': {
+      color: [/^#(0x)?[0-9a-f]+$/i, /^rgb\(/i, /^rgba\(/i],
+      'background-color': [/^#(0x)?[0-9a-f]+$/i, /^rgb\(/i, /^rgba\(/i],
+      'font-weight': [/^\d+$/, /^(bold|normal|bolder|lighter)$/],
+      'font-style': [/^(italic|normal)$/],
+      'text-align': [/^(left|right|center|justify)$/],
+      'text-decoration': [/^(underline|line-through|none)$/],
+      'padding-left': [/^\d+(px|rem|em)$/],
+      'margin-left': [/^\d+(px|rem|em)$/],
+    },
+  },
+  transformTags: {
+    a: sanitizeHtml.simpleTransform('a', { target: '_blank', rel: 'noopener noreferrer' }, true),
+  },
+});
+
+const extractWebsiteContent = (html: string, sourceUrl: string) => {
+  const $ = cheerio.load(html);
+  $('script, style, noscript, template, svg, canvas, form, input, button').remove();
+
+  $('a[href]').each((_, element) => {
+    const href = $(element).attr('href');
+    $(element).attr('href', normalizeExternalUrl(href, sourceUrl));
+  });
+
+  $('img[src]').each((_, element) => {
+    const src = $(element).attr('src');
+    $(element).attr('src', normalizeExternalUrl(src, sourceUrl));
+  });
+
+  const title = (
+    $('meta[property="og:title"]').attr('content') ||
+    $('meta[name="twitter:title"]').attr('content') ||
+    $('h1').first().text() ||
+    $('title').first().text() ||
+    new URL(sourceUrl).hostname
+  ).replace(/\s+/g, ' ').trim();
+
+  const summary = (
+    $('meta[name="description"]').attr('content') ||
+    $('meta[property="og:description"]').attr('content') ||
+    $('p').first().text() ||
+    `Импортировано с сайта ${sourceUrl}`
+  ).replace(/\s+/g, ' ').trim().slice(0, 300);
+
+  const contentRoot = $('article').first().length
+    ? $('article').first()
+    : ($('main').first().length ? $('main').first() : $('[role="main"]').first());
+  const selectedHtml = contentRoot.length ? contentRoot.html() || '' : $('body').html() || '';
+  const sanitized = sanitizeImportedWebsiteHtml(selectedHtml);
+
+  return {
+    title: title || 'Импорт с сайта',
+    summary,
+    content: sanitized || `<p>Контент страницы не удалось выделить автоматически. Исходный HTML сохранён.</p><p><a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">${sourceUrl}</a></p>`,
+  };
+};
+
 const getImportSessionById = async (id: string): Promise<DocumentImportSessionRow | null> => {
   const result = await query('SELECT * FROM document_import_sessions WHERE id = $1', [id]);
   return result.rows.length ? result.rows[0] : null;
@@ -199,6 +352,7 @@ const serializeImportSession = (req: AuthenticatedRequest, session: DocumentImpo
   preview_html: session.preview_html || '',
   status: session.status,
   article_id: session.article_id,
+  source_url: session.source_url,
   created_at: session.created_at,
   updated_at: session.updated_at,
   expires_at: session.expires_at,
@@ -1161,6 +1315,86 @@ export const importArticle = async (req: AuthenticatedRequest, res: Response) =>
   }
 };
 
+export const importWebsite = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const rawUrl = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
+    if (!rawUrl) {
+      return res.status(400).json({ error: 'Website URL is required.' });
+    }
+
+    const parsedUrl = await validateWebsiteImportUrl(rawUrl);
+    const sourceUrl = parsedUrl.toString();
+
+    const response = await axios.get<string>(sourceUrl, {
+      timeout: 15000,
+      maxContentLength: 10 * 1024 * 1024,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Wiki2ImportBot/1.0; +https://wiki2-frontend.vercel.app)',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      responseType: 'text',
+      transformResponse: [(data) => data],
+    });
+
+    const contentType = String(response.headers['content-type'] || '').toLowerCase();
+    if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) {
+      return res.status(415).json({ error: 'Ссылка не похожа на HTML-страницу. Для файлов используйте импорт документа.' });
+    }
+
+    await fs.promises.mkdir(IMPORT_SESSIONS_ROOT, { recursive: true });
+
+    const html = response.data;
+    const parsed = extractWebsiteContent(html, sourceUrl);
+    const sessionId = randomUUID();
+    const hostname = parsedUrl.hostname.replace(/[^\w.-]+/g, '-');
+    const safeName = sanitizeFileName(`${hostname}-${Date.now()}.html`);
+    const sessionDir = path.join(IMPORT_SESSIONS_ROOT, sessionId);
+    await fs.promises.mkdir(sessionDir, { recursive: true });
+
+    const originalFilePath = path.join(sessionDir, `original-${safeName}`);
+    const workingFilePath = path.join(sessionDir, `working-${safeName}`);
+
+    await fs.promises.writeFile(originalFilePath, html, 'utf8');
+    await fs.promises.writeFile(workingFilePath, parsed.content, 'utf8');
+
+    const inserted = await query(
+      `INSERT INTO document_import_sessions (
+        id,
+        user_id,
+        original_file_name,
+        mime_type,
+        file_ext,
+        original_file_path,
+        working_file_path,
+        preview_html,
+        title,
+        summary,
+        status,
+        source_url
+      )
+      VALUES ($1, $2, $3, $4, '.html', $5, $6, $7, $8, $9, 'active', $10)
+      RETURNING *`,
+      [
+        sessionId,
+        req.user ? req.user.id : null,
+        safeName,
+        'text/html',
+        originalFilePath,
+        workingFilePath,
+        parsed.content,
+        parsed.title,
+        parsed.summary,
+        sourceUrl,
+      ]
+    );
+
+    res.status(201).json(serializeImportSession(req, inserted.rows[0]));
+  } catch (error: any) {
+    console.error('Website import failed:', error);
+    res.status(500).json({ error: 'Website import failed', details: error.message });
+  }
+};
+
 export const getImportSession = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const session = await getImportSessionById(req.params.id);
@@ -1197,6 +1431,10 @@ export const updateImportSession = async (req: AuthenticatedRequest, res: Respon
       preview_html = session.preview_html || '',
     } = req.body;
 
+    await fs.promises.writeFile(session.working_file_path, preview_html, 'utf8').catch((writeErr) => {
+      console.error('Failed to update import working copy (non-fatal):', writeErr);
+    });
+
     const updated = await query(
       `UPDATE document_import_sessions
        SET title = $2,
@@ -1229,7 +1467,12 @@ export const resetImportSession = async (req: AuthenticatedRequest, res: Respons
     }
 
     await fs.promises.copyFile(session.original_file_path, session.working_file_path);
-    const parsedDoc = await parseDocumentSafely(session.working_file_path, session.original_file_name);
+    const parsedDoc = session.file_ext === '.html' && session.source_url
+      ? extractWebsiteContent(await fs.promises.readFile(session.original_file_path, 'utf8'), session.source_url)
+      : await parseDocumentSafely(session.working_file_path, session.original_file_name);
+    if (session.file_ext === '.html') {
+      await fs.promises.writeFile(session.working_file_path, parsedDoc.content, 'utf8').catch(() => undefined);
+    }
     const updated = await query(
       `UPDATE document_import_sessions
        SET preview_html = $2,
@@ -1296,6 +1539,7 @@ const createArticleFromImportSession = async (
     article_type,
     owner_id,
     approver_id,
+    source_url,
   } = req.body;
 
   if (!title || !content) {
@@ -1326,12 +1570,14 @@ const createArticleFromImportSession = async (
     article_type: article_type || 'general',
     owner_id: owner_id ? Number(owner_id) : null,
     approver_id: approver_id ? Number(approver_id) : null,
+    source_url: source_url || session.source_url || null,
     structured_data: {
       importSessionId: session.id,
       originalFileName: session.original_file_name,
       originalUrl: getUploadUrl(session.original_file_path),
       workingUrl: getUploadUrl(session.working_file_path),
       fileExt: session.file_ext,
+      sourceUrl: source_url || session.source_url || null,
       importedAt: new Date().toISOString(),
       sourcePreserved: true,
     },

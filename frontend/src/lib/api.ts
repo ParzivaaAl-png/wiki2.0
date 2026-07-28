@@ -156,6 +156,7 @@ export interface DocumentImportSession {
   preview_html: string;
   status: string;
   article_id: number | null;
+  source_url: string | null;
   created_at: string;
   updated_at: string;
   expires_at: string;
@@ -176,6 +177,7 @@ export interface FinalizeImportPayload {
   article_type?: string;
   owner_id?: number | null;
   approver_id?: number | null;
+  source_url?: string | null;
 }
 
 export interface AnalyticsReport {
@@ -638,6 +640,14 @@ export async function importArticle(file: File): Promise<DocumentImportSession> 
   return apiCall<DocumentImportSession>('/articles/import', {
     method: 'POST',
     body: formData,
+  });
+}
+
+export async function importWebsite(url: string): Promise<DocumentImportSession> {
+  clearApiCache();
+  return apiCall<DocumentImportSession>('/articles/import-url', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
   });
 }
 

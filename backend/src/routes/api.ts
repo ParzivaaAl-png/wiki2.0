@@ -124,6 +124,7 @@ router.post('/notifications/read', requireAuth, articlesController.markNotificat
 // Image/File upload & import route
 router.post('/upload', requireAuth, requireRole(['Admin', 'Editor']), upload.single('image'), articlesController.uploadImage);
 router.post('/articles/import', requireAuth, requireRole(['Admin', 'Editor']), upload.single('file'), articlesController.importArticle);
+router.post('/articles/import-url', requireAuth, requireRole(['Admin', 'Editor']), articlesController.importWebsite);
 
 // Admin User Management Routes
 router.get('/admin/users', requireAuth, requireRole(['Admin', 'Editor']), authController.getUsersList);
