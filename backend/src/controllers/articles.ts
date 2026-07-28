@@ -15,7 +15,7 @@ import { parseDocument } from '../services/parser';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { query } from '../config/db';
 import { getUserAllowedSections } from '../models/orgStructure';
-import { canCreateInSections, canEditArticle, getUserCapabilities } from '../services/accessControl';
+import { canCreateInSections, canEditArticle, canRestoreArticle, getUserCapabilities } from '../services/accessControl';
 import {
   getClientIp,
   isIpAllowedBySettings,
@@ -793,6 +793,156 @@ const syncContentArticleLinks = async (sourceArticleId: number, content: string)
   );
 };
 
+type ArticleVersionSource =
+  | 'initial'
+  | 'save'
+  | 'publish'
+  | 'import_draft'
+  | 'import_publish'
+  | 'restore'
+  | 'sync';
+
+type ArticleVersionSnapshotOptions = {
+  source_type: ArticleVersionSource;
+  change_comment?: string | null;
+  editor_comment?: string | null;
+  restored_from_version_id?: number | null;
+  restored_from_version_number?: number | null;
+  restore_comment?: string | null;
+  created_by?: number | null;
+};
+
+const toJsonbParam = (value: unknown, fallback: unknown = null) => (
+  value === undefined ? JSON.stringify(fallback) : JSON.stringify(value)
+);
+
+const getRequestSessionId = async (req: Request): Promise<number | null> => {
+  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+  if (!refreshToken) return null;
+
+  try {
+    const sessionResult = await query(
+      'SELECT id FROM user_sessions WHERE refresh_token = $1 LIMIT 1',
+      [refreshToken]
+    );
+    return sessionResult.rows[0]?.id ? Number(sessionResult.rows[0].id) : null;
+  } catch (error) {
+    console.error('Failed to resolve session for article version snapshot:', error);
+    return null;
+  }
+};
+
+const createArticleVersionSnapshot = async (
+  req: Request,
+  articleId: number,
+  options: ArticleVersionSnapshotOptions
+) => {
+  const article = await ArticleModel.getArticleById(articleId);
+  if (!article) {
+    throw new Error('Article not found for version snapshot.');
+  }
+
+  const authReq = req as AuthenticatedRequest;
+  const nextVersionResult = await query(
+    'SELECT COALESCE(MAX(version_number), 0) + 1 AS version_number FROM article_versions WHERE article_id = $1',
+    [article.id]
+  );
+  const versionNumber = Number(nextVersionResult.rows[0]?.version_number || 1);
+  const sessionId = await getRequestSessionId(req);
+
+  const result = await query(
+    `INSERT INTO article_versions (
+       article_id,
+       version_number,
+       title,
+       slug,
+       content,
+       summary,
+       status,
+       published,
+       is_visible,
+       tags,
+       section_ids,
+       article_type,
+       owner_id,
+       approver_id,
+       source_url,
+       sync_interval,
+       structured_data,
+       mandatory_ack_enabled,
+       mandatory_ack_settings,
+       ip_restriction_enabled,
+       ip_restriction_settings,
+       created_by,
+       change_comment,
+       editor_comment,
+       source_type,
+       restored_from_version_id,
+       restored_from_version_number,
+       restore_comment,
+       ip_address,
+       session_id,
+       user_agent
+     )
+     VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9,
+       $10, $11, $12, $13, $14, $15, $16, $17,
+       $18, $19, $20, $21, $22, $23, $24, $25,
+       $26, $27, $28, $29, $30, $31
+     )
+     RETURNING *`,
+    [
+      article.id,
+      versionNumber,
+      article.title,
+      article.slug,
+      article.content,
+      article.summary || '',
+      article.status || (article.published ? 'published' : 'draft'),
+      !!article.published,
+      article.is_visible !== false,
+      toJsonbParam(article.tags || [], []),
+      article.section_ids || [],
+      article.article_type || 'general',
+      article.owner_id || null,
+      article.approver_id || null,
+      article.source_url || null,
+      article.sync_interval || 'manual',
+      toJsonbParam(article.structured_data, null),
+      !!article.mandatory_ack_enabled,
+      article.mandatory_ack_enabled ? toJsonbParam(article.mandatory_ack_settings || null, null) : null,
+      !!article.ip_restriction_enabled,
+      article.ip_restriction_enabled ? toJsonbParam(article.ip_restriction_settings || null, null) : null,
+      options.created_by !== undefined ? options.created_by : authReq.user?.id || null,
+      options.change_comment || null,
+      options.editor_comment || null,
+      options.source_type,
+      options.restored_from_version_id || null,
+      options.restored_from_version_number || null,
+      options.restore_comment || null,
+      getClientIp(req),
+      sessionId,
+      req.headers['user-agent'] || '',
+    ]
+  );
+
+  return result.rows[0];
+};
+
+const canViewArticleVersions = async (req: Request, article: ArticleModel.Article) => {
+  const authReq = req as AuthenticatedRequest;
+  if (await canEditArticle(authReq.user?.id, authReq.user?.role, article)) {
+    return true;
+  }
+
+  if (!article.published || !article.is_visible || article.status !== 'published') {
+    return false;
+  }
+
+  const allowedSectionIds = await getAllowedSectionsForRequest(req);
+  return (article.section_ids || []).some((sectionId) => allowedSectionIds.includes(Number(sectionId)));
+};
+
 const getActiveGuestAccessGrants = async (userId: number): Promise<GuestAccessGrant[]> => {
   if (!userId) return [];
 
@@ -1192,6 +1342,19 @@ export const createArticle = async (req: Request, res: Response) => {
       console.error('Failed to sync mandatory acknowledgement assignments (non-fatal):', ackErr);
     }
 
+    try {
+      await createArticleVersionSnapshot(req, article.id, {
+        source_type: article.published && article.status === 'published' ? 'publish' : 'save',
+        change_comment: article.published && article.status === 'published'
+          ? 'Создание и публикация статьи'
+          : 'Создание черновика статьи',
+        editor_comment: null,
+        created_by: authorId,
+      });
+    } catch (versionErr) {
+      console.error('Failed to create initial article version snapshot (non-fatal):', versionErr);
+    }
+
     // Auto-index to Meilisearch
     if (article.published && article.is_visible && article.status === 'published') {
       const doc: msService.ArticleDocument = {
@@ -1339,6 +1502,18 @@ export const updateArticle = async (req: Request, res: Response) => {
       console.error('Failed to write article change log (non-fatal):', logErr);
     }
 
+    try {
+      await createArticleVersionSnapshot(req, article.id, {
+        source_type: article.published && article.status === 'published' ? 'publish' : 'save',
+        change_comment: change_description || (article.published && article.status === 'published'
+          ? 'Сохранение опубликованной версии'
+          : 'Сохранение черновика'),
+        editor_comment: editor_comment || null,
+      });
+    } catch (versionErr) {
+      console.error('Failed to create article version snapshot (non-fatal):', versionErr);
+    }
+
     // Добавление системного уведомления
     const authorName = authReq.user ? authReq.user.name : 'Система';
     const authorRole = authReq.user ? authReq.user.role : '';
@@ -1409,58 +1584,184 @@ export const getRecentChanges = async (req: Request, res: Response) => {
   }
 };
 
-export const restoreArticleVersion = async (req: Request, res: Response) => {
+export const getArticleVersions = async (req: Request, res: Response) => {
   try {
-    const { id, changeId } = req.params;
-    const authReq = req as AuthenticatedRequest;
-
-    if (!authReq.user || authReq.user.role !== 'Admin') {
-      return res.status(403).json({ error: 'Доступ запрещен. Только Администраторы могут восстанавливать версии.' });
+    const { id } = req.params;
+    const article = await ArticleModel.getArticleById(Number(id));
+    if (!article) {
+      return res.status(404).json({ error: 'Статья не найдена.' });
     }
 
-    const versionRes = await query(
-      'SELECT * FROM article_changes_log WHERE id = $1 AND article_id = $2',
-      [Number(changeId), Number(id)]
+    const canView = await canViewArticleVersions(req, article);
+    if (!canView) {
+      return res.status(403).json({ error: 'Недостаточно прав для просмотра истории версий.' });
+    }
+
+    const result = await query(
+      `SELECT
+         av.*,
+         u.name AS created_by_name,
+         u.role AS created_by_role
+       FROM article_versions av
+       LEFT JOIN users u ON u.id = av.created_by
+       WHERE av.article_id = $1
+       ORDER BY av.version_number DESC`,
+      [article.id]
     );
-    if (versionRes.rows.length === 0) {
+
+    res.json(result.rows);
+  } catch (error: any) {
+    console.error('Failed to get article versions:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const getArticleVersion = async (req: Request, res: Response) => {
+  try {
+    const { id, versionId } = req.params;
+    const article = await ArticleModel.getArticleById(Number(id));
+    if (!article) {
+      return res.status(404).json({ error: 'Статья не найдена.' });
+    }
+
+    const canView = await canViewArticleVersions(req, article);
+    if (!canView) {
+      return res.status(403).json({ error: 'Недостаточно прав для просмотра версии статьи.' });
+    }
+
+    const result = await query(
+      `SELECT
+         av.*,
+         u.name AS created_by_name,
+         u.role AS created_by_role
+       FROM article_versions av
+       LEFT JOIN users u ON u.id = av.created_by
+       WHERE av.id = $1 AND av.article_id = $2
+       LIMIT 1`,
+      [Number(versionId), article.id]
+    );
+
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Версия не найдена.' });
     }
-    const version = versionRes.rows[0];
+
+    res.json(result.rows[0]);
+  } catch (error: any) {
+    console.error('Failed to get article version:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const restoreArticleVersion = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const versionId = Number(req.params.versionId || req.params.changeId);
+    const authReq = req as AuthenticatedRequest;
+    const shouldPublish = req.body?.publish === true;
+    const restoreComment = typeof req.body?.comment === 'string' ? req.body.comment.trim() : '';
+    const requireReacknowledgement = !!req.body?.require_reacknowledgement;
+
+    if (!authReq.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
 
     const currentArticle = await ArticleModel.getArticleById(Number(id));
     if (!currentArticle) {
       return res.status(404).json({ error: 'Статья не найдена.' });
     }
 
-    const restoredContent = version.new_content !== null ? version.new_content : currentArticle.content;
-    const restoredTitle = version.new_title !== null ? version.new_title : currentArticle.title;
+    const hasRestoreAccess = await canRestoreArticle(authReq.user.id, authReq.user.role, currentArticle);
+    if (!hasRestoreAccess) {
+      await logSecurityEvent({
+        req,
+        actorUserId: authReq.user.id,
+        articleId: currentArticle.id,
+        action: 'article_version_restore',
+        status: 'denied',
+        metadata: { source_version_id: versionId, publish: shouldPublish },
+      });
+      return res.status(403).json({ error: 'Недостаточно прав для восстановления этой статьи.' });
+    }
 
-    const updatedArticle = await ArticleModel.updateArticle(Number(id), {
-      title: restoredTitle,
-      slug: currentArticle.slug,
-      content: restoredContent,
-      summary: currentArticle.summary || '',
+    const versionRes = await query(
+      `SELECT *
+       FROM article_versions
+       WHERE id = $1 AND article_id = $2
+       LIMIT 1`,
+      [versionId, Number(id)]
+    );
+    if (versionRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Версия не найдена.' });
+    }
+    const version = versionRes.rows[0];
+
+    const restoredTags = Array.isArray(version.tags) ? version.tags : [];
+    const restoredSectionIds = Array.isArray(version.section_ids)
+      ? version.section_ids.map((sectionId: unknown) => Number(sectionId)).filter(Boolean)
+      : [];
+    const targetStatus = shouldPublish ? 'published' : 'draft';
+
+    let updatedArticle = await ArticleModel.updateArticle(Number(id), {
+      title: version.title || currentArticle.title,
+      slug: version.slug || currentArticle.slug,
+      content: version.content || '',
+      summary: version.summary || '',
       category_id: currentArticle.category_id,
-      published: currentArticle.published,
-      is_visible: currentArticle.is_visible,
-      status: currentArticle.status,
-      tags: currentArticle.tags || [],
-      section_ids: currentArticle.section_ids,
+      published: shouldPublish,
+      is_visible: true,
+      status: targetStatus,
+      tags: restoredTags,
+      section_ids: restoredSectionIds,
       position: currentArticle.position,
-      source_url: currentArticle.source_url || null,
-      sync_interval: currentArticle.sync_interval || 'manual',
-      article_type: currentArticle.article_type || 'general',
-      owner_id: currentArticle.owner_id || null,
-      approver_id: currentArticle.approver_id || null,
+      source_url: version.source_url || null,
+      sync_interval: version.sync_interval || 'manual',
+      structured_data: version.structured_data || null,
+      article_type: version.article_type || 'general',
+      owner_id: version.owner_id || null,
+      approver_id: version.approver_id || null,
     });
 
     if (!updatedArticle) {
       return res.status(404).json({ error: 'Не удалось обновить статью при восстановлении.' });
     }
 
-    const restoredDateStr = new Date(version.changed_at).toLocaleString('ru-RU');
-    const changeDescription = `Восстановление к версии от ${restoredDateStr}`;
-    const editorComment = `Откат к изменениям #${changeId}`;
+    try {
+      await syncArticleIpRestriction(updatedArticle.id, {
+        ...(version.ip_restriction_settings || {}),
+        enabled: !!version.ip_restriction_enabled,
+      });
+      updatedArticle = await ArticleModel.getArticleById(updatedArticle.id) || updatedArticle;
+    } catch (ipErr) {
+      console.error('Failed to restore IP restriction settings (non-fatal):', ipErr);
+    }
+
+    try {
+      await syncContentArticleLinks(updatedArticle.id, updatedArticle.content);
+    } catch (linkSyncErr) {
+      console.error('Failed to sync links after version restore (non-fatal):', linkSyncErr);
+    }
+
+    const isMandatoryArticle = !!currentArticle.mandatory_ack_enabled || !!version.mandatory_ack_enabled;
+    try {
+      await syncMandatoryAcknowledgementAssignments(
+        updatedArticle,
+        isMandatoryArticle
+          ? {
+              ...(version.mandatory_ack_settings || currentArticle.mandatory_ack_settings || {}),
+              enabled: true,
+              require_reacknowledgement: requireReacknowledgement,
+            }
+          : { enabled: false },
+        authReq.user,
+        shouldPublish && isMandatoryArticle && requireReacknowledgement
+      );
+      updatedArticle = await ArticleModel.getArticleById(updatedArticle.id) || updatedArticle;
+    } catch (ackErr) {
+      console.error('Failed to restore mandatory acknowledgement settings (non-fatal):', ackErr);
+    }
+
+    const changeDescription = `Восстановлена версия ${version.version_number}${shouldPublish ? ' и опубликована' : ' в черновик'}`;
+    const editorComment = restoreComment || `Восстановление из версии ${version.version_number}`;
 
     await query(
       `INSERT INTO article_changes_log (article_id, user_id, change_description, editor_comment, old_content, new_content, old_title, new_title)
@@ -1471,17 +1772,45 @@ export const restoreArticleVersion = async (req: Request, res: Response) => {
         changeDescription,
         editorComment,
         currentArticle.content,
-        restoredContent,
+        updatedArticle.content,
         currentArticle.title,
-        restoredTitle
+        updatedArticle.title,
       ]
     );
+
+    const newVersion = await createArticleVersionSnapshot(req, updatedArticle.id, {
+      source_type: 'restore',
+      change_comment: `Восстановлена из версии ${version.version_number}`,
+      editor_comment: restoreComment || null,
+      restored_from_version_id: version.id,
+      restored_from_version_number: version.version_number,
+      restore_comment: restoreComment || null,
+      created_by: authReq.user.id,
+    });
+
+    await logSecurityEvent({
+      req,
+      actorUserId: authReq.user.id,
+      articleId: updatedArticle.id,
+      action: 'article_version_restore',
+      status: 'success',
+      metadata: {
+        source_version_id: version.id,
+        source_version_number: version.version_number,
+        new_version_id: newVersion.id,
+        new_version_number: newVersion.version_number,
+        publish: shouldPublish,
+        require_reacknowledgement: requireReacknowledgement,
+        restore_comment: restoreComment || null,
+        session_id: newVersion.session_id || null,
+      },
+    });
 
     await query(
       `INSERT INTO notifications (title, message, type) VALUES ($1, $2, $3)`,
       [
         `Статья "${updatedArticle.title}" была восстановлена.`,
-        `Автор: ${authReq.user.name} (Администратор)\n\nОписание изменений:\n${changeDescription}`,
+        `Автор: ${authReq.user.name}\n\nОписание изменений:\n${changeDescription}`,
         'info'
       ]
     );
@@ -1504,7 +1833,7 @@ export const restoreArticleVersion = async (req: Request, res: Response) => {
       await msService.deleteArticle(updatedArticle.id);
     }
 
-    res.json(updatedArticle);
+    res.json({ article: updatedArticle, version: newVersion });
   } catch (error: any) {
     console.error('Failed to restore article version:', error);
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
@@ -1991,6 +2320,17 @@ const createArticleFromImportSession = async (
     );
   } catch (logErr) {
     console.error('Failed to write import change log (non-fatal):', logErr);
+  }
+
+  try {
+    await createArticleVersionSnapshot(req, article.id, {
+      source_type: targetStatus === 'published' ? 'import_publish' : 'import_draft',
+      change_comment: targetStatus === 'published' ? 'Импорт документа и публикация' : 'Импорт документа в черновик',
+      editor_comment: `Исходный файл: ${session.original_file_name}`,
+      created_by: authorId,
+    });
+  } catch (versionErr) {
+    console.error('Failed to create imported article version snapshot (non-fatal):', versionErr);
   }
 
   try {

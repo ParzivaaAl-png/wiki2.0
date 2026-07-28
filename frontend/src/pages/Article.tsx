@@ -31,8 +31,8 @@ import {
   addFavoriteArticle,
   removeFavoriteArticle,
   fetchFavoriteArticles,
-  fetchArticleChanges,
-  ArticleChangeLog,
+  fetchArticleVersions,
+  ArticleVersion,
   restoreArticleVersion,
   fetchArticles,
   fetchArticleLinks,
@@ -79,9 +79,11 @@ export default function ArticlePage() {
   const [isFavorited, setIsFavorited] = React.useState(false);
   const [isFavoriteLoading, setIsFavoriteLoading] = React.useState(false);
   const [isChangesModalOpen, setIsChangesModalOpen] = React.useState(false);
-  const [changesLog, setChangesLog] = React.useState<ArticleChangeLog[]>([]);
+  const [versionsLog, setVersionsLog] = React.useState<ArticleVersion[]>([]);
   const [isChangesLoading, setIsChangesLoading] = React.useState(false);
-  const [selectedChange, setSelectedChange] = React.useState<ArticleChangeLog | null>(null);
+  const [selectedVersion, setSelectedVersion] = React.useState<ArticleVersion | null>(null);
+  const [versionViewMode, setVersionViewMode] = React.useState<'preview' | 'compare'>('compare');
+  const [compareTargetId, setCompareTargetId] = React.useState<'current' | number>('current');
   const [isRestoring, setIsRestoring] = React.useState(false);
 
   // Link state
@@ -404,26 +406,56 @@ export default function ArticlePage() {
     setIsChangesModalOpen(true);
     setIsChangesLoading(true);
     try {
-      const logs = await fetchArticleChanges(article!.id);
-      setChangesLog(logs);
+      const versions = await fetchArticleVersions(article!.id);
+      setVersionsLog(versions);
+      setSelectedVersion(null);
+      setCompareTargetId('current');
+      setVersionViewMode('compare');
     } catch (err: any) {
-      console.error('Failed to fetch changes log:', err);
+      console.error('Failed to fetch article versions:', err);
     } finally {
       setIsChangesLoading(false);
     }
   };
 
-  const handleRestoreVersion = async (changeId: number) => {
-    if (!article || isRestoring) return;
-    if (!window.confirm('Вы действительно хотите откатить эту статью к выбранной версии?')) return;
-    
+  // Restore Modal State
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = React.useState(false);
+  const [restoreTargetVersion, setRestoreTargetVersion] = React.useState<ArticleVersion | null>(null);
+  const [restorePublish, setRestorePublish] = React.useState(false);
+  const [restoreCommentInput, setRestoreCommentInput] = React.useState('');
+  const [restoreRequireReack, setRestoreRequireReack] = React.useState(false);
+
+  const openRestoreModal = (version: ArticleVersion, publish: boolean) => {
+    setRestoreTargetVersion(version);
+    setRestorePublish(publish);
+    setRestoreCommentInput(`Восстановлена из версии ${version.version_number}`);
+    setRestoreRequireReack(false);
+    setIsRestoreModalOpen(true);
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!article || !restoreTargetVersion || isRestoring) return;
+
     setIsRestoring(true);
     try {
-      await restoreArticleVersion(article.id, changeId);
+      await restoreArticleVersion(article.id, restoreTargetVersion.id, {
+        publish: restorePublish,
+        comment: restoreCommentInput.trim() || `Восстановление из версии ${restoreTargetVersion.version_number}`,
+        require_reacknowledgement: restoreRequireReack,
+      });
+
+      setIsRestoreModalOpen(false);
       setIsChangesModalOpen(false);
-      setSelectedChange(null);
-      alert('Статья успешно восстановлена к выбранной версии!');
-      window.location.reload();
+      setSelectedVersion(null);
+
+      // Refresh versions log and current article
+      const updatedVersions = await fetchArticleVersions(article.id);
+      setVersionsLog(updatedVersions);
+
+      const refreshedArticle = await fetchArticle(article.id);
+      setArticle(refreshedArticle);
+
+      alert(restorePublish ? 'Версия успешно восстановлена и опубликована.' : 'Версия успешно восстановлена в черновик.');
     } catch (err: any) {
       console.error('Failed to restore version:', err);
       alert('Ошибка при восстановлении версии: ' + err.message);
@@ -717,6 +749,48 @@ export default function ArticlePage() {
       default: return 'Назначено';
     }
   };
+
+  const getVersionStatusLabel = (status?: string | null) => {
+    switch (status) {
+      case 'draft': return 'Черновик';
+      case 'published': return 'Опубликована';
+      case 'archived': return 'Архив';
+      case 'on_approval': return 'На согласовании';
+      case 'requires_verification': return 'Требует проверки';
+      default: return status || 'Без статуса';
+    }
+  };
+
+  const getVersionSourceLabel = (source?: string | null) => {
+    switch (source) {
+      case 'initial': return 'Стартовый снимок';
+      case 'save': return 'Сохранение';
+      case 'publish': return 'Публикация';
+      case 'import_draft': return 'Импорт в черновик';
+      case 'import_publish': return 'Импорт и публикация';
+      case 'restore': return 'Восстановление';
+      case 'sync': return 'Синхронизация';
+      default: return source || 'Сохранение';
+    }
+  };
+
+  const selectedCompareTarget = React.useMemo(() => {
+    if (!selectedVersion) return null;
+    if (compareTargetId === 'current') {
+      return article
+        ? { title: article.title, content: article.content, label: 'Текущая статья' }
+        : null;
+    }
+
+    const target = versionsLog.find((version) => version.id === compareTargetId);
+    return target
+      ? {
+          title: target.title,
+          content: target.content,
+          label: `Версия ${target.version_number}`,
+        }
+      : null;
+  }, [article, compareTargetId, selectedVersion, versionsLog]);
 
   const allRequiredCollapsiblesOpened =
     requiredCollapsibleCount === 0 || openedRequiredCollapsibles.size >= requiredCollapsibleCount;
@@ -1326,35 +1400,33 @@ export default function ArticlePage() {
         </aside>
       )}
 
-      {/* Changes Log Modal */}
+      {/* Version History Modal */}
       <AnimatePresence>
         {isChangesModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => {
                 setIsChangesModalOpen(false);
-                setSelectedChange(null);
+                setSelectedVersion(null);
               }}
               className="absolute inset-0 bg-neutral-950/60"
             />
-            {/* Modal Content */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               className={`relative w-full ${
-                selectedChange ? 'max-w-3xl' : 'max-w-lg'
+                selectedVersion ? 'max-w-5xl' : 'max-w-2xl'
               } border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl shadow-premium dark:shadow-premium-dark flex flex-col max-h-[80vh] overflow-hidden transition-all duration-200`}
             >
               <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-800">
                 <h3 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
-                  {selectedChange ? (
+                  {selectedVersion ? (
                     <button
-                      onClick={() => setSelectedChange(null)}
+                      onClick={() => setSelectedVersion(null)}
                       className="mr-2 inline-flex items-center gap-1 px-2.5 py-1 text-xs text-neutral-500 hover:text-neutral-950 dark:hover:text-white bg-neutral-50 dark:bg-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 rounded-lg transition-colors cursor-pointer select-none font-sans font-semibold"
                     >
                       ← Назад
@@ -1362,12 +1434,12 @@ export default function ArticlePage() {
                   ) : (
                     <History className="w-4.5 h-4.5 text-indigo-500" />
                   )}
-                  {selectedChange ? `Сравнение изменений версии #${selectedChange.id}` : 'История изменений статьи'}
+                  {selectedVersion ? `Версия ${selectedVersion.version_number}` : 'История версий статьи'}
                 </h3>
                 <button
                   onClick={() => {
                     setIsChangesModalOpen(false);
-                    setSelectedChange(null);
+                    setSelectedVersion(null);
                   }}
                   className="p-1 rounded-md text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
                 >
@@ -1379,134 +1451,385 @@ export default function ArticlePage() {
                 {isChangesLoading ? (
                   <div className="flex flex-col items-center justify-center py-10 gap-2">
                     <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
-                    <span className="text-xs text-neutral-400">Загрузка истории правок...</span>
+                    <span className="text-xs text-neutral-400">Загрузка истории версий...</span>
                   </div>
-                ) : selectedChange ? (
-                  /* Detail/Diff View */
+                ) : selectedVersion ? (
                   <div className="space-y-4 animate-fadeIn">
                     <div className="p-3.5 bg-neutral-50/50 dark:bg-neutral-900/40 border border-neutral-200 dark:border-neutral-800 rounded-xl space-y-2 text-xs">
                       <div className="flex justify-between items-start gap-4 flex-wrap sm:flex-nowrap">
                         <div>
                           <div className="font-bold text-neutral-950 dark:text-white">
-                            Автор: {selectedChange.user_name || 'Система'} 
-                            {selectedChange.user_role && ` (${selectedChange.user_role})`}
+                            Автор: {selectedVersion.created_by_name || 'Система'}
+                            {selectedVersion.created_by_role && ` (${selectedVersion.created_by_role})`}
                           </div>
                           <div className="text-neutral-400 text-[10px] mt-0.5">
-                            Дата правки: {new Date(selectedChange.changed_at).toLocaleString('ru-RU')}
+                            Создана: {new Date(selectedVersion.created_at).toLocaleString('ru-RU')}
                           </div>
                         </div>
 
-                        {isAdmin && (
-                          <button
-                            onClick={() => handleRestoreVersion(selectedChange.id)}
-                            disabled={isRestoring}
-                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-750 disabled:opacity-50 text-white rounded-lg text-[10px] font-bold shadow-md shadow-rose-600/15 transition-all cursor-pointer shrink-0"
-                          >
-                            {isRestoring ? 'Восстановление...' : 'Восстановить версию'}
-                          </button>
+                        {isStaff && (
+                          <div className="flex flex-wrap gap-2 justify-end">
+                            <button
+                              onClick={() => openRestoreModal(selectedVersion, false)}
+                              disabled={isRestoring}
+                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg text-[10px] font-bold shadow-md shadow-amber-600/15 transition-all cursor-pointer shrink-0"
+                            >
+                              {isRestoring ? 'Восстановление...' : 'Восстановить в черновик'}
+                            </button>
+                            <button
+                              onClick={() => openRestoreModal(selectedVersion, true)}
+                              disabled={isRestoring}
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-[10px] font-bold shadow-md shadow-indigo-600/15 transition-all cursor-pointer shrink-0"
+                            >
+                              {isRestoring ? 'Восстановление...' : 'Восстановить и опубликовать'}
+                            </button>
+                          </div>
                         )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 border-t border-neutral-200/50 dark:border-neutral-800/80 pt-3">
+                        <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-3 py-2">
+                          <div className="text-[10px] font-bold uppercase text-neutral-400">Статус</div>
+                          <div className="mt-0.5 font-semibold text-neutral-900 dark:text-neutral-100">{getVersionStatusLabel(selectedVersion.status)}</div>
+                        </div>
+                        <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-3 py-2">
+                          <div className="text-[10px] font-bold uppercase text-neutral-400">Источник</div>
+                          <div className="mt-0.5 font-semibold text-neutral-900 dark:text-neutral-100">{getVersionSourceLabel(selectedVersion.source_type)}</div>
+                        </div>
+                        <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-3 py-2">
+                          <div className="text-[10px] font-bold uppercase text-neutral-400">Основа</div>
+                          <div className="mt-0.5 font-semibold text-neutral-900 dark:text-neutral-100">
+                            {selectedVersion.restored_from_version_number
+                              ? `Восстановлена из версии ${selectedVersion.restored_from_version_number}`
+                              : 'Обычная версия'}
+                          </div>
+                        </div>
                       </div>
 
                       <div className="border-t border-neutral-200/50 dark:border-neutral-800/80 pt-2 space-y-1">
                         <div>
-                          <span className="font-semibold text-neutral-700 dark:text-neutral-300">Описание изменений:</span>{' '}
-                          {selectedChange.change_description}
+                          <span className="font-semibold text-neutral-700 dark:text-neutral-300">Комментарий:</span>{' '}
+                          {selectedVersion.change_comment || 'Комментарий не указан'}
                         </div>
-                        {selectedChange.editor_comment && (
+                        {(selectedVersion.editor_comment || selectedVersion.restore_comment) && (
                           <div className="text-[11px] text-neutral-450 dark:text-neutral-550 italic pl-2 border-l-2 border-indigo-500/30">
-                            Комментарий редактора: "{selectedChange.editor_comment}"
+                            {selectedVersion.editor_comment || selectedVersion.restore_comment}
                           </div>
                         )}
                       </div>
                     </div>
 
-                    {/* Title change diff */}
-                    {selectedChange.old_title && selectedChange.new_title && selectedChange.old_title !== selectedChange.new_title && (
-                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs space-y-1">
-                        <div className="font-bold text-amber-700 dark:text-amber-450">Изменено название статьи:</div>
-                        <div className="text-neutral-450 line-through">- {selectedChange.old_title}</div>
-                        <div className="text-neutral-900 dark:text-white font-semibold">+ {selectedChange.new_title}</div>
-                      </div>
-                    )}
-
-                    {/* Content Diff */}
-                    <div className="border border-neutral-200 dark:border-neutral-850 rounded-xl overflow-hidden bg-neutral-50/50 dark:bg-neutral-950 flex flex-col shadow-inner">
-                      <div className="px-3 py-2 border-b border-neutral-200 dark:border-neutral-850 bg-neutral-100/50 dark:bg-neutral-900/50 text-[10px] font-bold uppercase text-neutral-400 tracking-wider">
-                        Сравнение Markdown-содержимого
-                      </div>
-                      <div className="overflow-y-auto max-h-[300px] divide-y divide-neutral-100/30 dark:divide-neutral-900/30">
-                        {computeDiff(selectedChange.old_content || '', selectedChange.new_content || '').map((line, idx) => {
-                          if (line.type === 'added') {
-                            return (
-                              <div key={idx} className="px-3 py-1 bg-green-50/50 dark:bg-green-950/20 border-l-4 border-green-500 font-mono text-xs whitespace-pre-wrap text-green-955 dark:text-green-300">
-                                + {line.text}
-                              </div>
-                            );
-                          }
-                          if (line.type === 'removed') {
-                            return (
-                              <div key={idx} className="px-3 py-1 bg-red-50/50 dark:bg-red-950/20 border-l-4 border-red-500 font-mono text-xs whitespace-pre-wrap text-red-950 dark:text-red-350 line-through opacity-85">
-                                - {line.text}
-                              </div>
-                            );
-                          }
-                          if (line.type === 'modified') {
-                            return (
-                              <div key={idx} className="px-3 py-1.5 bg-amber-50/40 dark:bg-amber-950/15 border-l-4 border-amber-500 font-mono text-xs whitespace-pre-wrap text-neutral-900 dark:text-neutral-100 space-y-0.5">
-                                <div className="text-neutral-400 line-through opacity-70">- {line.oldText}</div>
-                                <div className="text-neutral-900 dark:text-white font-semibold">+ {line.text}</div>
-                              </div>
-                            );
-                          }
-                          return (
-                            <div key={idx} className="px-3 py-1 text-neutral-600 dark:text-neutral-450 font-mono text-xs whitespace-pre-wrap">
-                              &nbsp;&nbsp;{line.text}
-                            </div>
-                          );
-                        })}
-                      </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => setVersionViewMode('preview')}
+                        className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
+                          versionViewMode === 'preview'
+                            ? 'border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300'
+                            : 'border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-neutral-900 dark:hover:text-white'
+                        }`}
+                      >
+                        Просмотр
+                      </button>
+                      <button
+                        onClick={() => setVersionViewMode('compare')}
+                        className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
+                          versionViewMode === 'compare'
+                            ? 'border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300'
+                            : 'border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-neutral-900 dark:hover:text-white'
+                        }`}
+                      >
+                        Сравнение
+                      </button>
+                      {versionViewMode === 'compare' && (
+                        <select
+                          value={String(compareTargetId)}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setCompareTargetId(value === 'current' ? 'current' : Number(value));
+                          }}
+                          className="ml-auto min-w-[190px] px-3 py-1.5 text-xs bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg text-neutral-800 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        >
+                          <option value="current">Сравнить с текущей статьёй</option>
+                          {versionsLog
+                            .filter((version) => version.id !== selectedVersion.id)
+                            .map((version) => (
+                              <option key={version.id} value={version.id}>
+                                Сравнить с версией {version.version_number}
+                              </option>
+                            ))}
+                        </select>
+                      )}
                     </div>
+
+                    {versionViewMode === 'preview' ? (
+                      <div className="border border-neutral-200 dark:border-neutral-850 rounded-xl overflow-hidden bg-white dark:bg-neutral-950">
+                        <div className="px-3 py-2 border-b border-neutral-200 dark:border-neutral-850 bg-neutral-100/50 dark:bg-neutral-900/50 text-[10px] font-bold uppercase text-neutral-400 tracking-wider">
+                          Просмотр содержимого версии
+                        </div>
+                        <div className="max-h-[360px] overflow-y-auto p-4 prose-custom">
+                          {/<[a-z][\s\S]*>/i.test(selectedVersion.content) ? (
+                            <div dangerouslySetInnerHTML={{ __html: selectedVersion.content }} />
+                          ) : (
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                              {selectedVersion.content}
+                            </ReactMarkdown>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {selectedCompareTarget && selectedCompareTarget.title !== selectedVersion.title && (
+                          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs space-y-1">
+                            <div className="font-bold text-amber-700 dark:text-amber-450">Разное название статьи:</div>
+                            <div className="text-neutral-450 line-through">- {selectedCompareTarget.label}: {selectedCompareTarget.title}</div>
+                            <div className="text-neutral-900 dark:text-white font-semibold">+ Версия {selectedVersion.version_number}: {selectedVersion.title}</div>
+                          </div>
+                        )}
+
+                        <div className="border border-neutral-200 dark:border-neutral-850 rounded-xl overflow-hidden bg-neutral-50/50 dark:bg-neutral-950 flex flex-col shadow-inner">
+                          <div className="px-3 py-2 border-b border-neutral-200 dark:border-neutral-850 bg-neutral-100/50 dark:bg-neutral-900/50 text-[10px] font-bold uppercase text-neutral-400 tracking-wider">
+                            Сравнение содержимого: {selectedCompareTarget?.label || 'Текущая статья'} → версия {selectedVersion.version_number}
+                          </div>
+                          <div className="overflow-y-auto max-h-[340px] divide-y divide-neutral-100/30 dark:divide-neutral-900/30">
+                            {computeDiff(selectedCompareTarget?.content || '', selectedVersion.content || '').map((line, idx) => {
+                              if (line.type === 'added') {
+                                return (
+                                  <div key={idx} className="px-3 py-1 bg-green-50/50 dark:bg-green-950/20 border-l-4 border-green-500 font-mono text-xs whitespace-pre-wrap text-green-955 dark:text-green-300">
+                                    + {line.text}
+                                  </div>
+                                );
+                              }
+                              if (line.type === 'removed') {
+                                return (
+                                  <div key={idx} className="px-3 py-1 bg-red-50/50 dark:bg-red-950/20 border-l-4 border-red-500 font-mono text-xs whitespace-pre-wrap text-red-950 dark:text-red-350 line-through opacity-85">
+                                    - {line.text}
+                                  </div>
+                                );
+                              }
+                              if (line.type === 'modified') {
+                                return (
+                                  <div key={idx} className="px-3 py-1.5 bg-amber-50/40 dark:bg-amber-950/15 border-l-4 border-amber-500 font-mono text-xs whitespace-pre-wrap text-neutral-900 dark:text-neutral-100 space-y-0.5">
+                                    <div className="text-neutral-400 line-through opacity-70">- {line.oldText}</div>
+                                    <div className="text-neutral-900 dark:text-white font-semibold">+ {line.text}</div>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div key={idx} className="px-3 py-1 text-neutral-600 dark:text-neutral-450 font-mono text-xs whitespace-pre-wrap">
+                                  &nbsp;&nbsp;{line.text}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
-                ) : changesLog.length === 0 ? (
+                ) : versionsLog.length === 0 ? (
                   <div className="text-center py-10 text-xs text-neutral-400 italic">
-                    У этой статьи пока нет записанных изменений в журнале.
+                    У этой статьи пока нет сохранённых версий.
                   </div>
                 ) : (
                   <div className="space-y-4 relative before:absolute before:left-3 before:top-2 before:bottom-2 before:w-[1px] before:bg-neutral-200/50 dark:before:bg-neutral-800/50">
-                    {changesLog.map((log) => (
-                      <div key={log.id} className="relative pl-7 text-xs">
-                        {/* Dot */}
+                    {versionsLog.map((version) => (
+                      <div key={version.id} className="relative pl-7 text-xs">
                         <div className="absolute left-[9px] top-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-4 ring-white dark:ring-neutral-950" />
                         
                         <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-400 mb-1">
                           <span className="font-semibold text-neutral-800 dark:text-neutral-200">
-                            {log.user_name || 'Система'} 
-                            {log.user_role && ` (${log.user_role === 'Admin' ? 'Админ' : log.user_role === 'Editor' ? 'Редактор' : 'Пользователь'})`}
+                            Версия {version.version_number} · {version.created_by_name || 'Система'}
                           </span>
                           <span>
-                            {new Date(log.changed_at).toLocaleString()}
+                            {new Date(version.created_at).toLocaleString('ru-RU')}
                           </span>
                         </div>
                         
-                        <div 
-                          onClick={() => setSelectedChange(log)}
+                        <div
+                          onClick={() => {
+                            setSelectedVersion(version);
+                            setVersionViewMode('compare');
+                            setCompareTargetId('current');
+                          }}
                           className="bg-neutral-50 dark:bg-background/30 p-2.5 rounded-lg border border-neutral-200 dark:border-border space-y-1.5 hover:border-indigo-500 dark:hover:border-indigo-500 cursor-pointer transition-all hover:bg-neutral-100/50 dark:hover:bg-neutral-900/80"
-                          title="Нажмите, чтобы сравнить с предыдущей версией"
+                          title="Открыть версию"
                         >
-                          <div>
-                            <span className="font-semibold text-neutral-700 dark:text-neutral-300 font-mono text-[10px]">ИЗМЕНЕНИЯ:</span>{' '}
-                            {log.change_description}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="inline-flex rounded-full border border-neutral-200 dark:border-neutral-800 px-2 py-0.5 text-[10px] font-bold text-neutral-600 dark:text-neutral-300">
+                              {getVersionStatusLabel(version.status)}
+                            </span>
+                            <span className="inline-flex rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                              {getVersionSourceLabel(version.source_type)}
+                            </span>
+                            {version.restored_from_version_number && (
+                              <span className="inline-flex rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                                Из версии {version.restored_from_version_number}
+                              </span>
+                            )}
                           </div>
-                          {log.editor_comment && (
-                            <div className="text-[11px] text-neutral-450 dark:text-neutral-550 italic pl-1.5 border-l-2 border-indigo-500/30">
-                              "{log.editor_comment}"
-                            </div>
-                          )}
+                          <div>
+                            <span className="font-semibold text-neutral-700 dark:text-neutral-300 font-mono text-[10px]">КОММЕНТАРИЙ:</span>{' '}
+                            {version.change_comment || version.editor_comment || 'Комментарий не указан'}
+                          </div>
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedVersion(version);
+                                setVersionViewMode('preview');
+                                setCompareTargetId('current');
+                              }}
+                              className="px-2.5 py-1 rounded-md border border-neutral-200 dark:border-neutral-800 text-[10px] font-bold text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+                            >
+                              Просмотр
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedVersion(version);
+                                setVersionViewMode('compare');
+                                setCompareTargetId('current');
+                              }}
+                              className="px-2.5 py-1 rounded-md border border-neutral-200 dark:border-neutral-800 text-[10px] font-bold text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+                            >
+                              Сравнить
+                            </button>
+                            {isStaff && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openRestoreModal(version, false);
+                                  }}
+                                  className="px-2.5 py-1 rounded-md border border-amber-500/30 bg-amber-500/10 text-[10px] font-bold text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 cursor-pointer"
+                                >
+                                  В черновик
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openRestoreModal(version, true);
+                                  }}
+                                  className="px-2.5 py-1 rounded-md border border-indigo-500/30 bg-indigo-500/10 text-[10px] font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 cursor-pointer"
+                                >
+                                  Опубликовать
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Restore Version Confirmation Modal */}
+      <AnimatePresence>
+        {isRestoreModalOpen && restoreTargetVersion && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isRestoring && setIsRestoreModalOpen(false)}
+              className="absolute inset-0 bg-neutral-950/60"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-xl shadow-premium dark:shadow-premium-dark flex flex-col overflow-hidden transition-all duration-200 z-10"
+            >
+              <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-800">
+                <h3 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
+                  <History className="w-4 h-4 text-indigo-500" />
+                  Восстановление версии {restoreTargetVersion.version_number}
+                </h3>
+                <button
+                  onClick={() => !isRestoring && setIsRestoreModalOpen(false)}
+                  className="p-1 rounded-md text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4 text-xs">
+                <div className="p-3.5 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/50 space-y-1">
+                  <div className="font-bold text-indigo-950 dark:text-indigo-200">
+                    Режим восстановления: {restorePublish ? 'Восстановить и опубликовать' : 'Восстановить в черновик'}
+                  </div>
+                  <p className="text-neutral-600 dark:text-neutral-350 text-[11px] leading-relaxed">
+                    Старая версия не заменяется напрямую. Система создаст <strong>новую неизменяемую версию (Версия {(versionsLog[0]?.version_number || 0) + 1})</strong>, содержимое которой будет скопировано из версии {restoreTargetVersion.version_number}.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block font-semibold text-neutral-700 dark:text-neutral-300">
+                    Комментарий к изменению / восстановлению: <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={restoreCommentInput}
+                    onChange={(e) => setRestoreCommentInput(e.target.value)}
+                    placeholder="Укажите причину восстановления..."
+                    className="w-full p-2.5 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-xs resize-none"
+                  />
+                </div>
+
+                {(article?.mandatory_ack_enabled || restoreTargetVersion.mandatory_ack_enabled) && (
+                  <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl space-y-2">
+                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={restoreRequireReack}
+                        onChange={(e) => setRestoreRequireReack(e.target.checked)}
+                        className="mt-0.5 rounded border-amber-400 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer shrink-0"
+                      />
+                      <div>
+                        <span className="font-bold text-amber-900 dark:text-amber-200 block">
+                          Требуется повторное ознакомление сотрудников с новой версией
+                        </span>
+                        <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-0.5 leading-normal">
+                          Эта статья является обязательной. При включенном флаге сотрудникам будет повторно отправлено требование ознакомления с материалом.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 p-4 border-t border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30">
+                <button
+                  type="button"
+                  onClick={() => !isRestoring && setIsRestoreModalOpen(false)}
+                  disabled={isRestoring}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white border border-neutral-200 dark:border-neutral-800 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmRestore}
+                  disabled={isRestoring || !restoreCommentInput.trim()}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+                >
+                  {isRestoring ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Восстановление...
+                    </>
+                  ) : (
+                    'Подтвердить и восстановить'
+                  )}
+                </button>
               </div>
             </motion.div>
           </div>

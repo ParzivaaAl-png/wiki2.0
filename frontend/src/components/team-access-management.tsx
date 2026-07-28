@@ -845,13 +845,6 @@ export default function TeamAccessManagement() {
               {departmentEmployees.length} сотрудников
             </span>
             <button
-              onClick={() => openEmployeeModal(null, department.id)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Сотрудник
-            </button>
-            <button
               onClick={() => openDepartmentModal(department)}
               className="p-2 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 hover:bg-muted transition-colors"
               title="Редактировать отдел"
@@ -1217,6 +1210,13 @@ export default function TeamAccessManagement() {
 
             <div className="flex flex-wrap items-center gap-2">
               <button
+                onClick={() => openEmployeeModal(null)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Добавить сотрудника
+              </button>
+              <button
                 onClick={() => openDepartmentModal(null)}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border hover:bg-muted text-xs font-bold transition-colors"
               >
@@ -1224,7 +1224,7 @@ export default function TeamAccessManagement() {
                 Добавить отдел
               </button>
               <span className="text-[11px] text-muted-foreground">
-                Сотрудники добавляются внутри нужного отдела.
+                Отдел выбирается в карточке сотрудника.
               </span>
             </div>
           </div>

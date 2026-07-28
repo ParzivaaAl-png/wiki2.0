@@ -6,7 +6,8 @@ import {
   Tag as TagIcon,
   X,
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  History
 } from 'lucide-react';
 import {
   fetchArticle,
@@ -311,13 +312,27 @@ export default function Editor() {
     <div className="max-w-6xl mx-auto px-4 py-8">
       {/* Navigation and Save Actions */}
       <div className="flex items-center justify-between gap-4 mb-6">
-        <Link
-          to="/admin"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Отмена и возврат
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link
+            to="/admin"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Отмена и возврат
+          </Link>
+          {isEditMode && id && (
+            <Link
+              to={`/articles/${id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+              title="Открыть статью и просмотреть историю версий"
+            >
+              <History className="w-3.5 h-3.5" />
+              История версий
+            </Link>
+          )}
+        </div>
 
         <button
           onClick={handleSaveClick}

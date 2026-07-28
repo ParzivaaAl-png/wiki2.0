@@ -93,6 +93,44 @@ export interface ArticleChangeLog {
   new_title: string | null;
 }
 
+export interface ArticleVersion {
+  id: number;
+  article_id: number;
+  version_number: number;
+  title: string;
+  slug: string;
+  content: string;
+  summary: string;
+  status: string;
+  published: boolean;
+  is_visible: boolean;
+  tags: string[];
+  section_ids: number[];
+  article_type?: string;
+  owner_id?: number | null;
+  approver_id?: number | null;
+  source_url?: string | null;
+  sync_interval?: string;
+  structured_data?: any | null;
+  mandatory_ack_enabled?: boolean;
+  mandatory_ack_settings?: MandatoryAcknowledgementSettings | null;
+  ip_restriction_enabled?: boolean;
+  ip_restriction_settings?: IpRestrictionSettings | null;
+  created_by?: number | null;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
+  created_at: string;
+  change_comment?: string | null;
+  editor_comment?: string | null;
+  source_type: 'initial' | 'save' | 'publish' | 'import_draft' | 'import_publish' | 'restore' | 'sync' | string;
+  restored_from_version_id?: number | null;
+  restored_from_version_number?: number | null;
+  restore_comment?: string | null;
+  ip_address?: string | null;
+  session_id?: number | null;
+  user_agent?: string | null;
+}
+
 export interface GuestAccessInfo {
   type: 'article' | 'section';
   expires_at: string;
@@ -1168,6 +1206,26 @@ export async function fetchArticleChanges(id: number): Promise<ArticleChangeLog[
   return apiCall<ArticleChangeLog[]>(`/articles/${id}/changes`, { cache: 'no-store' });
 }
 
+export async function fetchArticleVersions(id: number): Promise<ArticleVersion[]> {
+  return apiCall<ArticleVersion[]>(`/articles/${id}/versions`, { cache: 'no-store' });
+}
+
+export async function fetchArticleVersion(id: number, versionId: number): Promise<ArticleVersion> {
+  return apiCall<ArticleVersion>(`/articles/${id}/versions/${versionId}`, { cache: 'no-store' });
+}
+
+export async function restoreArticleVersion(
+  id: number,
+  versionId: number,
+  data: { publish: boolean; comment: string; require_reacknowledgement?: boolean }
+): Promise<{ article: Article; version: ArticleVersion }> {
+  clearApiCache();
+  return apiCall<{ article: Article; version: ArticleVersion }>(`/articles/${id}/versions/${versionId}/restore`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 // Article Rankings
 export async function fetchPopularArticles(): Promise<Article[]> {
   return apiCall<Article[]>('/articles/ranking/popular', { cache: 'no-store' });
@@ -1188,13 +1246,6 @@ export interface RecentChange extends ArticleChangeLog {
 
 export async function fetchRecentChanges(): Promise<RecentChange[]> {
   return apiCall<RecentChange[]>('/articles/changes/recent', { cache: 'no-store' });
-}
-
-export async function restoreArticleVersion(id: number, changeId: number): Promise<Article> {
-  clearApiCache();
-  return apiCall<Article>(`/articles/${id}/restore/${changeId}`, {
-    method: 'POST',
-  });
 }
 
 export interface Space {

@@ -541,6 +541,37 @@ export const canEditArticle = async (
   return permissions.can_edit || permissions.can_publish || permissions.can_approve;
 };
 
+export const canRestoreArticle = async (
+  userId: number | null | undefined,
+  legacyRole: string | null | undefined,
+  article: { author_id?: number | null; owner_id?: number | null; approver_id?: number | null; section_ids?: number[]; status?: string }
+): Promise<boolean> => {
+  if (!userId) {
+    return false;
+  }
+
+  const { capabilities } = await getUserCapabilities(userId, legacyRole);
+  if (capabilities.can_manage_access || capabilities.can_manage_structure) {
+    return true;
+  }
+
+  if (article.owner_id === userId) {
+    return true;
+  }
+
+  if (article.approver_id === userId) {
+    return true;
+  }
+
+  if (article.author_id === userId) {
+    return true;
+  }
+
+  const permissions = await getSectionPermissionsForUser(userId, legacyRole, article.section_ids || []);
+  return permissions.can_edit || permissions.can_publish || permissions.can_approve;
+};
+
+
 export const seedDefaultAccessModel = async (): Promise<{
   roles: number;
   userRoleAssignments: number;

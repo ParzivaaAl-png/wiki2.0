@@ -104,7 +104,10 @@ router.put('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), artic
 router.delete('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.deleteArticle);
 router.post('/articles/reorder', requireAuth, requireRole(['Admin', 'Editor']), articlesController.reorderArticles);
 router.get('/articles/:id/changes', requireAuth, articlesController.getArticleChanges);
-router.post('/articles/:id/restore/:changeId', requireAuth, requireRole(['Admin']), articlesController.restoreArticleVersion);
+router.get('/articles/:id/versions', requireAuth, articlesController.getArticleVersions);
+router.get('/articles/:id/versions/:versionId', requireAuth, articlesController.getArticleVersion);
+router.post('/articles/:id/versions/:versionId/restore', requireAuth, articlesController.restoreArticleVersion);
+router.post('/articles/:id/restore/:changeId', requireAuth, articlesController.restoreArticleVersion);
 router.get('/articles/ranking/popular', optionalAuth, articlesController.getPopularArticles);
 router.get('/articles/ranking/trending', optionalAuth, articlesController.getTrendingArticles);
 router.get('/articles/ranking/recommended', optionalAuth, articlesController.getRecommendedArticles);

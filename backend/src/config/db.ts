@@ -218,10 +218,113 @@ export const initializeDatabase = async () => {
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMP DEFAULT NULL');
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS next_sync_at TIMESTAMP DEFAULT NULL');
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS structured_data JSONB DEFAULT NULL');
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS article_type VARCHAR(50) DEFAULT \'general\'');
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS owner_id INT REFERENCES users(id) ON DELETE SET NULL');
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS approver_id INT REFERENCES users(id) ON DELETE SET NULL');
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS mandatory_ack_enabled BOOLEAN DEFAULT FALSE');
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS mandatory_ack_settings JSONB DEFAULT NULL');
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS ip_restriction_enabled BOOLEAN DEFAULT FALSE');
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS ip_restriction_settings JSONB DEFAULT NULL');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS article_versions (
+        id SERIAL PRIMARY KEY,
+        article_id INT REFERENCES articles(id) ON DELETE CASCADE,
+        version_number INT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        summary TEXT DEFAULT '',
+        status VARCHAR(50) NOT NULL,
+        published BOOLEAN DEFAULT FALSE,
+        is_visible BOOLEAN DEFAULT TRUE,
+        tags JSONB DEFAULT '[]',
+        section_ids INT[] DEFAULT '{}',
+        article_type VARCHAR(50) DEFAULT 'general',
+        owner_id INT REFERENCES users(id) ON DELETE SET NULL,
+        approver_id INT REFERENCES users(id) ON DELETE SET NULL,
+        source_url TEXT,
+        sync_interval VARCHAR(50) DEFAULT 'manual',
+        structured_data JSONB DEFAULT NULL,
+        mandatory_ack_enabled BOOLEAN DEFAULT FALSE,
+        mandatory_ack_settings JSONB DEFAULT NULL,
+        ip_restriction_enabled BOOLEAN DEFAULT FALSE,
+        ip_restriction_settings JSONB DEFAULT NULL,
+        created_by INT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        change_comment TEXT,
+        editor_comment TEXT,
+        source_type VARCHAR(50) DEFAULT 'save',
+        restored_from_version_id INT REFERENCES article_versions(id) ON DELETE SET NULL,
+        restored_from_version_number INT,
+        restore_comment TEXT,
+        ip_address VARCHAR(90),
+        session_id INT REFERENCES user_sessions(id) ON DELETE SET NULL,
+        user_agent TEXT,
+        UNIQUE(article_id, version_number)
+      );
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_article_versions_article_number ON article_versions(article_id, version_number DESC)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_article_versions_created_at ON article_versions(created_at DESC)');
+    await pool.query(`
+      INSERT INTO article_versions (
+        article_id,
+        version_number,
+        title,
+        slug,
+        content,
+        summary,
+        status,
+        published,
+        is_visible,
+        tags,
+        section_ids,
+        article_type,
+        owner_id,
+        approver_id,
+        source_url,
+        sync_interval,
+        structured_data,
+        mandatory_ack_enabled,
+        mandatory_ack_settings,
+        ip_restriction_enabled,
+        ip_restriction_settings,
+        created_by,
+        created_at,
+        change_comment,
+        source_type
+      )
+      SELECT
+        a.id,
+        1,
+        a.title,
+        a.slug,
+        a.content,
+        COALESCE(a.summary, ''),
+        COALESCE(a.status, CASE WHEN a.published THEN 'published' ELSE 'draft' END),
+        COALESCE(a.published, false),
+        COALESCE(a.is_visible, true),
+        COALESCE((SELECT jsonb_agg(DISTINCT t.tag_name) FROM article_tags t WHERE t.article_id = a.id), '[]'::jsonb),
+        COALESCE((SELECT array_agg(DISTINCT axs.section_id) FROM article_sections axs WHERE axs.article_id = a.id), '{}'::int[]),
+        COALESCE(a.article_type, 'general'),
+        a.owner_id,
+        a.approver_id,
+        a.source_url,
+        COALESCE(a.sync_interval, 'manual'),
+        a.structured_data,
+        COALESCE(a.mandatory_ack_enabled, false),
+        a.mandatory_ack_settings,
+        COALESCE(a.ip_restriction_enabled, false),
+        a.ip_restriction_settings,
+        a.author_id,
+        COALESCE(a.created_at, CURRENT_TIMESTAMP),
+        'Текущая версия на момент включения истории версий',
+        'initial'
+      FROM articles a
+      WHERE NOT EXISTS (
+        SELECT 1 FROM article_versions av WHERE av.article_id = a.id
+      );
+    `);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS mandatory_ack_assignments (
