@@ -32,7 +32,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit (allow documents)
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit for document imports with images
   fileFilter: (req, file, cb) => {
     // Allow images and documents
     const allowedExtensions = /jpeg|jpg|png|gif|webp|pdf|docx|txt|xlsx|csv|zip/;
@@ -85,6 +85,13 @@ router.get('/classifier/data', articlesController.getClassifierData);
 router.get('/navigation', requireAuth, articlesController.getNavigationTree);
 router.get('/articles', optionalAuth, articlesController.getArticles);
 router.get('/articles/changes/recent', requireAuth, articlesController.getRecentChanges);
+router.post('/articles/import-sessions/:id/onlyoffice/callback', articlesController.handleOnlyOfficeImportCallback);
+router.get('/articles/import-sessions/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.getImportSession);
+router.patch('/articles/import-sessions/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.updateImportSession);
+router.post('/articles/import-sessions/:id/reset', requireAuth, requireRole(['Admin', 'Editor']), articlesController.resetImportSession);
+router.post('/articles/import-sessions/:id/save-draft', requireAuth, requireRole(['Admin', 'Editor']), articlesController.saveImportSessionDraft);
+router.post('/articles/import-sessions/:id/publish', requireAuth, requireRole(['Admin', 'Editor']), articlesController.publishImportSession);
+router.delete('/articles/import-sessions/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.cancelImportSession);
 router.get('/articles/:slugOrId', optionalAuth, articlesController.getArticle);
 router.post('/articles', requireAuth, requireRole(['Admin', 'Editor']), articlesController.createArticle);
 router.put('/articles/:id', requireAuth, requireRole(['Admin', 'Editor']), articlesController.updateArticle);

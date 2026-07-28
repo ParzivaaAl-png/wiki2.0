@@ -42,6 +42,7 @@ import {
   syncArticleNow,
   fetchArticleSyncHistory,
   fetchNotifications,
+  importArticle,
   markNotificationsAsRead,
   fetchNavigationTree,
   ArticleSyncLog,
@@ -107,6 +108,8 @@ export default function Admin() {
   const [syncHistoryList, setSyncHistoryList] = React.useState<ArticleSyncLog[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = React.useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = React.useState<ArticleSyncLog | null>(null);
+  const [isImportingDocument, setIsImportingDocument] = React.useState(false);
+  const importInputRef = React.useRef<HTMLInputElement>(null);
 
   const loadNotifications = React.useCallback(async () => {
     if (!isStaff) return;
@@ -199,6 +202,23 @@ export default function Admin() {
       alert('Ошибка при очистке кэша: ' + err.message);
     } finally {
       setIsClearingCache(false);
+    }
+  };
+
+  const handleDocumentImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImportingDocument(true);
+    try {
+      const session = await importArticle(file);
+      navigate(`/admin/import/${session.id}`);
+    } catch (err: any) {
+      console.error('Failed to start document import:', err);
+      alert('Ошибка импорта документа: ' + err.message);
+    } finally {
+      setIsImportingDocument(false);
+      if (event.target) event.target.value = '';
     }
   };
 
@@ -981,10 +1001,29 @@ export default function Admin() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".docx,.pdf,.txt,.xlsx,.csv,.zip"
+            onChange={handleDocumentImport}
+            className="hidden"
+          />
 
+          <button
+            onClick={() => importInputRef.current?.click()}
+            disabled={isImportingDocument}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-bold text-foreground shadow-sm transition-all hover:bg-muted disabled:opacity-50"
+          >
+            {isImportingDocument ? (
+              <Loader2 className="w-4.5 h-4.5 animate-spin text-indigo-500" />
+            ) : (
+              <FileUp className="w-4.5 h-4.5 text-indigo-500" />
+            )}
+            <span>{isImportingDocument ? 'Загрузка...' : 'Импорт документа'}</span>
+          </button>
 
-           <button
+          <button
             onClick={() => navigate('/admin/editor/new')}
             className="inline-flex items-center gap-1.5 px-4 py-2 border border-indigo-500/20 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-lg text-sm font-semibold shadow-sm transition-all text-center justify-center cursor-pointer font-bold"
           >

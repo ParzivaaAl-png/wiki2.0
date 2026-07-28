@@ -17,6 +17,7 @@ import Home from './pages/Home';
 import ArticlePage from './pages/Article';
 import AdminPage from './pages/Admin';
 import EditorPage from './pages/Editor';
+import ImportPreviewPage from './pages/ImportPreview';
 import LoginPage from './pages/Login';
 import ProfilePage from './pages/Profile';
 
@@ -512,6 +513,16 @@ function AppContent() {
                   </AnimatedPage>
                 </ProtectedRoute>
               } 
+            />
+            <Route
+              path="/admin/import/:id"
+              element={
+                <ProtectedRoute allowedRoles={['Admin', 'Editor']}>
+                  <AnimatedPage>
+                    <ImportPreviewPage />
+                  </AnimatedPage>
+                </ProtectedRoute>
+              }
             />
           </Routes>
         </AnimatePresence>

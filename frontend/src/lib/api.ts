@@ -23,6 +23,13 @@ const getApiUrl = () => {
   return apiUrl;
 };
 
+export const getApiAssetUrl = (pathOrUrl?: string | null) => {
+  if (!pathOrUrl) return '';
+  if (/^https?:\/\//i.test(pathOrUrl) || pathOrUrl.startsWith('data:')) return pathOrUrl;
+  const apiOrigin = getApiUrl().replace(/\/api\/?$/i, '').replace(/\/$/, '');
+  return `${apiOrigin}${pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`}`;
+};
+
 
 // Token storage for cross-origin auth fallback (Safari ITP blocks third-party cookies)
 let memoryToken: string | null = null;
@@ -129,6 +136,46 @@ export interface Article {
   trending_views?: number | string;
   favorites_count?: number | string;
   guest_access?: GuestAccessInfo | null;
+}
+
+export interface OnlyOfficeImportConfig {
+  enabled: boolean;
+  documentServerUrl: string | null;
+  reason?: string;
+  config?: Record<string, any>;
+}
+
+export interface DocumentImportSession {
+  id: string;
+  original_file_name: string;
+  mime_type: string | null;
+  file_ext: string | null;
+  title: string;
+  slug?: string;
+  summary: string;
+  preview_html: string;
+  status: string;
+  article_id: number | null;
+  created_at: string;
+  updated_at: string;
+  expires_at: string;
+  original_url: string;
+  working_url: string;
+  original_absolute_url: string;
+  working_absolute_url: string;
+  onlyoffice: OnlyOfficeImportConfig;
+}
+
+export interface FinalizeImportPayload {
+  title: string;
+  slug?: string;
+  summary?: string;
+  content: string;
+  section_ids?: number[];
+  tags?: string[];
+  article_type?: string;
+  owner_id?: number | null;
+  approver_id?: number | null;
 }
 
 export interface AnalyticsReport {
@@ -583,14 +630,56 @@ export async function fetchMyProfile(): Promise<MyProfile> {
 }
 
 // Article Import API
-export async function importArticle(file: File): Promise<Article> {
+export async function importArticle(file: File): Promise<DocumentImportSession> {
   clearApiCache();
   const formData = new FormData();
   formData.append('file', file);
 
-  return apiCall<Article>('/articles/import', {
+  return apiCall<DocumentImportSession>('/articles/import', {
     method: 'POST',
     body: formData,
+  });
+}
+
+export async function fetchImportSession(id: string): Promise<DocumentImportSession> {
+  return apiCall<DocumentImportSession>(`/articles/import-sessions/${id}`, { cache: 'no-store' });
+}
+
+export async function updateImportSession(
+  id: string,
+  data: Pick<DocumentImportSession, 'title' | 'summary' | 'preview_html'>
+): Promise<DocumentImportSession> {
+  return apiCall<DocumentImportSession>(`/articles/import-sessions/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function resetImportSession(id: string): Promise<DocumentImportSession> {
+  return apiCall<DocumentImportSession>(`/articles/import-sessions/${id}/reset`, {
+    method: 'POST',
+  });
+}
+
+export async function cancelImportSession(id: string): Promise<void> {
+  return apiCall<void>(`/articles/import-sessions/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function saveImportSessionDraft(id: string, data: FinalizeImportPayload): Promise<Article> {
+  clearApiCache();
+  return apiCall<Article>(`/articles/import-sessions/${id}/save-draft`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function publishImportSession(id: string, data: FinalizeImportPayload): Promise<Article> {
+  clearApiCache();
+  return apiCall<Article>(`/articles/import-sessions/${id}/publish`, {
+    method: 'POST',
+    body: JSON.stringify(data),
   });
 }
 

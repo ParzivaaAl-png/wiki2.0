@@ -159,6 +159,31 @@ export const initializeDatabase = async () => {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_article_changes_log_article_id ON article_changes_log(article_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_updated_at ON articles(updated_at)');
 
+    // Temporary document import sessions. Uploading a document must not create or
+    // publish an article until the editor explicitly confirms the import.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS document_import_sessions (
+        id UUID PRIMARY KEY,
+        user_id INT REFERENCES users(id) ON DELETE SET NULL,
+        original_file_name TEXT NOT NULL,
+        mime_type TEXT,
+        file_ext VARCHAR(20),
+        original_file_path TEXT NOT NULL,
+        working_file_path TEXT NOT NULL,
+        preview_html TEXT,
+        title TEXT NOT NULL,
+        summary TEXT DEFAULT '',
+        status VARCHAR(32) DEFAULT 'active',
+        article_id INT REFERENCES articles(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours')
+      );
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_document_import_sessions_user ON document_import_sessions(user_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_document_import_sessions_status ON document_import_sessions(status)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_document_import_sessions_expires_at ON document_import_sessions(expires_at)');
+
     // Create database indexes for performance speedup
     console.log('Creating database indexes for performance speedup...');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_category_id ON articles(category_id)');

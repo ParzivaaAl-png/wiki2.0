@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
+import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as ArticleModel from '../models/article';
@@ -12,6 +14,8 @@ import { getUserAllowedSections } from '../models/orgStructure';
 import { canCreateInSections, canEditArticle, getUserCapabilities } from '../services/accessControl';
 
 const execFileAsync = promisify(execFile);
+const UPLOADS_ROOT = path.join(__dirname, '../../uploads');
+const IMPORT_SESSIONS_ROOT = path.join(UPLOADS_ROOT, 'import-sessions');
 
 type GuestAccessGrant = {
   article_id: number | null;
@@ -27,6 +31,201 @@ type GuestAccessInfo = {
 };
 
 const toIsoString = (value: Date | string) => new Date(value).toISOString();
+
+type DocumentImportSessionRow = {
+  id: string;
+  user_id: number | null;
+  original_file_name: string;
+  mime_type: string | null;
+  file_ext: string | null;
+  original_file_path: string;
+  working_file_path: string;
+  preview_html: string | null;
+  title: string;
+  summary: string | null;
+  status: string;
+  article_id: number | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+  expires_at: Date | string;
+};
+
+const normalizePublicOrigin = (value: string) => (
+  value
+    .replace(/\/api\/?$/i, '')
+    .replace(/\/$/, '')
+);
+
+const getPublicOrigin = (req: Request) => (
+  normalizePublicOrigin(
+    process.env.PUBLIC_BACKEND_URL ||
+    process.env.API_PUBLIC_URL ||
+    `${req.protocol}://${req.get('host')}`
+  )
+);
+
+const getOnlyOfficeServerUrl = () => (
+  (process.env.ONLYOFFICE_DOCUMENT_SERVER_URL || process.env.ONLYOFFICE_DOCS_URL || '').replace(/\/$/, '')
+);
+
+const getUploadUrl = (filePath: string) => {
+  const relative = path.relative(UPLOADS_ROOT, filePath);
+  return `/uploads/${relative.split(path.sep).map(encodeURIComponent).join('/')}`;
+};
+
+const getAbsoluteUploadUrl = (req: Request, filePath: string) => `${getPublicOrigin(req)}${getUploadUrl(filePath)}`;
+
+const sanitizeFileName = (fileName: string) => (
+  fileName
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180) || `document-${Date.now()}`
+);
+
+const slugifyTitle = (title: string, suffix: string | number = Date.now()) => {
+  const base = title
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w\u0400-\u04FF-]+/g, '')
+    .replace(/--+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+
+  return `${base || 'imported-document'}-${suffix}`;
+};
+
+const getFallbackImportPreview = (originalName: string, errorMessage?: string) => {
+  const ext = path.extname(originalName).toLowerCase();
+  const title = path.basename(originalName, ext).replace(/[_-]/g, ' ').trim() || 'Импортированный документ';
+  const note = errorMessage
+    ? `<p>Встроенный HTML-предпросмотр недоступен: ${errorMessage}</p>`
+    : '<p>Предпросмотр для этого формата недоступен, но оригинальный файл сохранён.</p>';
+
+  return {
+    title,
+    content: [
+      '<div class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">',
+      '<h3>Оригинальный документ сохранён</h3>',
+      note,
+      '<p>Скачайте оригинал или откройте рабочую копию в исходном формате, если нужно сохранить сложное форматирование без потерь.</p>',
+      '</div>',
+    ].join(''),
+    summary: `Импортирован файл "${originalName}". Точное отображение хранится в оригинальном документе.`,
+  };
+};
+
+const parseDocumentSafely = async (filePath: string, originalName: string) => {
+  try {
+    return await parseDocument(filePath, originalName);
+  } catch (error: any) {
+    return getFallbackImportPreview(originalName, error?.message || 'формат не поддерживается');
+  }
+};
+
+const getImportSessionById = async (id: string): Promise<DocumentImportSessionRow | null> => {
+  const result = await query('SELECT * FROM document_import_sessions WHERE id = $1', [id]);
+  return result.rows.length ? result.rows[0] : null;
+};
+
+const canAccessImportSession = (session: DocumentImportSessionRow, user?: AuthenticatedRequest['user']) => {
+  if (!user) return false;
+  return user.role === 'Admin' || user.role === 'Администратор Wiki' || session.user_id === user.id;
+};
+
+const buildOnlyOfficeConfig = (req: AuthenticatedRequest, session: DocumentImportSessionRow) => {
+  const documentServerUrl = getOnlyOfficeServerUrl();
+  const ext = (session.file_ext || '').replace('.', '').toLowerCase();
+  const isDocx = ext === 'docx';
+
+  if (!documentServerUrl || !isDocx) {
+    return {
+      enabled: false,
+      documentServerUrl: documentServerUrl || null,
+      reason: isDocx
+        ? 'ONLYOFFICE Document Server не настроен.'
+        : 'Нативное редактирование доступно только для DOCX.',
+    };
+  }
+
+  const publicOrigin = getPublicOrigin(req);
+
+  return {
+    enabled: true,
+    documentServerUrl,
+    config: {
+      documentType: 'word',
+      width: '100%',
+      height: '100%',
+      document: {
+        fileType: ext,
+        key: `${session.id}-${new Date(session.updated_at).getTime()}`.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 128),
+        title: session.original_file_name,
+        url: getAbsoluteUploadUrl(req, session.working_file_path),
+        permissions: {
+          edit: true,
+          download: true,
+          print: true,
+          review: true,
+        },
+      },
+      editorConfig: {
+        mode: 'edit',
+        lang: 'ru',
+        callbackUrl: `${publicOrigin}/api/articles/import-sessions/${session.id}/onlyoffice/callback`,
+        user: {
+          id: String(req.user?.id || 'system'),
+          name: req.user?.name || 'Wiki user',
+        },
+        customization: {
+          autosave: true,
+          forcesave: true,
+        },
+      },
+    },
+  };
+};
+
+const serializeImportSession = (req: AuthenticatedRequest, session: DocumentImportSessionRow) => ({
+  id: session.id,
+  original_file_name: session.original_file_name,
+  mime_type: session.mime_type,
+  file_ext: session.file_ext,
+  title: session.title,
+  slug: slugifyTitle(session.title, new Date(session.created_at).getTime()),
+  summary: session.summary || '',
+  preview_html: session.preview_html || '',
+  status: session.status,
+  article_id: session.article_id,
+  created_at: session.created_at,
+  updated_at: session.updated_at,
+  expires_at: session.expires_at,
+  original_url: getUploadUrl(session.original_file_path),
+  working_url: getUploadUrl(session.working_file_path),
+  original_absolute_url: getAbsoluteUploadUrl(req, session.original_file_path),
+  working_absolute_url: getAbsoluteUploadUrl(req, session.working_file_path),
+  onlyoffice: buildOnlyOfficeConfig(req, session),
+});
+
+const indexImportedArticleIfNeeded = async (article: ArticleModel.Article) => {
+  if (article.published && article.is_visible && article.status === 'published') {
+    const doc: msService.ArticleDocument = {
+      id: article.id,
+      title: article.title,
+      slug: article.slug,
+      content: article.content,
+      summary: article.summary,
+      categoryName: '',
+      tags: article.tags,
+      published: article.published,
+      createdAt: article.created_at.toISOString(),
+      section_ids: article.section_ids,
+    };
+    await msService.indexArticle(doc);
+  }
+};
 
 const extractInternalArticleReferences = (content: string) => {
   const articleIds = new Set<number>();
@@ -903,66 +1102,331 @@ export const importArticle = async (req: AuthenticatedRequest, res: Response) =>
       return res.status(400).json({ error: 'No document file uploaded.' });
     }
 
-    const { path: tempPath, originalname } = req.file;
+    await fs.promises.mkdir(IMPORT_SESSIONS_ROOT, { recursive: true });
 
-    // Parse document
-    const parsedDoc = await parseDocument(tempPath, originalname);
+    const sessionId = randomUUID();
+    const { path: tempPath, originalname, mimetype } = req.file;
+    const safeName = sanitizeFileName(originalname);
+    const fileExt = path.extname(safeName).toLowerCase();
+    const sessionDir = path.join(IMPORT_SESSIONS_ROOT, sessionId);
+    await fs.promises.mkdir(sessionDir, { recursive: true });
 
-    // Slugify title + random string to prevent duplicates
-    const cleanTitle = parsedDoc.title;
-    const cleanSlug = cleanTitle
-      .toString()
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, '-')
-      .replace(/[^\w\u0400-\u04FF-]+/g, '')
-      .replace(/--+/g, '-')
-      .replace(/^-+/, '')
-      .replace(/-+$/, '') + '-' + Date.now();
+    const originalFilePath = path.join(sessionDir, `original-${safeName}`);
+    const workingFilePath = path.join(sessionDir, `working-${safeName}`);
 
+    await fs.promises.copyFile(tempPath, originalFilePath);
+    await fs.promises.copyFile(tempPath, workingFilePath);
+    await fs.promises.unlink(tempPath).catch(() => undefined);
+
+    const parsedDoc = await parseDocumentSafely(workingFilePath, safeName);
     const authorId = req.user ? req.user.id : null;
 
-    // Create article in Postgres as published
-    const article = await ArticleModel.createArticle({
-      title: cleanTitle,
-      slug: cleanSlug,
-      content: parsedDoc.content,
-      summary: parsedDoc.summary,
-      category_id: null,
-      author_id: authorId,
-      published: true,
-      status: 'published',
-      tags: [],
-    });
+    const inserted = await query(
+      `INSERT INTO document_import_sessions (
+        id,
+        user_id,
+        original_file_name,
+        mime_type,
+        file_ext,
+        original_file_path,
+        working_file_path,
+        preview_html,
+        title,
+        summary,
+        status
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active')
+      RETURNING *`,
+      [
+        sessionId,
+        authorId,
+        safeName,
+        mimetype || null,
+        fileExt || null,
+        originalFilePath,
+        workingFilePath,
+        parsedDoc.content,
+        parsedDoc.title || path.basename(safeName, fileExt),
+        parsedDoc.summary || '',
+      ]
+    );
 
-    // Index to Meilisearch
-    const doc: msService.ArticleDocument = {
-      id: article.id,
-      title: article.title,
-      slug: article.slug,
-      content: article.content,
-      summary: article.summary,
-      categoryName: '',
-      tags: [],
-      published: true,
-      createdAt: article.created_at.toISOString(),
-      section_ids: article.section_ids,
-    };
-    
-    await msService.indexArticle(doc);
-
-    // Clean up local temp file
-    if (fs.existsSync(tempPath)) {
-      fs.unlinkSync(tempPath);
-    }
-
-    res.status(201).json(article);
+    res.status(201).json(serializeImportSession(req, inserted.rows[0]));
   } catch (error: any) {
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
     console.error('Document import failed:', error);
     res.status(500).json({ error: 'Document import failed', details: error.message });
+  }
+};
+
+export const getImportSession = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const session = await getImportSessionById(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Import session not found.' });
+    }
+    if (!canAccessImportSession(session, req.user)) {
+      return res.status(403).json({ error: 'Недостаточно прав для просмотра этой импорт-сессии.' });
+    }
+
+    res.json(serializeImportSession(req, session));
+  } catch (error: any) {
+    console.error('Failed to get import session:', error);
+    res.status(500).json({ error: 'Failed to get import session', details: error.message });
+  }
+};
+
+export const updateImportSession = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const session = await getImportSessionById(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Import session not found.' });
+    }
+    if (!canAccessImportSession(session, req.user)) {
+      return res.status(403).json({ error: 'Недостаточно прав для редактирования этой импорт-сессии.' });
+    }
+    if (session.status !== 'active') {
+      return res.status(409).json({ error: 'Import session is already completed.' });
+    }
+
+    const {
+      title = session.title,
+      summary = session.summary || '',
+      preview_html = session.preview_html || '',
+    } = req.body;
+
+    const updated = await query(
+      `UPDATE document_import_sessions
+       SET title = $2,
+           summary = $3,
+           preview_html = $4,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [session.id, title, summary, preview_html]
+    );
+
+    res.json(serializeImportSession(req, updated.rows[0]));
+  } catch (error: any) {
+    console.error('Failed to update import session:', error);
+    res.status(500).json({ error: 'Failed to update import session', details: error.message });
+  }
+};
+
+export const resetImportSession = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const session = await getImportSessionById(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Import session not found.' });
+    }
+    if (!canAccessImportSession(session, req.user)) {
+      return res.status(403).json({ error: 'Недостаточно прав для сброса этой импорт-сессии.' });
+    }
+    if (session.status !== 'active') {
+      return res.status(409).json({ error: 'Import session is already completed.' });
+    }
+
+    await fs.promises.copyFile(session.original_file_path, session.working_file_path);
+    const parsedDoc = await parseDocumentSafely(session.working_file_path, session.original_file_name);
+    const updated = await query(
+      `UPDATE document_import_sessions
+       SET preview_html = $2,
+           title = $3,
+           summary = $4,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [session.id, parsedDoc.content, parsedDoc.title, parsedDoc.summary || '']
+    );
+
+    res.json(serializeImportSession(req, updated.rows[0]));
+  } catch (error: any) {
+    console.error('Failed to reset import session:', error);
+    res.status(500).json({ error: 'Failed to reset import session', details: error.message });
+  }
+};
+
+export const cancelImportSession = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const session = await getImportSessionById(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Import session not found.' });
+    }
+    if (!canAccessImportSession(session, req.user)) {
+      return res.status(403).json({ error: 'Недостаточно прав для отмены этой импорт-сессии.' });
+    }
+    if (session.article_id) {
+      return res.status(409).json({ error: 'Import session already created an article.' });
+    }
+
+    await query('DELETE FROM document_import_sessions WHERE id = $1', [session.id]);
+    await fs.promises.rm(path.dirname(session.original_file_path), { recursive: true, force: true }).catch(() => undefined);
+    res.status(204).send();
+  } catch (error: any) {
+    console.error('Failed to cancel import session:', error);
+    res.status(500).json({ error: 'Failed to cancel import session', details: error.message });
+  }
+};
+
+const createArticleFromImportSession = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  targetStatus: 'draft' | 'published'
+) => {
+  const session = await getImportSessionById(req.params.id);
+  if (!session) {
+    return res.status(404).json({ error: 'Import session not found.' });
+  }
+  if (!canAccessImportSession(session, req.user)) {
+    return res.status(403).json({ error: 'Недостаточно прав для сохранения этой импорт-сессии.' });
+  }
+  if (session.status !== 'active') {
+    return res.status(409).json({ error: 'Import session is already completed.' });
+  }
+
+  const {
+    title = session.title,
+    slug,
+    summary = session.summary || '',
+    content = session.preview_html || '',
+    section_ids,
+    tags,
+    article_type,
+    owner_id,
+    approver_id,
+  } = req.body;
+
+  if (!title || !content) {
+    return res.status(400).json({ error: 'Title and content are required.' });
+  }
+
+  const selectedSectionIds = Array.isArray(section_ids)
+    ? section_ids.map((sectionId) => Number(sectionId)).filter(Boolean)
+    : [];
+  const authorId = req.user ? req.user.id : null;
+  const hasCreateAccess = await canCreateInSections(authorId, req.user?.role, selectedSectionIds);
+  if (!hasCreateAccess) {
+    return res.status(403).json({ error: 'Недостаточно прав для создания статьи в выбранных разделах.' });
+  }
+
+  const article = await ArticleModel.createArticle({
+    title,
+    slug: slug || slugifyTitle(title),
+    content,
+    summary,
+    category_id: null,
+    author_id: authorId,
+    published: targetStatus === 'published',
+    is_visible: true,
+    status: targetStatus,
+    tags: Array.isArray(tags) ? tags : ['импорт'],
+    section_ids: selectedSectionIds,
+    article_type: article_type || 'general',
+    owner_id: owner_id ? Number(owner_id) : null,
+    approver_id: approver_id ? Number(approver_id) : null,
+    structured_data: {
+      importSessionId: session.id,
+      originalFileName: session.original_file_name,
+      originalUrl: getUploadUrl(session.original_file_path),
+      workingUrl: getUploadUrl(session.working_file_path),
+      fileExt: session.file_ext,
+      importedAt: new Date().toISOString(),
+      sourcePreserved: true,
+    },
+  });
+
+  try {
+    await syncContentArticleLinks(article.id, article.content);
+  } catch (linkSyncErr) {
+    console.error('Failed to sync internal article links after import (non-fatal):', linkSyncErr);
+  }
+
+  try {
+    await query(
+      `INSERT INTO article_changes_log (article_id, user_id, change_description, editor_comment, old_content, new_content, old_title, new_title)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        article.id,
+        authorId,
+        targetStatus === 'published' ? 'Импорт документа и публикация' : 'Импорт документа в черновик',
+        `Исходный файл: ${session.original_file_name}`,
+        null,
+        article.content,
+        null,
+        article.title,
+      ]
+    );
+  } catch (logErr) {
+    console.error('Failed to write import change log (non-fatal):', logErr);
+  }
+
+  try {
+    await indexImportedArticleIfNeeded(article);
+  } catch (indexErr) {
+    console.error('Failed to index imported article (non-fatal):', indexErr);
+  }
+
+  await query(
+    `UPDATE document_import_sessions
+     SET status = $2,
+         article_id = $3,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1`,
+    [session.id, targetStatus === 'published' ? 'published' : 'draft_saved', article.id]
+  );
+
+  return res.status(201).json(article);
+};
+
+export const saveImportSessionDraft = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    return await createArticleFromImportSession(req, res, 'draft');
+  } catch (error: any) {
+    console.error('Failed to save import as draft:', error);
+    res.status(500).json({ error: 'Failed to save import as draft', details: error.message });
+  }
+};
+
+export const publishImportSession = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    return await createArticleFromImportSession(req, res, 'published');
+  } catch (error: any) {
+    console.error('Failed to publish imported article:', error);
+    res.status(500).json({ error: 'Failed to publish imported article', details: error.message });
+  }
+};
+
+export const handleOnlyOfficeImportCallback = async (req: Request, res: Response) => {
+  try {
+    const session = await getImportSessionById(req.params.id);
+    if (!session) {
+      return res.json({ error: 0 });
+    }
+
+    const status = Number(req.body?.status);
+    const fileUrl = req.body?.url;
+
+    if ((status === 2 || status === 6) && fileUrl && session.status === 'active') {
+      const response = await axios.get<ArrayBuffer>(fileUrl, { responseType: 'arraybuffer' });
+      await fs.promises.writeFile(session.working_file_path, Buffer.from(response.data));
+      const parsedDoc = await parseDocumentSafely(session.working_file_path, session.original_file_name);
+
+      await query(
+        `UPDATE document_import_sessions
+         SET preview_html = $2,
+             summary = $3,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [session.id, parsedDoc.content, parsedDoc.summary || session.summary || '']
+      );
+    }
+
+    res.json({ error: 0 });
+  } catch (error) {
+    console.error('ONLYOFFICE import callback failed:', error);
+    res.json({ error: 1 });
   }
 };
 
