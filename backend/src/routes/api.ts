@@ -138,6 +138,8 @@ router.post('/admin/users', requireAuth, requireRole(['Admin']), authController.
 router.put('/admin/users/:id/role', requireAuth, requireRole(['Admin']), authController.changeRole);
 router.put('/admin/users/:id/block', requireAuth, requireRole(['Admin']), authController.toggleBlockUser);
 router.put('/admin/users/:id/reset-password', requireAuth, requireRole(['Admin']), authController.resetPasswordByAdmin);
+router.post('/admin/users/:id/require-password-change', requireAuth, requireRole(['Admin']), authController.requirePasswordChangeByAdmin);
+router.post('/admin/users/:id/sessions/revoke', requireAuth, requireRole(['Admin']), authController.revokeUserSessionsByAdmin);
 router.delete('/admin/users/:id', requireAuth, requireRole(['Admin']), authController.deleteUserByAdmin);
 
 // Admin Session & Profile Modification Audit Routes

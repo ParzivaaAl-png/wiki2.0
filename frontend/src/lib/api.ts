@@ -138,6 +138,15 @@ export interface Article {
   guest_access?: GuestAccessInfo | null;
   mandatory_ack_enabled?: boolean;
   mandatory_ack_settings?: MandatoryAcknowledgementSettings | null;
+  ip_restriction_enabled?: boolean;
+  ip_restriction_settings?: IpRestrictionSettings | null;
+}
+
+export interface IpRestrictionSettings {
+  enabled: boolean;
+  mode?: 'whitelist';
+  allowed_ranges: string[];
+  apply_to_attachments: boolean;
 }
 
 export type MandatoryAcknowledgementStatus =
@@ -203,6 +212,7 @@ export interface ArticleMandatoryAcknowledgementState {
 
 export type ArticlePayload = Omit<Article, 'id' | 'created_at' | 'updated_at' | 'views'> & {
   mandatory_acknowledgement?: MandatoryAcknowledgementSettings;
+  ip_restriction?: IpRestrictionSettings;
   change_description?: string;
   editor_comment?: string;
 };
@@ -833,11 +843,25 @@ export async function adminToggleBlock(userId: number, is_blocked: boolean): Pro
   });
 }
 
-export async function adminResetPassword(userId: number, password: string): Promise<{ message: string }> {
+export async function adminResetPassword(userId: number, password?: string): Promise<{ message: string; temporaryPassword?: string }> {
   clearApiCache();
-  return apiCall<{ message: string }>(`/admin/users/${userId}/reset-password`, {
+  return apiCall<{ message: string; temporaryPassword?: string }>(`/admin/users/${userId}/reset-password`, {
     method: 'PUT',
-    body: JSON.stringify({ password }),
+    body: JSON.stringify(password ? { password } : {}),
+  });
+}
+
+export async function adminRequirePasswordChange(userId: number): Promise<{ message: string }> {
+  clearApiCache();
+  return apiCall<{ message: string }>(`/admin/users/${userId}/require-password-change`, {
+    method: 'POST',
+  });
+}
+
+export async function adminRevokeUserSessions(userId: number): Promise<{ message: string; revoked_count: number }> {
+  clearApiCache();
+  return apiCall<{ message: string; revoked_count: number }>(`/admin/users/${userId}/sessions/revoke`, {
+    method: 'POST',
   });
 }
 
@@ -1128,9 +1152,15 @@ export async function markMandatoryAcknowledgementReadComplete(articleId: number
   return apiCall<ArticleMandatoryAcknowledgementState>(`/articles/${articleId}/mandatory-acknowledgement/read-complete`, { method: 'POST' });
 }
 
-export async function confirmMandatoryAcknowledgement(articleId: number): Promise<ArticleMandatoryAcknowledgementState> {
+export async function confirmMandatoryAcknowledgement(
+  articleId: number,
+  data?: { opened_required_collapsibles_count?: number; required_collapsibles_count?: number }
+): Promise<ArticleMandatoryAcknowledgementState> {
   clearApiCache();
-  return apiCall<ArticleMandatoryAcknowledgementState>(`/articles/${articleId}/mandatory-acknowledgement/confirm`, { method: 'POST' });
+  return apiCall<ArticleMandatoryAcknowledgementState>(`/articles/${articleId}/mandatory-acknowledgement/confirm`, {
+    method: 'POST',
+    body: JSON.stringify(data || {}),
+  });
 }
 
 // Article Changes

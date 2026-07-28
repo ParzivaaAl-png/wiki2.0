@@ -30,6 +30,8 @@ export interface Article {
   structured_data?: any | null;
   mandatory_ack_enabled?: boolean;
   mandatory_ack_settings?: any | null;
+  ip_restriction_enabled?: boolean;
+  ip_restriction_settings?: any | null;
 }
 
 export const getAllArticles = async (options: {

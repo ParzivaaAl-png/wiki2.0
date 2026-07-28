@@ -20,6 +20,7 @@ import {
   Position,
   User,
   MandatoryAcknowledgementSettings,
+  IpRestrictionSettings,
 } from '../lib/api';
 import { ModalPortal } from '../components/modal-portal';
 import WYSIWYGEditor from '../components/wysiwyg-editor';
@@ -64,6 +65,12 @@ export default function Editor() {
     require_reacknowledgement: false,
     notifications_enabled: true,
     reminders_enabled: false,
+  });
+  const [ipRestriction, setIpRestriction] = React.useState<IpRestrictionSettings>({
+    enabled: false,
+    mode: 'whitelist',
+    allowed_ranges: [],
+    apply_to_attachments: true,
   });
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -123,6 +130,16 @@ export default function Editor() {
               require_reacknowledgement: !!article.mandatory_ack_settings.require_reacknowledgement,
               notifications_enabled: article.mandatory_ack_settings.notifications_enabled !== false,
               reminders_enabled: !!article.mandatory_ack_settings.reminders_enabled,
+            });
+          }
+          if (article.ip_restriction_settings || article.ip_restriction_enabled) {
+            setIpRestriction({
+              enabled: !!article.ip_restriction_enabled,
+              mode: 'whitelist',
+              allowed_ranges: Array.isArray(article.ip_restriction_settings?.allowed_ranges)
+                ? article.ip_restriction_settings.allowed_ranges
+                : [],
+              apply_to_attachments: article.ip_restriction_settings?.apply_to_attachments !== false,
             });
           }
         } else {
@@ -225,6 +242,7 @@ export default function Editor() {
         ...mandatoryAck,
         due_days: Number(mandatoryAck.due_days || 7),
       },
+      ip_restriction: ipRestriction,
       ...(isEditMode && {
         change_description: changeDescription.trim() || 'Обновлено содержание статьи',
         editor_comment: editorComment.trim() || 'Редактирование статьи',
@@ -534,6 +552,65 @@ export default function Editor() {
                       <span>Включить напоминания о сроке</span>
                     </label>
                   </div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-rose-500/20 bg-rose-500/[0.035] p-4 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-extrabold text-foreground">
+                    <ShieldCheck className="h-4 w-4 text-rose-500" />
+                    Ограничение по IP
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    Белый список сетей для просмотра статьи. Проверка выполняется на сервере.
+                  </p>
+                </div>
+                <label className="relative inline-flex cursor-pointer items-center">
+                  <input
+                    type="checkbox"
+                    checked={ipRestriction.enabled}
+                    onChange={(e) => setIpRestriction((prev) => ({ ...prev, enabled: e.target.checked }))}
+                    className="peer sr-only"
+                  />
+                  <span className="h-5 w-9 rounded-full bg-muted after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-border after:bg-white after:transition-all peer-checked:bg-rose-600 peer-checked:after:translate-x-full" />
+                </label>
+              </div>
+
+              {ipRestriction.enabled && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1 block text-[10px] font-bold uppercase text-muted-foreground">
+                      Разрешенные IP и CIDR
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={ipRestriction.allowed_ranges.join('\n')}
+                      onChange={(e) => {
+                        const ranges = e.target.value
+                          .split(/[\n,]/)
+                          .map((item) => item.trim())
+                          .filter(Boolean);
+                        setIpRestriction((prev) => ({ ...prev, allowed_ranges: ranges }));
+                      }}
+                      placeholder={'192.168.1.10\n10.0.0.0/24\n2001:db8::/32'}
+                      className="w-full resize-none rounded-lg border border-border bg-card px-3 py-2 font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground focus:border-rose-500"
+                    />
+                    <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+                      Каждый адрес или диапазон с новой строки. Если список пуст, доступ будет закрыт всем.
+                    </p>
+                  </div>
+
+                  <label className="flex items-start gap-2 text-[11px] font-semibold text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={ipRestriction.apply_to_attachments}
+                      onChange={(e) => setIpRestriction((prev) => ({ ...prev, apply_to_attachments: e.target.checked }))}
+                      className="mt-0.5 h-3.5 w-3.5 rounded border-border text-rose-600"
+                    />
+                    <span>Применять ограничение к вложениям и скачиванию файлов</span>
+                  </label>
                 </div>
               )}
             </div>

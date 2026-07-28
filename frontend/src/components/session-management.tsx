@@ -9,13 +9,21 @@ import {
   RefreshCw,
   Search,
   Clock,
-  Globe
+  Globe,
+  KeyRound,
+  Lock,
+  Unlock,
+  RotateCcw
 } from 'lucide-react';
 import { 
   fetchUserSessions, 
   deleteUserSession, 
   UserWithSessions, 
-  UserSession 
+  UserSession,
+  adminResetPassword,
+  adminRequirePasswordChange,
+  adminRevokeUserSessions,
+  adminToggleBlock
 } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 
@@ -25,6 +33,7 @@ export default function SessionManagement() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [expandedUserIds, setExpandedUserIds] = React.useState<Set<number>>(new Set());
+  const [temporaryPassword, setTemporaryPassword] = React.useState<{ userName: string; password: string } | null>(null);
 
   const loadSessions = async () => {
     setIsLoading(true);
@@ -69,6 +78,71 @@ export default function SessionManagement() {
       })));
     } catch (err: any) {
       alert(err.message || 'Не удалось завершить сессию.');
+    }
+  };
+
+  const handleResetPassword = async (targetUser: UserWithSessions, event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (!window.confirm(`Сгенерировать временный пароль для пользователя ${targetUser.name}? Все активные сессии будут завершены.`)) {
+      return;
+    }
+
+    try {
+      const result = await adminResetPassword(targetUser.id);
+      if (result.temporaryPassword) {
+        setTemporaryPassword({ userName: targetUser.name, password: result.temporaryPassword });
+      }
+      setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? { ...u, sessions: [] } : u)));
+    } catch (err: any) {
+      alert(err.message || 'Не удалось сбросить пароль.');
+    }
+  };
+
+  const handleRequirePasswordChange = async (targetUser: UserWithSessions, event: React.MouseEvent) => {
+    event.stopPropagation();
+    try {
+      await adminRequirePasswordChange(targetUser.id);
+      alert(`При следующем входе ${targetUser.name} должен будет сменить пароль.`);
+    } catch (err: any) {
+      alert(err.message || 'Не удалось включить требование смены пароля.');
+    }
+  };
+
+  const handleRevokeAllSessions = async (targetUser: UserWithSessions, event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (!window.confirm(`Завершить все активные сессии пользователя ${targetUser.name}?`)) {
+      return;
+    }
+
+    try {
+      await adminRevokeUserSessions(targetUser.id);
+      setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? { ...u, sessions: [] } : u)));
+    } catch (err: any) {
+      alert(err.message || 'Не удалось завершить все сессии.');
+    }
+  };
+
+  const handleToggleBlock = async (targetUser: UserWithSessions, event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (targetUser.id === currentUser?.id) {
+      alert('Нельзя заблокировать собственный аккаунт.');
+      return;
+    }
+
+    const nextBlocked = !targetUser.is_blocked;
+    if (!window.confirm(`${nextBlocked ? 'Заблокировать' : 'Разблокировать'} аккаунт ${targetUser.name}?`)) {
+      return;
+    }
+
+    try {
+      await adminToggleBlock(targetUser.id, nextBlocked);
+      setUsers((prev) => prev.map((u) => (
+        u.id === targetUser.id
+          ? { ...u, is_blocked: nextBlocked, sessions: nextBlocked ? [] : u.sessions }
+          : u
+      )));
+    } catch (err: any) {
+      alert(err.message || 'Не удалось изменить статус аккаунта.');
     }
   };
 
@@ -188,6 +262,11 @@ export default function SessionManagement() {
                             Вы
                           </span>
                         )}
+                        {u.is_blocked && (
+                          <span className="text-[9px] px-1.5 py-0.2 bg-red-500/10 text-red-500 rounded font-semibold">
+                            Заблокирован
+                          </span>
+                        )}
                       </h4>
                       <p className="text-[10px] text-neutral-400 font-light mt-0.5">
                         Логин: {u.username} • Роль: {u.role}
@@ -195,7 +274,42 @@ export default function SessionManagement() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="hidden xl:flex items-center gap-1.5">
+                      <button
+                        onClick={(event) => handleResetPassword(u, event)}
+                        className="inline-flex h-8 items-center gap-1 rounded-lg border border-amber-500/20 bg-amber-500/5 px-2 text-[10px] font-bold text-amber-600 hover:bg-amber-500/10"
+                        title="Сгенерировать временный пароль"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" />
+                        Сброс
+                      </button>
+                      <button
+                        onClick={(event) => handleRequirePasswordChange(u, event)}
+                        className="inline-flex h-8 items-center gap-1 rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-2 text-[10px] font-bold text-indigo-600 hover:bg-indigo-500/10"
+                        title="Потребовать смену пароля"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Смена
+                      </button>
+                      <button
+                        onClick={(event) => handleRevokeAllSessions(u, event)}
+                        className="inline-flex h-8 items-center gap-1 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-2 text-[10px] font-bold text-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-900"
+                        title="Завершить все сессии"
+                      >
+                        <ShieldAlert className="h-3.5 w-3.5" />
+                        Сессии
+                      </button>
+                      <button
+                        onClick={(event) => handleToggleBlock(u, event)}
+                        disabled={u.id === currentUser?.id}
+                        className="inline-flex h-8 items-center gap-1 rounded-lg border border-red-500/20 bg-red-500/5 px-2 text-[10px] font-bold text-red-500 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                        title={u.is_blocked ? 'Разблокировать аккаунт' : 'Заблокировать аккаунт'}
+                      >
+                        {u.is_blocked ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                        {u.is_blocked ? 'Открыть' : 'Блок'}
+                      </button>
+                    </div>
                     <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
                       activeSessions.length > 0
                         ? 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20'
@@ -214,6 +328,37 @@ export default function SessionManagement() {
                 {/* Collapsible Session List */}
                 {isExpanded && (
                   <div className="bg-neutral-50/30 dark:bg-neutral-900/5 p-4 border-t border-neutral-100 dark:border-neutral-900 space-y-3">
+                    <div className="grid grid-cols-2 gap-2 xl:hidden">
+                      <button
+                        onClick={(event) => handleResetPassword(u, event)}
+                        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-2 text-[10px] font-bold text-amber-600"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" />
+                        Временный пароль
+                      </button>
+                      <button
+                        onClick={(event) => handleRequirePasswordChange(u, event)}
+                        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-2 text-[10px] font-bold text-indigo-600"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Смена пароля
+                      </button>
+                      <button
+                        onClick={(event) => handleRevokeAllSessions(u, event)}
+                        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-2 text-[10px] font-bold text-neutral-500"
+                      >
+                        <ShieldAlert className="h-3.5 w-3.5" />
+                        Завершить сессии
+                      </button>
+                      <button
+                        onClick={(event) => handleToggleBlock(u, event)}
+                        disabled={u.id === currentUser?.id}
+                        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/5 px-2 text-[10px] font-bold text-red-500 disabled:opacity-40"
+                      >
+                        {u.is_blocked ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                        {u.is_blocked ? 'Разблокировать' : 'Заблокировать'}
+                      </button>
+                    </div>
                     {activeSessions.length === 0 ? (
                       <p className="text-[11px] text-neutral-400 py-2 pl-11">
                         Нет активных сессий (пользователь не вошел в аккаунт).
@@ -276,6 +421,34 @@ export default function SessionManagement() {
           })
         )}
       </div>
+      {temporaryPassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 shadow-2xl">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
+                <KeyRound className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-outfit text-base font-extrabold text-neutral-950 dark:text-neutral-100">
+                  Временный пароль создан
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
+                  Покажите пароль пользователю {temporaryPassword.userName}. После закрытия окна повторно посмотреть его нельзя.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 font-mono text-lg font-extrabold tracking-widest text-amber-700 dark:text-amber-300">
+              {temporaryPassword.password}
+            </div>
+            <button
+              onClick={() => setTemporaryPassword(null)}
+              className="mt-5 inline-flex min-h-10 w-full items-center justify-center rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white hover:bg-indigo-700"
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -100,6 +100,8 @@ export default function ArticlePage() {
   const [mandatoryAckState, setMandatoryAckState] = React.useState<ArticleMandatoryAcknowledgementState | null>(null);
   const [hasReachedArticleEnd, setHasReachedArticleEnd] = React.useState(false);
   const [isConfirmingAck, setIsConfirmingAck] = React.useState(false);
+  const [requiredCollapsibleCount, setRequiredCollapsibleCount] = React.useState(0);
+  const [openedRequiredCollapsibles, setOpenedRequiredCollapsibles] = React.useState<Set<string>>(new Set());
 
   // Fetch article links when article is loaded
   React.useEffect(() => {
@@ -500,11 +502,83 @@ export default function ArticlePage() {
     return () => window.removeEventListener('scroll', onScroll);
   }, [article, mandatoryAckState?.required, mandatoryAckState?.assignment?.acknowledged_at, mandatoryAckState?.assignment?.read_completed_at]);
 
+  React.useEffect(() => {
+    setHasReachedArticleEnd(false);
+    setRequiredCollapsibleCount(0);
+    setOpenedRequiredCollapsibles(new Set());
+  }, [article?.id]);
+
+  React.useEffect(() => {
+    if (!article) return;
+
+    let cleanupListeners: (() => void) | undefined;
+    const timer = window.setTimeout(() => {
+      const root = document.querySelector(`[data-article-content="${article.id}"]`);
+      if (!root) return;
+
+      const blocks = Array.from(
+        root.querySelectorAll<HTMLDetailsElement>('details[data-wiki-collapsible="true"]')
+      );
+
+      blocks.forEach((block, index) => {
+        block.dataset.collapsibleRuntimeId = block.dataset.collapsibleRuntimeId || `${article.id}-${index}`;
+      });
+
+      const requiredBlocks = blocks.filter((block) => block.dataset.requiredForAck === 'true');
+      const openedRequired = new Set(
+        requiredBlocks
+          .filter((block) => block.open)
+          .map((block) => block.dataset.collapsibleRuntimeId || '')
+          .filter(Boolean)
+      );
+
+      setRequiredCollapsibleCount(requiredBlocks.length);
+      setOpenedRequiredCollapsibles(openedRequired);
+
+      const onToggle = (event: Event) => {
+        const current = event.currentTarget as HTMLDetailsElement;
+
+        if (current.open && current.dataset.allowMultiple === 'false') {
+          blocks.forEach((block) => {
+            if (block !== current && block.dataset.allowMultiple === 'false') {
+              block.open = false;
+            }
+          });
+        }
+
+        if (current.dataset.requiredForAck === 'true' && current.open) {
+          const id = current.dataset.collapsibleRuntimeId;
+          if (id) {
+            setOpenedRequiredCollapsibles((prev) => {
+              const next = new Set(prev);
+              next.add(id);
+              return next;
+            });
+          }
+        }
+      };
+
+      blocks.forEach((block) => block.addEventListener('toggle', onToggle));
+
+      cleanupListeners = () => {
+        blocks.forEach((block) => block.removeEventListener('toggle', onToggle));
+      };
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+      cleanupListeners?.();
+    };
+  }, [article?.id, article?.content]);
+
   const handleConfirmMandatoryAcknowledgement = async () => {
     if (!article || isConfirmingAck) return;
     setIsConfirmingAck(true);
     try {
-      const updated = await confirmMandatoryAcknowledgement(article.id);
+      const updated = await confirmMandatoryAcknowledgement(article.id, {
+        opened_required_collapsibles_count: openedRequiredCollapsibles.size,
+        required_collapsibles_count: requiredCollapsibleCount,
+      });
       setMandatoryAckState(updated);
       alert('Ознакомление подтверждено.');
     } catch (err: any) {
@@ -565,7 +639,7 @@ export default function ArticlePage() {
     let html = article.content;
     const headingRegex = /(<h([1-4]))([^>]*>)([\s\S]*?)(<\/h\2>)/gi;
     
-    return html.replace(headingRegex, (m, openTag, level, attrs, text, closeTag) => {
+    html = html.replace(headingRegex, (m, openTag, level, attrs, text, closeTag) => {
       if (attrs.includes('id=')) return m;
       
       const cleanText = text.replace(/<[^>]*>/g, '').trim();
@@ -577,6 +651,16 @@ export default function ArticlePage() {
         
       return `${openTag} id="${id}"${attrs}${text}${closeTag}`;
     });
+
+    if (article.ip_restriction_enabled && article.ip_restriction_settings?.apply_to_attachments !== false) {
+      html = html.replace(/(href|src)="(\/uploads\/[^"]+)"/gi, (match, attr, url) => {
+        if (url.includes('articleId=')) return match;
+        const separator = url.includes('?') ? '&' : '?';
+        return `${attr}="${url}${separator}articleId=${article.id}"`;
+      });
+    }
+
+    return html;
   }, [article]);
 
   const getStatusBadge = (status: string) => {
@@ -633,6 +717,11 @@ export default function ArticlePage() {
       default: return 'Назначено';
     }
   };
+
+  const allRequiredCollapsiblesOpened =
+    requiredCollapsibleCount === 0 || openedRequiredCollapsibles.size >= requiredCollapsibleCount;
+  const hasCompletedMandatoryReading =
+    hasReachedArticleEnd || !!mandatoryAckState?.assignment?.read_completed_at;
 
   // Custom markdown headings handler
   const MarkdownComponents = {
@@ -802,7 +891,10 @@ export default function ArticlePage() {
                     )}
                   </div>
                   <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                    Открытие статьи фиксируется как просмотр. Подтверждение станет доступно только после прокрутки материала до конца.
+                    Открытие статьи фиксируется как просмотр. Подтверждение станет доступно после прокрутки материала до конца
+                    {requiredCollapsibleCount > 0
+                      ? ` и открытия обязательных раскрывающихся блоков (${openedRequiredCollapsibles.size}/${requiredCollapsibleCount}).`
+                      : '.'}
                   </p>
                 </div>
                 <button
@@ -810,7 +902,8 @@ export default function ArticlePage() {
                   disabled={
                     isConfirmingAck ||
                     !!mandatoryAckState.assignment.acknowledged_at ||
-                    (!hasReachedArticleEnd && !mandatoryAckState.assignment.read_completed_at)
+                    !hasCompletedMandatoryReading ||
+                    !allRequiredCollapsiblesOpened
                   }
                   className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                 >
@@ -941,6 +1034,57 @@ export default function ArticlePage() {
           )}
 
           {/* Article content renderer */}
+          <style>{`
+            .wiki-collapsible-block {
+              margin: 1rem 0;
+              overflow: hidden;
+              border: 1px solid var(--border);
+              border-radius: 0.875rem;
+              background: var(--card);
+              box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+            }
+            .dark .wiki-collapsible-block {
+              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            }
+            .wiki-collapsible-summary {
+              display: flex;
+              align-items: center;
+              gap: 0.625rem;
+              padding: 0.95rem 1rem;
+              cursor: pointer;
+              list-style: none;
+              font-weight: 800;
+              color: var(--foreground);
+              background: var(--muted);
+              user-select: none;
+            }
+            .wiki-collapsible-summary::-webkit-details-marker {
+              display: none;
+            }
+            .wiki-collapsible-summary::before {
+              content: '';
+              width: 0.45rem;
+              height: 0.45rem;
+              border-right: 2px solid currentColor;
+              border-bottom: 2px solid currentColor;
+              transform: rotate(-45deg);
+              transition: transform 160ms ease;
+              opacity: 0.7;
+            }
+            .wiki-collapsible-block[open] > .wiki-collapsible-summary::before {
+              transform: rotate(45deg);
+            }
+            .wiki-collapsible-content {
+              padding: 1rem;
+              border-top: 1px solid var(--border);
+            }
+            .wiki-collapsible-content > :first-child {
+              margin-top: 0;
+            }
+            .wiki-collapsible-content > :last-child {
+              margin-bottom: 0;
+            }
+          `}</style>
           {(() => {
             if (article.slug === 'auto-list') {
               return <TariffsClassifier />;
@@ -954,6 +1098,7 @@ export default function ArticlePage() {
             if (isHtml) {
               return (
                 <div 
+                  data-article-content={article.id}
                   dangerouslySetInnerHTML={{ __html: processedContent }} 
                   className="prose dark:prose-invert max-w-none prose-neutral dark:prose-neutral prose-headings:font-bold prose-h2:text-2xl prose-h2:border-b prose-h2:border-neutral-250/50 dark:prose-h2:border-neutral-800/50 prose-h2:pb-2 prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-3 prose-p:leading-relaxed prose-p:mb-4 prose-ul:list-disc prose-ul:pl-6 prose-ul:mb-4 prose-table:w-full prose-table:border-collapse prose-table:my-4 prose-td:border prose-td:border-neutral-200/50 dark:prose-td:border-neutral-800/50 prose-td:p-2 prose-th:bg-neutral-100 dark:prose-th:bg-neutral-900 prose-th:p-2 prose-th:font-semibold" 
                 />

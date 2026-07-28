@@ -64,8 +64,8 @@ export const initializeDatabase = async () => {
       console.log('Database tables already exist. Checking additional tables...');
     }
 
-    // Always ensure user_sessions and user_audit_logs exist
-    console.log('Ensuring user_sessions and user_audit_logs tables exist...');
+    // Always ensure session and audit tables exist
+    console.log('Ensuring session and audit tables exist...');
     const createSessionsTableQuery = `
       CREATE TABLE IF NOT EXISTS user_sessions (
         id SERIAL PRIMARY KEY,
@@ -91,6 +91,24 @@ export const initializeDatabase = async () => {
       );
     `;
     await pool.query(createAuditLogsTableQuery);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS security_audit_logs (
+        id SERIAL PRIMARY KEY,
+        actor_user_id INT REFERENCES users(id) ON DELETE SET NULL,
+        target_user_id INT REFERENCES users(id) ON DELETE SET NULL,
+        article_id INT REFERENCES articles(id) ON DELETE SET NULL,
+        action VARCHAR(120) NOT NULL,
+        status VARCHAR(40) NOT NULL,
+        ip_address VARCHAR(90),
+        user_agent TEXT,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_security_audit_action_created ON security_audit_logs(action, created_at DESC)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_security_audit_article ON security_audit_logs(article_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_security_audit_target_user ON security_audit_logs(target_user_id)');
 
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false');
     
@@ -202,6 +220,8 @@ export const initializeDatabase = async () => {
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS structured_data JSONB DEFAULT NULL');
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS mandatory_ack_enabled BOOLEAN DEFAULT FALSE');
     await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS mandatory_ack_settings JSONB DEFAULT NULL');
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS ip_restriction_enabled BOOLEAN DEFAULT FALSE');
+    await pool.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS ip_restriction_settings JSONB DEFAULT NULL');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS mandatory_ack_assignments (

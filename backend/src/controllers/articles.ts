@@ -16,6 +16,12 @@ import { AuthenticatedRequest } from '../middleware/auth';
 import { query } from '../config/db';
 import { getUserAllowedSections } from '../models/orgStructure';
 import { canCreateInSections, canEditArticle, getUserCapabilities } from '../services/accessControl';
+import {
+  getClientIp,
+  isIpAllowedBySettings,
+  logSecurityEvent,
+  normalizeIpRestrictionSettings,
+} from '../services/security';
 
 const execFileAsync = promisify(execFile);
 const UPLOADS_ROOT = path.join(__dirname, '../../uploads');
@@ -394,6 +400,12 @@ type MandatoryAckSettings = {
   reminders_enabled: boolean;
 };
 
+type ArticleIpRestrictionInput = {
+  enabled: boolean;
+  allowed_ranges: string[];
+  apply_to_attachments: boolean;
+};
+
 const normalizeNumberIds = (value: unknown): number[] => {
   if (!Array.isArray(value)) return [];
   return Array.from(new Set(value.map((item) => Number(item)).filter((id) => Number.isFinite(id) && id > 0)));
@@ -411,6 +423,101 @@ const normalizeMandatoryAckSettings = (input: any): MandatoryAckSettings => ({
   notifications_enabled: input?.notifications_enabled !== false,
   reminders_enabled: !!input?.reminders_enabled,
 });
+
+const normalizeArticleIpRestriction = (input: any): ArticleIpRestrictionInput => {
+  const settings = normalizeIpRestrictionSettings(input);
+  return {
+    enabled: settings.enabled,
+    allowed_ranges: settings.allowed_ranges,
+    apply_to_attachments: settings.apply_to_attachments,
+  };
+};
+
+const syncArticleIpRestriction = async (articleId: number, input: any) => {
+  const settings = normalizeArticleIpRestriction(input);
+  await query(
+    `UPDATE articles
+     SET ip_restriction_enabled = $2,
+         ip_restriction_settings = $3,
+         updated_at = updated_at
+     WHERE id = $1`,
+    [
+      articleId,
+      settings.enabled,
+      JSON.stringify(settings),
+    ]
+  );
+};
+
+const enforceArticleIpRestriction = async (
+  req: Request,
+  article: ArticleModel.Article,
+  action: string
+) => {
+  const settings = normalizeIpRestrictionSettings({
+    ...(article.ip_restriction_settings || {}),
+    enabled: !!article.ip_restriction_enabled,
+  });
+
+  if (!settings.enabled) return true;
+
+  const authReq = req as AuthenticatedRequest;
+  const clientIp = getClientIp(req);
+  const allowed = isIpAllowedBySettings(clientIp, settings);
+
+  await logSecurityEvent({
+    req,
+    actorUserId: authReq.user?.id || null,
+    articleId: article.id,
+    action,
+    status: allowed ? 'allowed' : 'denied',
+    metadata: {
+      article_title: article.title,
+      allowed_ranges: settings.allowed_ranges,
+      apply_to_attachments: settings.apply_to_attachments,
+    },
+  });
+
+  return allowed;
+};
+
+const filterSearchResultsByIpRestriction = async <T extends { id: number }>(
+  req: Request,
+  results: T[]
+) => {
+  if (!results.length) return results;
+
+  const articleIds = results.map((item) => Number(item.id)).filter(Boolean);
+  const restrictionResult = await query(
+    `SELECT id, title, ip_restriction_enabled, ip_restriction_settings
+     FROM articles
+     WHERE id = ANY($1::int[])
+       AND ip_restriction_enabled = true`,
+    [articleIds]
+  );
+
+  if (restrictionResult.rows.length === 0) return results;
+
+  const restrictions = new Map<number, ArticleModel.Article>(
+    restrictionResult.rows.map((row) => [Number(row.id), row as ArticleModel.Article])
+  );
+
+  const allowedResults: T[] = [];
+  for (const item of results) {
+    const restrictedArticle = restrictions.get(Number(item.id));
+    if (!restrictedArticle) {
+      allowedResults.push(item);
+      continue;
+    }
+
+    const allowed = await enforceArticleIpRestriction(req, restrictedArticle, 'restricted_article_search');
+    if (allowed) {
+      allowedResults.push(item);
+    }
+  }
+
+  return allowedResults;
+};
 
 const getArticleVersionKey = (article: Pick<ArticleModel.Article, 'id' | 'updated_at'>) => (
   `article-${article.id}-${new Date(article.updated_at).getTime()}`
@@ -928,6 +1035,11 @@ export const getArticle = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Article not found' });
     }
 
+    const hasAllowedIp = await enforceArticleIpRestriction(req, article, 'restricted_article_view');
+    if (!hasAllowedIp) {
+      return res.status(403).json({ error: 'Статья доступна только из разрешенной сети.' });
+    }
+
     const activeGuestGrants = userId ? await getActiveGuestAccessGrants(userId) : [];
     const articleGuestAccess = getGuestAccessInfoForArticle(activeGuestGrants, article.id, article.section_ids || []);
 
@@ -954,8 +1066,7 @@ export const getArticle = async (req: Request, res: Response) => {
     }
 
     // Запись детального просмотра с IP и User ID в фоновом режиме
-    const rawIp = (authReq.headers['x-forwarded-for'] as string) || authReq.socket.remoteAddress || authReq.ip || '';
-    const ip = rawIp.split(',')[0].trim();
+    const ip = getClientIp(req);
     
     ArticleModel.incrementArticleViews(article.id, userId, ip).catch(err => 
       console.error(`Failed to increment views for article ${article?.id}:`, err)
@@ -1022,6 +1133,7 @@ export const createArticle = async (req: Request, res: Response) => {
       owner_id,
       approver_id,
       mandatory_acknowledgement,
+      ip_restriction,
     } = req.body;
     
     if (!title || !slug || !content) {
@@ -1054,6 +1166,13 @@ export const createArticle = async (req: Request, res: Response) => {
       owner_id: owner_id ? Number(owner_id) : null,
       approver_id: approver_id ? Number(approver_id) : null,
     });
+
+    try {
+      await syncArticleIpRestriction(article.id, ip_restriction);
+      article = await ArticleModel.getArticleById(article.id) || article;
+    } catch (ipErr) {
+      console.error('Failed to sync IP restriction settings (non-fatal):', ipErr);
+    }
 
     try {
       await syncContentArticleLinks(article.id, article.content);
@@ -1121,6 +1240,7 @@ export const updateArticle = async (req: Request, res: Response) => {
       change_description,
       editor_comment,
       mandatory_acknowledgement,
+      ip_restriction,
     } = req.body;
 
     if (!title || !slug || !content) {
@@ -1161,6 +1281,21 @@ export const updateArticle = async (req: Request, res: Response) => {
 
     if (!article) {
       return res.status(404).json({ error: 'Article not found' });
+    }
+
+    try {
+      await syncArticleIpRestriction(
+        article.id,
+        ip_restriction === undefined
+          ? {
+              ...(currentArticle.ip_restriction_settings || {}),
+              enabled: !!currentArticle.ip_restriction_enabled,
+            }
+          : ip_restriction
+      );
+      article = await ArticleModel.getArticleById(article.id) || article;
+    } catch (ipErr) {
+      console.error('Failed to sync IP restriction settings (non-fatal):', ipErr);
     }
 
     try {
@@ -1434,6 +1569,8 @@ export const searchArticles = async (req: Request, res: Response) => {
         if (sections.length === 0) return false;
         return sections.some(id => allowedSectionIds.includes(id));
       });
+
+      results = await filterSearchResultsByIpRestriction(req, results);
     }
     
     res.json(results);
@@ -1469,6 +1606,8 @@ export const suggestArticles = async (req: Request, res: Response) => {
         if (sections.length === 0) return false;
         return sections.some(id => allowedSectionIds.includes(id));
       });
+
+      results = await filterSearchResultsByIpRestriction(req, results);
     }
 
     res.json(results);
@@ -1483,20 +1622,12 @@ export const uploadImage = async (req: Request, res: Response) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file uploaded.' });
     }
-    
-    // Convert to base64 data URL
-    const fileBuffer = await fs.promises.readFile(req.file.path);
-    const base64 = fileBuffer.toString('base64');
-    const imageUrl = `data:${req.file.mimetype};base64,${base64}`;
-    
-    // Delete the file from the ephemeral disk
-    await fs.promises.unlink(req.file.path).catch(err => {
-      console.error('Failed to delete temp file:', err);
-    });
+
+    const fileUrl = `/uploads/${encodeURIComponent(req.file.filename)}`;
     
     res.status(201).json({ 
       message: 'Image uploaded successfully', 
-      url: imageUrl 
+      url: fileUrl
     });
   } catch (error: any) {
     console.error('Image upload failed:', error);
@@ -2077,6 +2208,12 @@ export const confirmMandatoryAcknowledgement = async (req: AuthenticatedRequest,
     }
     if (!assignment.read_completed_at) {
       return res.status(400).json({ error: 'Подтверждение доступно только после прокрутки статьи до конца.' });
+    }
+    const articleResult = await query('SELECT content FROM articles WHERE id = $1', [Number(req.params.id)]);
+    const requiredBlocksInArticle = String(articleResult.rows[0]?.content || '').match(/data-required-for-ack=["']true["']/gi)?.length || 0;
+    const openedRequiredBlocks = Number(req.body?.opened_required_collapsibles_count || 0);
+    if (requiredBlocksInArticle > 0 && openedRequiredBlocks < requiredBlocksInArticle) {
+      return res.status(400).json({ error: 'Откройте все обязательные раскрывающиеся блоки перед подтверждением ознакомления.' });
     }
 
     const now = new Date();

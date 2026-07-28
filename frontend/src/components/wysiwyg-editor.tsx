@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
-import { Extension } from '@tiptap/core';
+import { useEditor, EditorContent, NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import { Extension, Node, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import { TextStyle } from '@tiptap/extension-text-style';
@@ -24,7 +24,7 @@ import {
   List, ListOrdered, CheckSquare, Image as ImageIcon,
   Link as LinkIcon, Quote, Code, Heading1, Heading2, Heading3, Heading4,
   Undo, Redo, Table as TableIcon, Smile, Eye, EyeOff, Save,
-  Youtube as YoutubeIcon, Paperclip, BookOpen, AlertTriangle
+  Youtube as YoutubeIcon, Paperclip, BookOpen, AlertTriangle, ChevronDown, Type
 } from 'lucide-react';
 import { uploadImage, suggestArticles, Suggestion } from '../lib/api';
 
@@ -86,6 +86,14 @@ declare module '@tiptap/core' {
       setFontSize: (fontSize: string) => ReturnType;
       unsetFontSize: () => ReturnType;
     };
+    collapsibleBlock: {
+      insertCollapsibleBlock: (attrs?: {
+        title?: string;
+        defaultOpen?: boolean;
+        allowMultiple?: boolean;
+        requiredForAck?: boolean;
+      }) => ReturnType;
+    };
   }
 }
 
@@ -132,6 +140,141 @@ const FontSize = Extension.create({
   },
 });
 
+const CollapsibleBlockView = ({ node, updateAttributes }: any) => {
+  const attrs = node.attrs || {};
+
+  return (
+    <NodeViewWrapper className="wiki-collapsible-editor my-4 rounded-xl border border-indigo-500/25 bg-indigo-500/[0.035] p-3">
+      <div className="mb-3 flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
+        <label className="text-[10px] font-extrabold uppercase text-muted-foreground">
+          Заголовок раскрывающегося блока
+        </label>
+        <input
+          value={attrs.title || ''}
+          onChange={(event) => updateAttributes({ title: event.target.value })}
+          className="h-9 rounded-lg border border-border bg-muted px-3 text-sm font-bold text-foreground outline-none focus:border-indigo-500"
+          placeholder="Например: Детали тарифа"
+        />
+        <div className="grid gap-2 text-[11px] font-semibold text-muted-foreground sm:grid-cols-3">
+          <label className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-2">
+            <input
+              type="checkbox"
+              checked={!!attrs.defaultOpen}
+              onChange={(event) => updateAttributes({ defaultOpen: event.target.checked })}
+              className="h-3.5 w-3.5 rounded border-border text-indigo-600"
+            />
+            <span>Открыт после публикации</span>
+          </label>
+          <label className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-2">
+            <input
+              type="checkbox"
+              checked={attrs.allowMultiple !== false}
+              onChange={(event) => updateAttributes({ allowMultiple: event.target.checked })}
+              className="h-3.5 w-3.5 rounded border-border text-indigo-600"
+            />
+            <span>Можно открывать несколько</span>
+          </label>
+          <label className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-2">
+            <input
+              type="checkbox"
+              checked={!!attrs.requiredForAck}
+              onChange={(event) => updateAttributes({ requiredForAck: event.target.checked })}
+              className="h-3.5 w-3.5 rounded border-border text-indigo-600"
+            />
+            <span>Обязательно открыть</span>
+          </label>
+        </div>
+      </div>
+      <div className="rounded-lg border border-dashed border-indigo-500/25 bg-card/70 p-3">
+        <div className="mb-2 flex items-center gap-2 text-[10px] font-extrabold uppercase text-indigo-500">
+          <ChevronDown className="h-3.5 w-3.5" />
+          Содержимое блока
+        </div>
+        <NodeViewContent className="wiki-collapsible-editor-content min-h-12 text-foreground" />
+      </div>
+    </NodeViewWrapper>
+  );
+};
+
+const CollapsibleBlock = Node.create({
+  name: 'collapsibleBlock',
+  group: 'block',
+  content: 'block+',
+  defining: true,
+  isolating: true,
+
+  addAttributes() {
+    return {
+      title: {
+        default: 'Раскрывающийся блок',
+        parseHTML: (element) => element.getAttribute('data-title') || element.querySelector('summary')?.textContent || 'Раскрывающийся блок',
+        renderHTML: (attributes) => ({ 'data-title': attributes.title }),
+      },
+      defaultOpen: {
+        default: false,
+        parseHTML: (element) => element.hasAttribute('open') || element.getAttribute('data-default-open') === 'true',
+        renderHTML: (attributes) => ({
+          'data-default-open': attributes.defaultOpen ? 'true' : 'false',
+          ...(attributes.defaultOpen ? { open: '' } : {}),
+        }),
+      },
+      allowMultiple: {
+        default: true,
+        parseHTML: (element) => element.getAttribute('data-allow-multiple') !== 'false',
+        renderHTML: (attributes) => ({ 'data-allow-multiple': attributes.allowMultiple === false ? 'false' : 'true' }),
+      },
+      requiredForAck: {
+        default: false,
+        parseHTML: (element) => element.getAttribute('data-required-for-ack') === 'true',
+        renderHTML: (attributes) => ({ 'data-required-for-ack': attributes.requiredForAck ? 'true' : 'false' }),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'details[data-wiki-collapsible="true"]' }];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      'details',
+      mergeAttributes(HTMLAttributes, {
+        'data-wiki-collapsible': 'true',
+        class: 'wiki-collapsible-block',
+      }),
+      ['summary', { class: 'wiki-collapsible-summary' }, node.attrs.title || 'Раскрывающийся блок'],
+      ['div', { class: 'wiki-collapsible-content' }, 0],
+    ];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(CollapsibleBlockView);
+  },
+
+  addCommands() {
+    return {
+      insertCollapsibleBlock:
+        (attrs = {}) =>
+        ({ commands }) =>
+          commands.insertContent({
+            type: this.name,
+            attrs: {
+              title: attrs.title || 'Раскрывающийся блок',
+              defaultOpen: !!attrs.defaultOpen,
+              allowMultiple: attrs.allowMultiple !== false,
+              requiredForAck: !!attrs.requiredForAck,
+            },
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: 'Добавьте содержимое блока...' }],
+              },
+            ],
+          }),
+    };
+  },
+});
+
 export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGEditorProps) {
   const [isPreview, setIsPreview] = React.useState(false);
   const [showEmoji, setShowEmoji] = React.useState(false);
@@ -145,11 +288,17 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  const withArticleScope = React.useCallback((url: string) => {
+    if (!articleId || articleId === 'new' || !url.startsWith('/uploads/')) return url;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}articleId=${encodeURIComponent(String(articleId))}`;
+  }, [articleId]);
+
   const uploadImageFile = async (file: File, view: any) => {
     try {
       const res = await uploadImage(file);
       const { schema } = view.state;
-      const node = schema.nodes.image.create({ src: res.url });
+      const node = schema.nodes.image.create({ src: withArticleScope(res.url) });
       const transaction = view.state.tr.replaceSelectionWith(node);
       view.dispatch(transaction);
     } catch (err: any) {
@@ -164,6 +313,7 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
           levels: [1, 2, 3, 4, 5, 6],
         },
       }),
+      CollapsibleBlock,
       Underline,
       TextStyle,
       FontSize,
@@ -341,6 +491,25 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
     editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   };
 
+  const adjustFontSize = (direction: 1 | -1) => {
+    const values = FONT_SIZES.map((size) => size.value);
+    const current = activeFontSize || editor.getAttributes('textStyle').fontSize || '16px';
+    const currentIndex = Math.max(0, values.indexOf(current));
+    const nextIndex = Math.min(values.length - 1, Math.max(0, currentIndex + direction));
+    const nextSize = values[nextIndex];
+    setActiveFontSize(nextSize);
+    editor.chain().focus().setFontSize(nextSize).run();
+  };
+
+  const insertCollapsibleBlock = () => {
+    editor.chain().focus().insertCollapsibleBlock({
+      title: 'Новый раскрывающийся блок',
+      defaultOpen: false,
+      allowMultiple: true,
+      requiredForAck: false,
+    }).run();
+  };
+
   const addEmoji = (emoji: string) => {
     editor.chain().focus().insertContent(emoji).run();
     setShowEmoji(false);
@@ -367,11 +536,12 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
 
     try {
       const res = await uploadImage(file);
+      const scopedUrl = withArticleScope(res.url);
       // Вставляем как красивую ссылку с иконкой скрепки
       editor
         .chain()
         .focus()
-        .insertContent(`<a href="${res.url}" download="${file.name}" class="inline-flex items-center gap-1.5 text-indigo-650 dark:text-indigo-400 font-bold underline hover:text-indigo-850">📎 ${file.name}</a> `)
+        .insertContent(`<a href="${scopedUrl}" download="${file.name}" class="inline-flex items-center gap-1.5 text-indigo-650 dark:text-indigo-400 font-bold underline hover:text-indigo-850">📎 ${file.name}</a> `)
         .run();
     } catch (err: any) {
       alert(err.message || 'Ошибка загрузки файла');
@@ -469,6 +639,34 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
         .dark .ProseMirror blockquote {
           border-left-color: #475569;
           color: #94a3b8;
+        }
+        .ProseMirror .wiki-collapsible-editor-content > *:first-child {
+          margin-top: 0;
+        }
+        .ProseMirror .wiki-collapsible-editor-content > *:last-child {
+          margin-bottom: 0;
+        }
+        .wiki-collapsible-block {
+          margin: 1rem 0;
+          border: 1px solid var(--border);
+          border-radius: 0.75rem;
+          background: var(--card);
+          overflow: hidden;
+        }
+        .wiki-collapsible-summary {
+          cursor: pointer;
+          list-style: none;
+          padding: 0.875rem 1rem;
+          font-weight: 800;
+          color: var(--foreground);
+          background: var(--muted);
+        }
+        .wiki-collapsible-summary::-webkit-details-marker {
+          display: none;
+        }
+        .wiki-collapsible-content {
+          padding: 1rem;
+          border-top: 1px solid var(--border);
         }
       `}</style>
 
@@ -571,7 +769,7 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
                   editor.chain().focus().unsetFontSize().run();
                 }
               }}
-              className="text-[10px] border border-border rounded px-1.5 py-1 bg-card text-muted-foreground outline-none cursor-pointer"
+              className="h-8 min-w-[92px] text-[11px] font-semibold border border-border rounded px-2 bg-card text-foreground outline-none cursor-pointer"
               title="Размер текста"
             >
               <option value="">Размер</option>
@@ -579,6 +777,22 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
                 <option key={size.value} value={size.value}>{size.name}</option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => adjustFontSize(-1)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded border border-border bg-card text-xs font-extrabold text-muted-foreground hover:bg-muted hover:text-foreground"
+              title="Уменьшить шрифт"
+            >
+              A-
+            </button>
+            <button
+              type="button"
+              onClick={() => adjustFontSize(1)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded border border-border bg-card text-sm font-extrabold text-foreground hover:bg-muted"
+              title="Увеличить шрифт"
+            >
+              A+
+            </button>
           </div>
 
           {/* Text Style: Bold, Italic, Underline */}
@@ -737,6 +951,15 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
               title="Блок предупреждения"
             >
               ⚠️ Вним.
+            </button>
+            <button
+              type="button"
+              onClick={insertCollapsibleBlock}
+              className="inline-flex items-center gap-1 px-1.5 py-1 text-[10px] font-bold rounded hover:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-550/15 cursor-pointer"
+              title="Раскрывающийся блок"
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+              Блок
             </button>
           </div>
 

@@ -60,6 +60,19 @@ export const requireAuth = async (
       employee_id: (user as any).employee_id,
     };
 
+    if (user.must_change_password) {
+      const canContinue =
+        (req.originalUrl.includes('/api/auth/me') && (req.method === 'GET' || req.method === 'PATCH')) ||
+        req.originalUrl.includes('/api/auth/logout');
+
+      if (!canContinue) {
+        return res.status(403).json({
+          error: 'Необходимо сменить временный пароль перед продолжением работы.',
+          code: 'PASSWORD_CHANGE_REQUIRED',
+        });
+      }
+    }
+
     next();
   } catch (error: any) {
     if (error.name === 'TokenExpiredError') {

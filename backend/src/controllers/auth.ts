@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { randomBytes } from 'crypto';
 import * as UserModel from '../models/user';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { query, pool } from '../config/db';
 import { getRuleAllowedSectionIds, getUserAccessProfile, getUserCapabilities } from '../services/accessControl';
+import { getClientIp, logSecurityEvent } from '../services/security';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_wiki20';
 const REFRESH_SECRET = process.env.REFRESH_SECRET || 'super_secret_refresh_key_wiki20';
@@ -21,6 +23,13 @@ const generateTokens = (userId: number) => {
   );
   return { accessToken, refreshToken };
 };
+
+const generateTemporaryPassword = () => (
+  randomBytes(9)
+    .toString('base64url')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .slice(0, 12)
+);
 
 const setCookieOptions = (maxAgeMs: number) => ({
   httpOnly: true,
@@ -46,8 +55,7 @@ export const register = async (req: Request, res: Response) => {
     
     const { accessToken, refreshToken } = generateTokens(user.id);
     
-    const rawIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
-    const ipAddress = rawIp.split(',')[0].trim();
+    const ipAddress = getClientIp(req);
     const userAgent = req.headers['user-agent'] || '';
     
     // Save session in DB
@@ -98,8 +106,7 @@ export const login = async (req: Request, res: Response) => {
 
     const { accessToken, refreshToken } = generateTokens(user.id);
     
-    const rawIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
-    const ipAddress = rawIp.split(',')[0].trim();
+    const ipAddress = getClientIp(req);
     const userAgent = req.headers['user-agent'] || '';
     
     // Save session in DB
@@ -171,8 +178,7 @@ export const refresh = async (req: Request, res: Response) => {
 
     const tokens = generateTokens(user.id);
     
-    const rawIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || req.ip || '';
-    const ipAddress = rawIp.split(',')[0].trim();
+    const ipAddress = getClientIp(req);
     const userAgent = req.headers['user-agent'] || '';
 
     // Update session with new refresh token
@@ -384,6 +390,19 @@ export const toggleBlockUser = async (req: AuthenticatedRequest, res: Response) 
     const success = await UserModel.blockUser(Number(id), !!is_blocked);
     if (!success) return res.status(404).json({ error: 'User not found.' });
 
+    if (is_blocked) {
+      await query('DELETE FROM user_sessions WHERE user_id = $1', [Number(id)]);
+    }
+
+    await logSecurityEvent({
+      req,
+      actorUserId: req.user?.id || null,
+      targetUserId: Number(id),
+      action: is_blocked ? 'account_blocked' : 'account_unblocked',
+      status: 'success',
+      metadata: { sessions_revoked: !!is_blocked },
+    });
+
     res.json({ message: `User account has been ${is_blocked ? 'blocked' : 'unblocked'}` });
   } catch (error: any) {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
@@ -446,17 +465,61 @@ export const deleteUserByAdmin = async (req: AuthenticatedRequest, res: Response
 export const resetPasswordByAdmin = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { password } = req.body;
+    const requestedPassword = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
+    const temporaryPassword = requestedPassword || generateTemporaryPassword();
 
-    if (!password || password.length < 6) {
+    if (temporaryPassword.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10);
     const success = await UserModel.resetUserPassword(Number(id), passwordHash);
     if (!success) return res.status(404).json({ error: 'User not found.' });
 
-    res.json({ message: 'User password reset successfully.' });
+    await query('DELETE FROM user_sessions WHERE user_id = $1', [Number(id)]);
+    await logSecurityEvent({
+      req,
+      actorUserId: req.user?.id || null,
+      targetUserId: Number(id),
+      action: 'password_reset_temporary',
+      status: 'success',
+      metadata: { sessions_revoked: true, password_visible_once: true },
+    });
+
+    res.json({
+      message: 'User password reset successfully.',
+      temporaryPassword,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const requirePasswordChangeByAdmin = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      `UPDATE users
+       SET must_change_password = true,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING id`,
+      [Number(id)]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    await logSecurityEvent({
+      req,
+      actorUserId: req.user?.id || null,
+      targetUserId: Number(id),
+      action: 'require_password_change',
+      status: 'success',
+    });
+
+    res.json({ message: 'Password change will be required at next login.' });
   } catch (error: any) {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
@@ -494,7 +557,33 @@ export const deleteUserSession = async (req: AuthenticatedRequest, res: Response
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Сессия не найдена.' });
     }
+    await logSecurityEvent({
+      req,
+      actorUserId: req.user?.id || null,
+      targetUserId: result.rows[0].user_id,
+      action: 'session_revoked',
+      status: 'success',
+      metadata: { session_id: Number(id) },
+    });
     res.json({ message: 'Сессия успешно завершена.' });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
+export const revokeUserSessionsByAdmin = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await query('DELETE FROM user_sessions WHERE user_id = $1 RETURNING id', [Number(id)]);
+    await logSecurityEvent({
+      req,
+      actorUserId: req.user?.id || null,
+      targetUserId: Number(id),
+      action: 'all_sessions_revoked',
+      status: 'success',
+      metadata: { revoked_count: result.rowCount || 0 },
+    });
+    res.json({ message: 'Все активные сессии пользователя завершены.', revoked_count: result.rowCount || 0 });
   } catch (error: any) {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
@@ -562,6 +651,14 @@ export const updateUserByAdmin = async (req: AuthenticatedRequest, res: Response
           'INSERT INTO user_audit_logs (user_id, changed_by, field_changed, old_value, new_value) VALUES ($1, $2, $3, $4, $5)',
           [id, adminId, 'password', '***', '***']
         );
+        await logSecurityEvent({
+          req,
+          actorUserId: adminId || null,
+          targetUserId: Number(id),
+          action: 'password_changed_by_admin',
+          status: 'success',
+          metadata: { must_change_password: true },
+        });
       }
 
       if (Object.prototype.hasOwnProperty.call(req.body, 'employee_id')) {

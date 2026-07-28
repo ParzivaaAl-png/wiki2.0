@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import dotenv from 'dotenv';
 import apiRouter from './routes/api';
-import { checkDatabaseConnection, initializeDatabase } from './config/db';
+import { checkDatabaseConnection, initializeDatabase, query } from './config/db';
 import { 
   checkMeilisearchConnection, 
   initializeMeilisearch, 
@@ -16,6 +16,12 @@ import {
 } from './services/meilisearch';
 import * as ArticleModel from './models/article';
 import * as NewsModel from './models/news';
+import {
+  isIpAllowedBySettings,
+  logSecurityEvent,
+  normalizeIpRestrictionSettings,
+  getClientIp,
+} from './services/security';
 
 dotenv.config();
 
@@ -34,8 +40,71 @@ app.use(cookieParser());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Serve static upload files
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Serve upload files. When an articleId is supplied, attachment access follows
+// the same backend IP restriction as the article itself.
+app.use('/uploads', async (req, res, next) => {
+  try {
+    const rawArticleId = Array.isArray(req.query.articleId) ? req.query.articleId[0] : req.query.articleId;
+    const articleId = Number(rawArticleId || 0);
+    const candidateArticles: ArticleModel.Article[] = [];
+
+    if (Number.isFinite(articleId) && articleId > 0) {
+      const article = await ArticleModel.getArticleById(articleId);
+      if (!article) {
+        return res.status(404).json({ error: 'Article not found' });
+      }
+      candidateArticles.push(article);
+    } else {
+      const uploadPath = `/uploads${req.path}`;
+      const matchingArticles = await query(
+        `SELECT id, title, ip_restriction_enabled, ip_restriction_settings
+         FROM articles
+         WHERE ip_restriction_enabled = true
+           AND content LIKE $1
+         LIMIT 20`,
+        [`%${uploadPath}%`]
+      );
+      candidateArticles.push(...(matchingArticles.rows as ArticleModel.Article[]));
+    }
+
+    if (candidateArticles.length === 0) {
+      return next();
+    }
+
+    for (const article of candidateArticles) {
+      const settings = normalizeIpRestrictionSettings({
+        ...(article.ip_restriction_settings || {}),
+        enabled: !!article.ip_restriction_enabled,
+      });
+
+      if (!settings.enabled || settings.apply_to_attachments === false) {
+        continue;
+      }
+
+      const allowed = isIpAllowedBySettings(getClientIp(req), settings);
+      await logSecurityEvent({
+        req,
+        articleId: article.id,
+        action: 'restricted_article_attachment',
+        status: allowed ? 'allowed' : 'denied',
+        metadata: {
+          article_title: article.title,
+          file_path: req.path,
+          allowed_ranges: settings.allowed_ranges,
+        },
+      });
+
+      if (!allowed) {
+        return res.status(403).json({ error: 'Файл доступен только из разрешенной сети.' });
+      }
+    }
+
+    return next();
+  } catch (error) {
+    console.error('Failed to check upload IP restriction:', error);
+    return res.status(500).json({ error: 'Failed to check file access.' });
+  }
+}, express.static(path.join(__dirname, '../uploads')));
 
 // Routes
 app.use('/api', apiRouter);
