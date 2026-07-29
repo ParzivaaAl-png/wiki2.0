@@ -464,41 +464,57 @@ export default function ArticlePage() {
     }
   };
 
-  // Effect to highlight, expand collapsibles, and scroll to text or anchor
+  // Effect to highlight, expand collapsibles, and scroll to text or anchor with retry
   React.useEffect(() => {
     if (!article || isLoading) return;
-    
-    const timer = setTimeout(() => {
-      const queryParams = new URLSearchParams(location.search);
-      const highlight = queryParams.get('highlight');
-      const hash = location.hash;
 
-      const articleContainer = document.querySelector('article');
-      if (articleContainer) {
-        if (highlight) {
-          highlightTextInDOM(articleContainer as HTMLElement, highlight);
-        }
+    const queryParams = new URLSearchParams(location.search);
+    const highlight = queryParams.get('highlight');
+    const hash = location.hash;
 
-        if (hash) {
-          const targetId = decodeURIComponent(hash.substring(1));
-          const targetEl = document.getElementById(targetId);
-          if (targetEl) {
-            let parent = targetEl.parentElement;
-            while (parent && parent !== articleContainer) {
-              if (parent.tagName === 'DETAILS' || parent.hasAttribute('data-wiki-collapsible')) {
-                (parent as HTMLDetailsElement).open = true;
-              }
-              parent = parent.parentElement;
+    if (!highlight && !hash) return;
+
+    const runHighlight = () => {
+      const articleContainer = document.querySelector('article') || document.querySelector('[data-article-content]') || document.querySelector('.prose-custom');
+      if (!articleContainer) return false;
+
+      let success = false;
+      if (highlight) {
+        success = highlightTextInDOM(articleContainer as HTMLElement, highlight);
+      }
+
+      if (hash) {
+        const targetId = decodeURIComponent(hash.substring(1));
+        const targetEl = document.getElementById(targetId);
+        if (targetEl) {
+          let parent = targetEl.parentElement;
+          while (parent && parent !== articleContainer) {
+            if (parent.tagName === 'DETAILS' || parent.hasAttribute('data-wiki-collapsible') || parent.classList.contains('wiki-collapsible-block')) {
+              (parent as HTMLDetailsElement).open = true;
             }
-            setTimeout(() => {
-              targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 150);
+            parent = parent.parentElement;
           }
+          setTimeout(() => {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 300);
+          success = true;
         }
       }
-    }, 150);
-    
-    return () => clearTimeout(timer);
+
+      return success;
+    };
+
+    // Try immediately, then at 150ms, 400ms, and 800ms to handle async DOM rendering
+    runHighlight();
+    const t1 = setTimeout(runHighlight, 150);
+    const t2 = setTimeout(runHighlight, 400);
+    const t3 = setTimeout(runHighlight, 800);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
   }, [article, isLoading, location.search, location.hash]);
 
   React.useEffect(() => {
@@ -2037,17 +2053,30 @@ export default function ArticlePage() {
   );
 }
 
-function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
-  if (!textToHighlight || textToHighlight.trim().length === 0) return;
+function highlightTextInDOM(container: HTMLElement, textToHighlight: string): boolean {
+  if (!textToHighlight || textToHighlight.trim().length === 0) return false;
 
   const escapeRegExp = (str: string) => {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   };
 
-  const cleanText = textToHighlight.trim();
-  const pattern = escapeRegExp(cleanText).replace(/\s+/g, '\\s+');
+  const cleanText = textToHighlight.trim().replace(/\u00a0/g, ' ');
+  const pattern = escapeRegExp(cleanText).replace(/\s+/g, '[\\s\\u00a0]+');
   const testRegex = new RegExp(pattern, 'i'); // Non-global regex for safe test() without lastIndex mutation
   const matchRegex = new RegExp(`(${pattern})`, 'gi'); // Global regex for string replacement
+
+  // 1. FIRST PASS: Instantly open any <details> / .wiki-collapsible-block whose textContent matches!
+  const allDetails = container.querySelectorAll<HTMLDetailsElement>('details, .wiki-collapsible-block, [data-wiki-collapsible]');
+  let openedAny = false;
+  allDetails.forEach((details) => {
+    if (details.textContent && testRegex.test(details.textContent.replace(/\u00a0/g, ' '))) {
+      if (!details.open) {
+        details.open = true;
+        details.dispatchEvent(new Event('toggle'));
+        openedAny = true;
+      }
+    }
+  });
 
   // Clean up any previous search highlights
   container.querySelectorAll('mark.wiki-search-highlight').forEach((mark) => {
@@ -2058,6 +2087,7 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
     }
   });
 
+  // 2. SECOND PASS: Find text nodes and replace with <mark>
   const walk = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
   const nodesToReplace: Text[] = [];
 
@@ -2066,7 +2096,7 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
     const parent = currentNode.parentNode;
     if (
       currentNode.nodeValue && 
-      testRegex.test(currentNode.nodeValue) &&
+      testRegex.test(currentNode.nodeValue.replace(/\u00a0/g, ' ')) &&
       parent &&
       parent.nodeName !== 'SCRIPT' &&
       parent.nodeName !== 'STYLE' &&
@@ -2081,7 +2111,7 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
   let firstMark: HTMLElement | null = null;
 
   nodesToReplace.forEach((node) => {
-    // Expand all ancestor <details> / collapsible blocks so the highlighted text is fully visible
+    // Re-verify all ancestor <details> / collapsible blocks so the highlighted text is fully visible
     let currentParent = node.parentElement;
     while (currentParent && currentParent !== container) {
       if (
@@ -2093,6 +2123,7 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
         if (!detailsEl.open) {
           detailsEl.open = true;
           detailsEl.dispatchEvent(new Event('toggle'));
+          openedAny = true;
         }
       }
       currentParent = currentParent.parentElement;
@@ -2141,8 +2172,11 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
     markEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     setTimeout(() => {
       markEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 250);
+    }, 300);
+    return true;
   }
+
+  return openedAny;
 }
 
 interface DiffLine {
