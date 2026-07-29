@@ -458,6 +458,15 @@ function getRelevanceRank(hit: any, queryText: string): number {
   return 6;
 }
 
+const withMsTimeout = <T>(promise: Promise<T>, timeoutMs = 1500): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('Meilisearch request timeout')), timeoutMs)
+    ),
+  ]);
+};
+
 /**
  * Searches articles with filters, highlighting, and typo tolerance.
  */
@@ -467,49 +476,108 @@ export const searchArticles = async (
   tagName?: string,
   allowedSectionIds?: number[]
 ) => {
-  await syncIfNeeded();
+  // Run background sync non-blockingly
+  syncIfNeeded().catch(() => {});
   try {
-    const filterArray: string[] = ['published = true'];
+    return await withMsTimeout((async () => {
+      const filterArray: string[] = ['published = true'];
 
-    if (categorySlug) {
-      filterArray.push(`categoryName = "${categorySlug}"`);
-    }
+      if (categorySlug) {
+        filterArray.push(`categoryName = "${categorySlug}"`);
+      }
 
-    if (tagName) {
-      filterArray.push(`tags = "${tagName}"`);
-    }
+      if (tagName) {
+        filterArray.push(`tags = "${tagName}"`);
+      }
 
-    if (allowedSectionIds && allowedSectionIds.length > 0) {
-      filterArray.push(`section_ids IN [${allowedSectionIds.join(', ')}]`);
-    } else if (allowedSectionIds) {
-      filterArray.push(`section_ids = -1`);
-    }
+      if (allowedSectionIds && allowedSectionIds.length > 0) {
+        filterArray.push(`section_ids IN [${allowedSectionIds.join(', ')}]`);
+      } else if (allowedSectionIds) {
+        filterArray.push(`section_ids = -1`);
+      }
 
-    const searchParams: any = {
-      filter: filterArray,
-      attributesToHighlight: [
-        'title',
-        'title_latin',
-        'aliases',
-        'tags',
-        'tags_latin',
-        'summary',
-        'content',
-        'content_latin',
-        'search_text',
-        'search_text_latin'
-      ],
-      highlightPreTag: '<mark class="bg-indigo-500/20 text-indigo-200 px-1 rounded font-semibold">',
-      highlightPostTag: '</mark>',
-      showRankingScore: true,
-      limit: 25,
-    };
+      const searchParams: any = {
+        filter: filterArray,
+        attributesToHighlight: [
+          'title',
+          'title_latin',
+          'aliases',
+          'tags',
+          'tags_latin',
+          'summary',
+          'content',
+          'content_latin',
+          'search_text',
+          'search_text_latin'
+        ],
+        highlightPreTag: '<mark class="bg-indigo-500/20 text-indigo-200 px-1 rounded font-semibold">',
+        highlightPostTag: '</mark>',
+        showRankingScore: true,
+        limit: 25,
+      };
 
-    // If query is empty, sort by creation date (newest first)
-    if (!queryText || queryText.trim().length === 0) {
-      searchParams.sort = ['createdAt:desc'];
-      const response = await msClient.index(INDEX_NAME).search('', searchParams);
-      return response.hits.map((hit: any) => {
+      // If query is empty, sort by creation date (newest first)
+      if (!queryText || queryText.trim().length === 0) {
+        searchParams.sort = ['createdAt:desc'];
+        const response = await msClient.index(INDEX_NAME).search('', searchParams);
+        return response.hits.map((hit: any) => {
+          const formatted = hit._formatted || {};
+          const contentHighlights = extractHighlights(formatted.content || '');
+
+          return {
+            id: Number(hit.id),
+            title: formatted.title || hit.title,
+            slug: hit.slug,
+            summary: formatted.summary || hit.summary,
+            categoryName: hit.categoryName,
+            tags: hit.tags,
+            published: hit.published,
+            createdAt: hit.createdAt,
+            highlights: contentHighlights,
+            score: hit._rankingScore || 1.0,
+          };
+        });
+      }
+
+      // Generate multiple variants of the query
+      const variants = getQueryVariants(queryText);
+      
+      // Execute multiple search queries in parallel
+      const searchPromises = variants.map(variant =>
+        msClient.index(INDEX_NAME).search(variant, searchParams)
+      );
+      const searchResponses = await Promise.all(searchPromises);
+
+      // Merge and deduplicate by document id
+      const hitMap = new Map<number, any>();
+      for (const response of searchResponses) {
+        for (const hit of response.hits) {
+          const hitId = Number(hit.id);
+          const existing = hitMap.get(hitId);
+          if (!existing || (hit._rankingScore || 0) > (existing._rankingScore || 0)) {
+            hitMap.set(hitId, hit);
+          }
+        }
+      }
+
+      const mergedHits = Array.from(hitMap.values());
+
+      mergedHits.sort((a, b) => {
+        const rankA = getRelevanceRank(a, queryText);
+        const rankB = getRelevanceRank(b, queryText);
+        
+        if (rankA !== rankB) {
+          return rankA - rankB;
+        }
+        
+        const scoreA = a._rankingScore || 0;
+        const scoreB = b._rankingScore || 0;
+        return scoreB - scoreA;
+      });
+
+      const finalHits = mergedHits.slice(0, 20);
+
+      return finalHits.map((hit: any) => {
         const formatted = hit._formatted || {};
         const contentHighlights = extractHighlights(formatted.content || '');
 
@@ -526,68 +594,9 @@ export const searchArticles = async (
           score: hit._rankingScore || 1.0,
         };
       });
-    }
-
-    // Generate multiple variants of the query
-    const variants = getQueryVariants(queryText);
-    
-    // Execute multiple search queries in parallel
-    const searchPromises = variants.map(variant =>
-      msClient.index(INDEX_NAME).search(variant, searchParams)
-    );
-    const searchResponses = await Promise.all(searchPromises);
-
-    // Merge and deduplicate by document id
-    const hitMap = new Map<number, any>();
-    for (const response of searchResponses) {
-      for (const hit of response.hits) {
-        const hitId = Number(hit.id);
-        const existing = hitMap.get(hitId);
-        // Keep the one with the higher ranking score
-        if (!existing || (hit._rankingScore || 0) > (existing._rankingScore || 0)) {
-          hitMap.set(hitId, hit);
-        }
-      }
-    }
-
-    const mergedHits = Array.from(hitMap.values());
-
-    // Sort by custom relevance rank, then by rank score descending
-    mergedHits.sort((a, b) => {
-      const rankA = getRelevanceRank(a, queryText);
-      const rankB = getRelevanceRank(b, queryText);
-      
-      if (rankA !== rankB) {
-        return rankA - rankB;
-      }
-      
-      const scoreA = a._rankingScore || 0;
-      const scoreB = b._rankingScore || 0;
-      return scoreB - scoreA;
-    });
-
-    // Slice to top 20 hits
-    const finalHits = mergedHits.slice(0, 20);
-
-    return finalHits.map((hit: any) => {
-      const formatted = hit._formatted || {};
-      const contentHighlights = extractHighlights(formatted.content || '');
-
-      return {
-        id: Number(hit.id),
-        title: formatted.title || hit.title,
-        slug: hit.slug,
-        summary: formatted.summary || hit.summary,
-        categoryName: hit.categoryName,
-        tags: hit.tags,
-        published: hit.published,
-        createdAt: hit.createdAt,
-        highlights: contentHighlights,
-        score: hit._rankingScore || 1.0,
-      };
-    });
+    })(), 1500);
   } catch (error) {
-    console.error('Meilisearch search query failed:', error);
+    console.error('Meilisearch search query failed or timed out:', error);
     return [];
   }
 };
@@ -596,44 +605,47 @@ export const searchArticles = async (
  * Auto-completion suggestions provider.
  */
 export const suggestArticles = async (queryText: string, allowedSectionIds?: number[]) => {
-  await syncIfNeeded();
+  syncIfNeeded().catch(() => {});
   try {
-    if (!queryText || queryText.trim().length === 0) return [];
+    return await withMsTimeout((async () => {
+      if (!queryText || queryText.trim().length === 0) return [];
 
-    const filterArray = ['published = true'];
-    if (allowedSectionIds && allowedSectionIds.length > 0) {
-      filterArray.push(`section_ids IN [${allowedSectionIds.join(', ')}]`);
-    } else if (allowedSectionIds) {
-      filterArray.push(`section_ids = -1`);
-    }
-
-    const variants = getQueryVariants(queryText);
-    const searchPromises = variants.map(variant =>
-      msClient.index(INDEX_NAME).search(variant, {
-        filter: filterArray,
-        attributesToRetrieve: ['id', 'title', 'slug', 'categoryName'],
-        limit: 5,
-      })
-    );
-    const searchResponses = await Promise.all(searchPromises);
-
-    const hitMap = new Map<number, any>();
-    for (const response of searchResponses) {
-      for (const hit of response.hits) {
-        hitMap.set(Number(hit.id), hit);
+      const filterArray = ['published = true'];
+      if (allowedSectionIds && allowedSectionIds.length > 0) {
+        filterArray.push(`section_ids IN [${allowedSectionIds.join(', ')}]`);
+      } else if (allowedSectionIds) {
+        filterArray.push(`section_ids = -1`);
       }
-    }
 
-    const mergedHits = Array.from(hitMap.values());
+      const variants = getQueryVariants(queryText);
+      const searchPromises = variants.map(variant =>
+        msClient.index(INDEX_NAME).search(variant, {
+          filter: filterArray,
+          attributesToRetrieve: ['id', 'title', 'slug', 'categoryName'],
+          limit: 5,
+        })
+      );
+      const searchResponses = await Promise.all(searchPromises);
 
-    return mergedHits.slice(0, 5).map((hit: any) => ({
-      id: Number(hit.id),
-      title: hit.title,
-      slug: hit.slug,
-      categoryName: hit.categoryName,
-    }));
+      const hitMap = new Map<number, any>();
+      for (const response of searchResponses) {
+        for (const hit of response.hits) {
+          const hitId = Number(hit.id);
+          if (!hitMap.has(hitId)) {
+            hitMap.set(hitId, hit);
+          }
+        }
+      }
+
+      return Array.from(hitMap.values()).slice(0, 5).map(hit => ({
+        id: Number(hit.id),
+        title: hit.title,
+        slug: hit.slug,
+        categoryName: hit.categoryName,
+      }));
+    })(), 1500);
   } catch (error) {
-    console.error('Meilisearch suggestions query failed:', error);
+    console.error('Meilisearch suggest query failed or timed out:', error);
     return [];
   }
 };
