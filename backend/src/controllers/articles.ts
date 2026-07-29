@@ -1306,7 +1306,7 @@ export const createArticle = async (req: Request, res: Response) => {
       author_id: authorId,
       published: published === undefined ? true : !!published,
       is_visible: is_visible === undefined ? true : !!is_visible,
-      status: status || 'draft',
+      status: status || ((published === undefined || published) ? 'published' : 'draft'),
       tags: tags || [],
       section_ids: selectedSectionIds,
       position: position !== undefined ? Number(position) : 0,
@@ -1356,7 +1356,7 @@ export const createArticle = async (req: Request, res: Response) => {
     }
 
     // Auto-index to Meilisearch
-    if (article.published && article.is_visible && article.status === 'published') {
+    if (article.published && article.is_visible) {
       const doc: msService.ArticleDocument = {
         id: article.id,
         title: article.title,
@@ -1364,9 +1364,9 @@ export const createArticle = async (req: Request, res: Response) => {
         content: article.content,
         summary: article.summary,
         categoryName: '',
-        tags: article.tags,
+        tags: article.tags || [],
         published: article.published,
-        createdAt: article.created_at.toISOString(),
+        createdAt: article.created_at instanceof Date ? article.created_at.toISOString() : new Date(article.created_at).toISOString(),
         section_ids: article.section_ids,
       };
       msService.indexArticle(doc).catch(err => 
@@ -1533,7 +1533,7 @@ export const updateArticle = async (req: Request, res: Response) => {
     }
 
     // Auto-index or delete from Meilisearch depending on published and visible status
-    if (article.published && article.is_visible && article.status === 'published') {
+    if (article.published && article.is_visible) {
       const doc: msService.ArticleDocument = {
         id: article.id,
         title: article.title,
@@ -1541,9 +1541,9 @@ export const updateArticle = async (req: Request, res: Response) => {
         content: article.content,
         summary: article.summary,
         categoryName: '',
-        tags: article.tags,
+        tags: article.tags || [],
         published: article.published,
-        createdAt: article.created_at.toISOString(),
+        createdAt: article.created_at instanceof Date ? article.created_at.toISOString() : new Date(article.created_at).toISOString(),
         section_ids: article.section_ids,
       };
       msService.indexArticle(doc).catch(err => 
@@ -1865,19 +1865,16 @@ export const deleteArticle = async (req: Request, res: Response) => {
 export const searchArticles = async (req: Request, res: Response) => {
   try {
     const { q, category, tag } = req.query;
+    const searchQueryStr = typeof q === 'string' ? q.trim() : '';
     const allowedSectionIds = await getAllowedSectionsForRequest(req);
     
     let results = await msService.searchArticles(
-      (q as string) || '',
+      searchQueryStr,
       category as string,
       tag as string,
       allowedSectionIds
     );
 
-    // Дополнительная фильтрация результатов Meilisearch по разрешенным разделам на бэкенде (как fallback и для точности)
-    // В Meilisearch мы также добавим фильтрацию. Но на бэкенде мы перепроверим:
-    // Каждая статья из результатов должна содержать хотя бы одну секцию из allowedSectionIds
-    // Но Meilisearch возвращает документы. Сначала найдем в бд секции для найденных статей
     if (results && results.length > 0) {
       const articleIds = results.map(r => r.id);
       const secMapRes = await query(
@@ -1894,17 +1891,47 @@ export const searchArticles = async (req: Request, res: Response) => {
 
       results = results.filter(art => {
         const sections = articleToSections[art.id] || [];
-        // Если статья не привязана к секциям, обычные пользователи не видят её
         if (sections.length === 0) return false;
         return sections.some(id => allowedSectionIds.includes(id));
       });
 
       results = await filterSearchResultsByIpRestriction(req, results);
     }
+
+    // FALLBACK: If Meilisearch returned no results, search directly in Postgres DB
+    if ((!results || results.length === 0) && searchQueryStr.length > 0) {
+      const searchTerm = `%${searchQueryStr}%`;
+      const sql = `
+        SELECT DISTINCT a.id, a.title, a.slug, a.summary, a.published, a.created_at as "createdAt"
+        FROM articles a
+        INNER JOIN article_sections axs ON a.id = axs.article_id
+        WHERE a.published = true 
+          AND a.is_visible = true 
+          AND axs.section_id = ANY($1::int[])
+          AND (a.title ILIKE $2 OR a.summary ILIKE $2 OR a.content ILIKE $2 OR a.slug ILIKE $2)
+        ORDER BY a.created_at DESC
+        LIMIT 20
+      `;
+      const dbRes = await query(sql, [allowedSectionIds, searchTerm]);
+      results = dbRes.rows.map(row => ({
+        id: Number(row.id),
+        title: row.title,
+        slug: row.slug,
+        summary: row.summary || '',
+        categoryName: '',
+        tags: [],
+        published: row.published,
+        createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : new Date(row.createdAt).toISOString(),
+        highlights: [row.summary || row.title],
+        score: 1.0,
+      }));
+
+      results = await filterSearchResultsByIpRestriction(req, results);
+    }
     
-    res.json(results);
+    res.json(results || []);
   } catch (error: any) {
-    console.error('Meilisearch search request failed:', error);
+    console.error('Search request failed:', error);
     res.status(500).json({ error: 'Search Service Unavailable', details: error.message });
   }
 };
@@ -1912,9 +1939,10 @@ export const searchArticles = async (req: Request, res: Response) => {
 export const suggestArticles = async (req: Request, res: Response) => {
   try {
     const { q } = req.query;
+    const searchQueryStr = typeof q === 'string' ? q.trim() : '';
     const allowedSectionIds = await getAllowedSectionsForRequest(req);
     
-    let results = await msService.suggestArticles((q as string) || '', allowedSectionIds);
+    let results = await msService.suggestArticles(searchQueryStr, allowedSectionIds);
     
     if (results && results.length > 0) {
       const articleIds = results.map(r => r.id);
@@ -1939,9 +1967,40 @@ export const suggestArticles = async (req: Request, res: Response) => {
       results = await filterSearchResultsByIpRestriction(req, results);
     }
 
-    res.json(results);
+    // FALLBACK: If Meilisearch returned no suggestions, query Postgres DB directly
+    if ((!results || results.length === 0) && searchQueryStr.length > 0) {
+      const searchTerm = `%${searchQueryStr}%`;
+      const sql = `
+        SELECT DISTINCT a.id, a.title, a.slug, a.summary, a.published, a.created_at as "createdAt"
+        FROM articles a
+        INNER JOIN article_sections axs ON a.id = axs.article_id
+        WHERE a.published = true 
+          AND a.is_visible = true 
+          AND axs.section_id = ANY($1::int[])
+          AND (a.title ILIKE $2 OR a.summary ILIKE $2 OR a.content ILIKE $2 OR a.slug ILIKE $2)
+        ORDER BY a.created_at DESC
+        LIMIT 10
+      `;
+      const dbRes = await query(sql, [allowedSectionIds, searchTerm]);
+      results = dbRes.rows.map(row => ({
+        id: Number(row.id),
+        title: row.title,
+        slug: row.slug,
+        summary: row.summary || '',
+        categoryName: '',
+        tags: [],
+        published: row.published,
+        createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : new Date(row.createdAt).toISOString(),
+        highlights: [row.title],
+        score: 1.0,
+      }));
+
+      results = await filterSearchResultsByIpRestriction(req, results);
+    }
+
+    res.json(results || []);
   } catch (error: any) {
-    console.error('Meilisearch suggestions request failed:', error);
+    console.error('Suggestions request failed:', error);
     res.status(500).json({ error: 'Suggestions Service Unavailable', details: error.message });
   }
 };
