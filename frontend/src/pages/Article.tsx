@@ -1180,7 +1180,6 @@ export default function ArticlePage() {
           <style>{`
             .wiki-collapsible-block {
               margin: 1rem 0;
-              overflow: hidden;
               border: 1px solid var(--border);
               border-radius: 0.875rem;
               background: var(--card);
@@ -2214,11 +2213,25 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string): bo
     }
   });
 
+function scrollToElementCenter(el: HTMLElement) {
+  let top = 0;
+  let current: HTMLElement | null = el;
+  while (current && current !== document.body) {
+    top += current.offsetTop || 0;
+    current = current.offsetParent as HTMLElement | null;
+  }
+  const viewportHeight = window.innerHeight;
+  const targetY = Math.max(0, top - viewportHeight / 3);
+
+  window.scrollTo({
+    top: targetY,
+    behavior: 'smooth'
+  });
+}
+
   if (firstMark) {
     const markEl = firstMark as HTMLElement;
-    const doScroll = () => {
-      markEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    };
+    const doScroll = () => scrollToElementCenter(markEl);
     doScroll();
     setTimeout(doScroll, 100);
     setTimeout(doScroll, 350);
