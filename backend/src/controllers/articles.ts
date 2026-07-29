@@ -1877,16 +1877,19 @@ export const searchArticles = async (req: Request, res: Response) => {
     const role = authReq.user ? authReq.user.role : '';
     const isAdmin = authReq.user ? (role === 'Admin' || await isWikiAdmin(userId, role)) : false;
 
-    const allowedSectionIds = await getAllowedSectionsForRequest(req);
+    let allowedSectionIds: number[] | undefined = undefined;
+    if (!isAdmin && authReq.user) {
+      allowedSectionIds = await getAllowedSectionsForRequest(req);
+    }
     
     let results = await msService.searchArticles(
       searchQueryStr,
       category as string,
       tag as string,
-      isAdmin ? undefined : allowedSectionIds
+      allowedSectionIds
     );
 
-    if (results && results.length > 0) {
+    if (results && results.length > 0 && allowedSectionIds && allowedSectionIds.length > 0) {
       const articleIds = results.map(r => r.id);
       const secMapRes = await query(
         'SELECT article_id, section_id FROM article_sections WHERE article_id = ANY($1::int[])',
@@ -1900,13 +1903,11 @@ export const searchArticles = async (req: Request, res: Response) => {
         articleToSections[row.article_id].push(row.section_id);
       });
 
-      if (!isAdmin) {
-        results = results.filter(art => {
-          const sections = articleToSections[art.id] || [];
-          if (sections.length === 0) return true;
-          return sections.some(id => allowedSectionIds.includes(id));
-        });
-      }
+      results = results.filter(art => {
+        const sections = articleToSections[art.id] || [];
+        if (sections.length === 0) return true;
+        return sections.some(id => allowedSectionIds!.includes(id));
+      });
 
       results = await filterSearchResultsByIpRestriction(req, results);
     }
@@ -1921,7 +1922,7 @@ export const searchArticles = async (req: Request, res: Response) => {
         LEFT JOIN article_tags t ON a.id = t.article_id
         WHERE a.published = true 
           AND a.is_visible = true 
-          AND ($1::boolean = true OR axs.section_id = ANY($2::int[]) OR axs.section_id IS NULL)
+          AND ($1::boolean = true OR $2::int[] IS NULL OR axs.section_id = ANY($2::int[]) OR axs.section_id IS NULL)
           AND (
             a.title ILIKE $3 OR 
             a.summary ILIKE $3 OR 
@@ -1932,7 +1933,7 @@ export const searchArticles = async (req: Request, res: Response) => {
         ORDER BY a.created_at DESC
         LIMIT 20
       `;
-      const dbRes = await query(sql, [isAdmin, allowedSectionIds, searchTerm]);
+      const dbRes = await query(sql, [isAdmin || !authReq.user, allowedSectionIds || null, searchTerm]);
       results = dbRes.rows.map(row => ({
         id: Number(row.id),
         title: row.title,
@@ -1965,14 +1966,17 @@ export const suggestArticles = async (req: Request, res: Response) => {
     const role = authReq.user ? authReq.user.role : '';
     const isAdmin = authReq.user ? (role === 'Admin' || await isWikiAdmin(userId, role)) : false;
 
-    const allowedSectionIds = await getAllowedSectionsForRequest(req);
+    let allowedSectionIds: number[] | undefined = undefined;
+    if (!isAdmin && authReq.user) {
+      allowedSectionIds = await getAllowedSectionsForRequest(req);
+    }
     
     let results = await msService.suggestArticles(
       searchQueryStr, 
-      isAdmin ? undefined : allowedSectionIds
+      allowedSectionIds
     );
     
-    if (results && results.length > 0) {
+    if (results && results.length > 0 && allowedSectionIds && allowedSectionIds.length > 0) {
       const articleIds = results.map(r => r.id);
       const secMapRes = await query(
         'SELECT article_id, section_id FROM article_sections WHERE article_id = ANY($1::int[])',
@@ -1986,13 +1990,11 @@ export const suggestArticles = async (req: Request, res: Response) => {
         articleToSections[row.article_id].push(row.section_id);
       });
 
-      if (!isAdmin) {
-        results = results.filter(art => {
-          const sections = articleToSections[art.id] || [];
-          if (sections.length === 0) return true;
-          return sections.some(id => allowedSectionIds.includes(id));
-        });
-      }
+      results = results.filter(art => {
+        const sections = articleToSections[art.id] || [];
+        if (sections.length === 0) return true;
+        return sections.some(id => allowedSectionIds!.includes(id));
+      });
 
       results = await filterSearchResultsByIpRestriction(req, results);
     }
@@ -2007,7 +2009,7 @@ export const suggestArticles = async (req: Request, res: Response) => {
         LEFT JOIN article_tags t ON a.id = t.article_id
         WHERE a.published = true 
           AND a.is_visible = true 
-          AND ($1::boolean = true OR axs.section_id = ANY($2::int[]) OR axs.section_id IS NULL)
+          AND ($1::boolean = true OR $2::int[] IS NULL OR axs.section_id = ANY($2::int[]) OR axs.section_id IS NULL)
           AND (
             a.title ILIKE $3 OR 
             a.summary ILIKE $3 OR 
@@ -2018,7 +2020,7 @@ export const suggestArticles = async (req: Request, res: Response) => {
         ORDER BY a.created_at DESC
         LIMIT 10
       `;
-      const dbRes = await query(sql, [isAdmin, allowedSectionIds, searchTerm]);
+      const dbRes = await query(sql, [isAdmin || !authReq.user, allowedSectionIds || null, searchTerm]);
       results = dbRes.rows.map(row => ({
         id: Number(row.id),
         title: row.title,

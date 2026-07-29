@@ -76,9 +76,9 @@ router.post('/users/me/history/clear', requireAuth, authController.clearReadingH
 router.get('/users/me/mandatory-acknowledgements', requireAuth, articlesController.getMyMandatoryAcknowledgements);
 router.get('/users/me/mandatory-acknowledgements/count', requireAuth, articlesController.getMandatoryAcknowledgementCount);
 
-// Search routes (public — no auth required; results already filtered by published=true)
-router.get('/search', articlesController.searchArticles);
-router.get('/search/suggest', articlesController.suggestArticles);
+// Search routes (optionalAuth populates req.user when Auth header is provided)
+router.get('/search', optionalAuth, articlesController.searchArticles);
+router.get('/search/suggest', optionalAuth, articlesController.suggestArticles);
 
 // Classifier routes (public)
 router.get('/classifier/data', articlesController.getClassifierData);
