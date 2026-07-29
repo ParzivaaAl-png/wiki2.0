@@ -697,15 +697,35 @@ export default function ArticlePage() {
     }
   }, [article]);
 
-  // Process HTML content to inject anchors/IDs dynamically
+  // Process HTML content to inject anchors/IDs dynamically and pre-open matching details
   const processedContent = React.useMemo(() => {
     if (!article) return '';
     const isHtml = /<[a-z][\s\S]*>/i.test(article.content);
     if (!isHtml) return article.content;
 
     let html = article.content;
+
+    // 1. If highlight query is present in URL, pre-open any <details> element whose HTML contains the term
+    const queryParams = new URLSearchParams(location.search);
+    const highlightParam = queryParams.get('highlight');
+    if (highlightParam && highlightParam.trim().length > 0) {
+      const cleanHl = highlightParam.trim().replace(/\u00a0/g, ' ');
+      const stemHl = cleanHl.length > 4 ? cleanHl.substring(0, Math.min(cleanHl.length, 5)) : cleanHl;
+      const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const hlRegex = new RegExp(escapeRegExp(stemHl), 'i');
+
+      html = html.replace(/<details\b([^>]*)>([\s\S]*?)<\/details>/gi, (match, attrs, innerContent) => {
+        if (hlRegex.test(innerContent) || hlRegex.test(attrs)) {
+          if (!/\bopen\b/i.test(attrs)) {
+            return `<details open="" ${attrs}>${innerContent}</details>`;
+          }
+        }
+        return match;
+      });
+    }
+
+    // 2. Add IDs to headings
     const headingRegex = /(<h([1-4]))([^>]*>)([\s\S]*?)(<\/h\2>)/gi;
-    
     html = html.replace(headingRegex, (m, openTag, level, attrs, text, closeTag) => {
       if (attrs.includes('id=')) return m;
       
@@ -728,7 +748,7 @@ export default function ArticlePage() {
     }
 
     return html;
-  }, [article]);
+  }, [article, location.search]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -832,8 +852,22 @@ export default function ArticlePage() {
   const hasCompletedMandatoryReading =
     hasReachedArticleEnd || !!mandatoryAckState?.assignment?.read_completed_at;
 
-  // Custom markdown headings handler
+  // Custom markdown headings & details handler
   const MarkdownComponents = {
+    details: ({ node, children, open, ...props }: any) => {
+      const queryParams = new URLSearchParams(location.search);
+      const highlightParam = queryParams.get('highlight');
+      let forceOpen = open;
+      if (highlightParam && highlightParam.trim().length > 0) {
+        const cleanHl = highlightParam.trim();
+        const stemHl = cleanHl.length > 4 ? cleanHl.substring(0, 5) : cleanHl;
+        const textContent = React.Children.toArray(children).join(' ');
+        if (new RegExp(stemHl, 'i').test(textContent)) {
+          forceOpen = true;
+        }
+      }
+      return <details {...props} open={forceOpen}>{children}</details>;
+    },
     h2: ({ node, children, ...props }: any) => {
       const text = React.Children.toArray(children).join('');
       const id = text.toLowerCase().replace(/[^a-z0-9а-яё\s-]+/g, '').replace(/\s+/g, '-').replace(/(^-|-$)/g, '');
