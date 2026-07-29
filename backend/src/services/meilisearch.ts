@@ -215,24 +215,30 @@ export const initializeMeilisearch = async () => {
   }
 };
 
+const stripHtmlTags = (html: string): string => {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
 /**
  * Prepares the article document for indexing by adding normalized/transliterated fields.
  */
 export const prepareArticleDocument = (article: ArticleDocument): ArticleDocument => {
   const cleanTitle = article.title || '';
-  const cleanContent = article.content || '';
+  const rawContent = article.content || '';
+  const plainContent = stripHtmlTags(rawContent);
   const cleanSummary = article.summary || '';
   const cleanTags = article.tags || [];
 
   const title_latin = transliterateCyrillicToLatin(normalizeText(cleanTitle));
-  const content_latin = transliterateCyrillicToLatin(normalizeText(cleanContent));
+  const content_latin = transliterateCyrillicToLatin(normalizeText(plainContent));
   const tags_latin = cleanTags.map(tag => transliterateCyrillicToLatin(normalizeText(tag)));
   
   const titleAliases = getAliasesForText(cleanTitle);
   const tagAliases = cleanTags.flatMap(tag => getAliasesForText(tag));
   const aliases = Array.from(new Set([...titleAliases, ...tagAliases]));
   
-  const search_text = normalizeText(`${cleanTitle} ${cleanSummary} ${cleanContent} ${cleanTags.join(' ')}`);
+  const search_text = normalizeText(`${cleanTitle} ${cleanSummary} ${plainContent} ${cleanTags.join(' ')}`);
   const search_text_latin = transliterateCyrillicToLatin(search_text);
 
   return {
@@ -327,7 +333,7 @@ export const syncIfNeeded = async () => {
           summary: art.summary,
           categoryName: '',
           tags: art.tags,
-          published: art.published,
+          published: Boolean(art.published && art.is_visible && (art.status ? art.status === 'published' : true)),
           createdAt: art.created_at instanceof Date ? art.created_at.toISOString() : new Date(art.created_at).toISOString(),
           section_ids: art.section_ids,
         }));
@@ -356,7 +362,7 @@ export const triggerFullSync = async () => {
       summary: art.summary,
       categoryName: '',
       tags: art.tags,
-      published: art.published,
+      published: Boolean(art.published && art.is_visible && (art.status ? art.status === 'published' : true)),
       createdAt: art.created_at instanceof Date ? art.created_at.toISOString() : new Date(art.created_at).toISOString(),
       section_ids: art.section_ids,
     }));
@@ -458,7 +464,7 @@ function getRelevanceRank(hit: any, queryText: string): number {
   return 6;
 }
 
-const withMsTimeout = <T>(promise: Promise<T>, timeoutMs = 1500): Promise<T> => {
+const withMsTimeout = <T>(promise: Promise<T>, timeoutMs = 3500): Promise<T> => {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
@@ -491,9 +497,9 @@ export const searchArticles = async (
       }
 
       if (allowedSectionIds && allowedSectionIds.length > 0) {
-        filterArray.push(`section_ids IN [${allowedSectionIds.join(', ')}]`);
+        filterArray.push(`(section_ids IN [${allowedSectionIds.join(', ')}] OR section_ids IS EMPTY OR section_ids IS NULL)`);
       } else if (allowedSectionIds) {
-        filterArray.push(`section_ids = -1`);
+        filterArray.push(`(section_ids = -1 OR section_ids IS EMPTY OR section_ids IS NULL)`);
       }
 
       const searchParams: any = {
@@ -539,8 +545,8 @@ export const searchArticles = async (
         });
       }
 
-      // Generate multiple variants of the query
-      const variants = getQueryVariants(queryText);
+      // Generate query variants and take top 4 unique non-empty variants
+      const variants = getQueryVariants(queryText).slice(0, 4);
       
       // Execute multiple search queries in parallel
       const searchPromises = variants.map(variant =>
@@ -612,12 +618,12 @@ export const suggestArticles = async (queryText: string, allowedSectionIds?: num
 
       const filterArray = ['published = true'];
       if (allowedSectionIds && allowedSectionIds.length > 0) {
-        filterArray.push(`section_ids IN [${allowedSectionIds.join(', ')}]`);
+        filterArray.push(`(section_ids IN [${allowedSectionIds.join(', ')}] OR section_ids IS EMPTY OR section_ids IS NULL)`);
       } else if (allowedSectionIds) {
-        filterArray.push(`section_ids = -1`);
+        filterArray.push(`(section_ids = -1 OR section_ids IS EMPTY OR section_ids IS NULL)`);
       }
 
-      const variants = getQueryVariants(queryText);
+      const variants = getQueryVariants(queryText).slice(0, 4);
       const searchPromises = variants.map(variant =>
         msClient.index(INDEX_NAME).search(variant, {
           filter: filterArray,

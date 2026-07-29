@@ -1356,7 +1356,8 @@ export const createArticle = async (req: Request, res: Response) => {
     }
 
     // Auto-index to Meilisearch
-    if (article.published && article.is_visible) {
+    const isArticlePublished = Boolean(article.published && article.is_visible && (article.status ? article.status === 'published' : true));
+    if (isArticlePublished) {
       const doc: msService.ArticleDocument = {
         id: article.id,
         title: article.title,
@@ -1365,12 +1366,16 @@ export const createArticle = async (req: Request, res: Response) => {
         summary: article.summary,
         categoryName: '',
         tags: article.tags || [],
-        published: article.published,
+        published: true,
         createdAt: article.created_at instanceof Date ? article.created_at.toISOString() : new Date(article.created_at).toISOString(),
         section_ids: article.section_ids,
       };
       msService.indexArticle(doc).catch(err => 
         console.error('Failed to auto-index new article to Meilisearch:', err)
+      );
+    } else {
+      msService.deleteArticle(article.id).catch(err =>
+        console.error('Failed to remove unpublished article from Meilisearch:', err)
       );
     }
 
@@ -1533,7 +1538,8 @@ export const updateArticle = async (req: Request, res: Response) => {
     }
 
     // Auto-index or delete from Meilisearch depending on published and visible status
-    if (article.published && article.is_visible) {
+    const isArticlePublished = Boolean(article.published && article.is_visible && (article.status ? article.status === 'published' : true));
+    if (isArticlePublished) {
       const doc: msService.ArticleDocument = {
         id: article.id,
         title: article.title,
@@ -1542,7 +1548,7 @@ export const updateArticle = async (req: Request, res: Response) => {
         summary: article.summary,
         categoryName: '',
         tags: article.tags || [],
-        published: article.published,
+        published: true,
         createdAt: article.created_at instanceof Date ? article.created_at.toISOString() : new Date(article.created_at).toISOString(),
         section_ids: article.section_ids,
       };
