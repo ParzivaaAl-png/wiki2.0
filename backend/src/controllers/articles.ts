@@ -1356,7 +1356,7 @@ export const createArticle = async (req: Request, res: Response) => {
     }
 
     // Auto-index to Meilisearch
-    const isArticlePublished = Boolean(article.published && article.is_visible && (article.status ? article.status === 'published' : true));
+    const isArticlePublished = Boolean((article.published === undefined || article.published) && (article.is_visible === undefined || article.is_visible) && article.status !== 'archived');
     if (isArticlePublished) {
       const doc: msService.ArticleDocument = {
         id: article.id,
@@ -1538,7 +1538,7 @@ export const updateArticle = async (req: Request, res: Response) => {
     }
 
     // Auto-index or delete from Meilisearch depending on published and visible status
-    const isArticlePublished = Boolean(article.published && article.is_visible && (article.status ? article.status === 'published' : true));
+    const isArticlePublished = Boolean((article.published === undefined || article.published) && (article.is_visible === undefined || article.is_visible) && article.status !== 'archived');
     if (isArticlePublished) {
       const doc: msService.ArticleDocument = {
         id: article.id,

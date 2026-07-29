@@ -70,7 +70,7 @@ const runReindex = async () => {
       summary: art.summary || '',
       categoryName: '',
       tags: art.tags || [],
-      published: Boolean(art.published && art.is_visible && (art.status ? art.status === 'published' : true)),
+      published: Boolean((art.published === undefined || art.published) && (art.is_visible === undefined || art.is_visible) && art.status !== 'archived'),
       createdAt: art.created_at instanceof Date ? art.created_at.toISOString() : new Date(art.created_at).toISOString(),
       section_ids: art.section_ids || [],
     }));
