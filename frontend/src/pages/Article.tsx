@@ -2044,8 +2044,20 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   };
 
-  const pattern = escapeRegExp(textToHighlight.trim()).replace(/\s+/g, '\\s+');
-  const regex = new RegExp(`(${pattern})`, 'gi');
+  const cleanText = textToHighlight.trim();
+  const pattern = escapeRegExp(cleanText).replace(/\s+/g, '\\s+');
+  const testRegex = new RegExp(pattern, 'i'); // Non-global regex for safe test() without lastIndex mutation
+  const matchRegex = new RegExp(`(${pattern})`, 'gi'); // Global regex for string replacement
+
+  // Clean up any previous search highlights
+  container.querySelectorAll('mark.wiki-search-highlight').forEach((mark) => {
+    const parent = mark.parentNode;
+    if (parent) {
+      parent.replaceChild(document.createTextNode(mark.textContent || ''), mark);
+      parent.normalize();
+    }
+  });
+
   const walk = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
   const nodesToReplace: Text[] = [];
 
@@ -2054,7 +2066,7 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
     const parent = currentNode.parentNode;
     if (
       currentNode.nodeValue && 
-      regex.test(currentNode.nodeValue) &&
+      testRegex.test(currentNode.nodeValue) &&
       parent &&
       parent.nodeName !== 'SCRIPT' &&
       parent.nodeName !== 'STYLE' &&
@@ -2074,9 +2086,14 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
     while (currentParent && currentParent !== container) {
       if (
         currentParent.tagName === 'DETAILS' || 
-        currentParent.hasAttribute('data-wiki-collapsible')
+        currentParent.hasAttribute('data-wiki-collapsible') ||
+        currentParent.classList.contains('wiki-collapsible-block')
       ) {
-        (currentParent as HTMLDetailsElement).open = true;
+        const detailsEl = currentParent as HTMLDetailsElement;
+        if (!detailsEl.open) {
+          detailsEl.open = true;
+          detailsEl.dispatchEvent(new Event('toggle'));
+        }
       }
       currentParent = currentParent.parentElement;
     }
@@ -2088,15 +2105,15 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
     const fragments = document.createDocumentFragment();
     let lastIndex = 0;
 
-    regex.lastIndex = 0;
+    matchRegex.lastIndex = 0;
 
-    text.replace(regex, (match, p1, offset) => {
+    text.replace(matchRegex, (match, p1, offset) => {
       if (offset > lastIndex) {
         fragments.appendChild(document.createTextNode(text.substring(lastIndex, offset)));
       }
 
       const mark = document.createElement('mark');
-      mark.className = 'bg-yellow-200 dark:bg-yellow-500/40 text-neutral-900 dark:text-white px-1 py-0.5 rounded font-bold shadow-sm inline-block';
+      mark.className = 'wiki-search-highlight bg-amber-300 dark:bg-amber-500/60 text-neutral-950 dark:text-white px-1.5 py-0.5 rounded font-bold shadow-md inline-block ring-2 ring-amber-400/50 animate-pulse';
       mark.textContent = match;
       fragments.appendChild(mark);
 
@@ -2120,9 +2137,11 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
   });
 
   if (firstMark) {
+    const markEl = firstMark as HTMLElement;
+    markEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     setTimeout(() => {
-      (firstMark as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 200);
+      markEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 250);
   }
 }
 
