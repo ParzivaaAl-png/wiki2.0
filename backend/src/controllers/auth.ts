@@ -414,7 +414,21 @@ export const changeRole = async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
     const { role } = req.body;
 
-    const VALID_ROLES = [
+    if (!role || typeof role !== 'string' || !role.trim()) {
+      return res.status(400).json({ error: 'Укажите корректную роль или должность.' });
+    }
+
+    const normalizedRole = role.trim();
+
+    const STANDARD_ROLES = [
+      'Admin',
+      'Editor',
+      'User',
+      'reader',
+      'editor',
+      'process_owner',
+      'approver',
+      'wiki_admin',
       'Коммерческий директор',
       'Руководитель группы',
       'Супервайзер',
@@ -422,21 +436,27 @@ export const changeRole = async (req: AuthenticatedRequest, res: Response) => {
       'HR-менеджер',
       'Бухгалтер',
       'IT-специалист',
-      'Администратор Wiki'
+      'Администратор Wiki',
     ];
-    const positionResult = role
-      ? await query('SELECT id FROM positions WHERE name = $1 AND status = $2 LIMIT 1', [role, 'Active'])
-      : { rowCount: 0 };
 
-    if (!role || (!VALID_ROLES.includes(role) && (positionResult.rowCount || 0) === 0)) {
-      return res.status(400).json({ error: 'Некорректная роль. Роль должна совпадать с активной должностью.' });
+    let isValid = STANDARD_ROLES.includes(normalizedRole);
+    if (!isValid) {
+      const [wikiRoleRes, posRes] = await Promise.all([
+        query('SELECT id FROM wiki_roles WHERE code = $1 OR name = $1 LIMIT 1', [normalizedRole]),
+        query('SELECT id FROM positions WHERE name = $1 LIMIT 1', [normalizedRole]),
+      ]);
+      isValid = (wikiRoleRes.rowCount || 0) > 0 || (posRes.rowCount || 0) > 0;
+    }
+
+    if (!isValid) {
+      return res.status(400).json({ error: 'Некорректная роль. Укажите существующую роль или должность.' });
     }
 
     if (req.user?.id === Number(id)) {
       return res.status(400).json({ error: 'You cannot change your own role.' });
     }
 
-    const success = await UserModel.changeUserRole(Number(id), role);
+    const success = await UserModel.changeUserRole(Number(id), normalizedRole);
     if (!success) return res.status(404).json({ error: 'User not found.' });
 
     res.json({ message: 'User role updated successfully.' });
