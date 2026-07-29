@@ -464,23 +464,42 @@ export default function ArticlePage() {
     }
   };
 
-  // Effect to highlight and scroll to text
+  // Effect to highlight, expand collapsibles, and scroll to text or anchor
   React.useEffect(() => {
     if (!article || isLoading) return;
     
     const timer = setTimeout(() => {
       const queryParams = new URLSearchParams(location.search);
       const highlight = queryParams.get('highlight');
-      if (highlight) {
-        const articleContainer = document.querySelector('article');
-        if (articleContainer) {
+      const hash = location.hash;
+
+      const articleContainer = document.querySelector('article');
+      if (articleContainer) {
+        if (highlight) {
           highlightTextInDOM(articleContainer as HTMLElement, highlight);
+        }
+
+        if (hash) {
+          const targetId = decodeURIComponent(hash.substring(1));
+          const targetEl = document.getElementById(targetId);
+          if (targetEl) {
+            let parent = targetEl.parentElement;
+            while (parent && parent !== articleContainer) {
+              if (parent.tagName === 'DETAILS' || parent.hasAttribute('data-wiki-collapsible')) {
+                (parent as HTMLDetailsElement).open = true;
+              }
+              parent = parent.parentElement;
+            }
+            setTimeout(() => {
+              targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 150);
+          }
         }
       }
     }, 150);
     
     return () => clearTimeout(timer);
-  }, [article, isLoading, location.search]);
+  }, [article, isLoading, location.search, location.hash]);
 
   React.useEffect(() => {
     if (!article || !user) return;
@@ -2025,7 +2044,8 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   };
 
-  const regex = new RegExp(`(${escapeRegExp(textToHighlight)})`, 'gi');
+  const pattern = escapeRegExp(textToHighlight.trim()).replace(/\s+/g, '\\s+');
+  const regex = new RegExp(`(${pattern})`, 'gi');
   const walk = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
   const nodesToReplace: Text[] = [];
 
@@ -2049,6 +2069,18 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
   let firstMark: HTMLElement | null = null;
 
   nodesToReplace.forEach((node) => {
+    // Expand all ancestor <details> / collapsible blocks so the highlighted text is fully visible
+    let currentParent = node.parentElement;
+    while (currentParent && currentParent !== container) {
+      if (
+        currentParent.tagName === 'DETAILS' || 
+        currentParent.hasAttribute('data-wiki-collapsible')
+      ) {
+        (currentParent as HTMLDetailsElement).open = true;
+      }
+      currentParent = currentParent.parentElement;
+    }
+
     const parent = node.parentNode;
     if (!parent) return;
 
@@ -2090,7 +2122,7 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string) {
   if (firstMark) {
     setTimeout(() => {
       (firstMark as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 100);
+    }, 200);
   }
 }
 

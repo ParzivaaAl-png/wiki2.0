@@ -306,7 +306,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
       e.preventDefault();
       
       if (selectedIndex < matchedArticles.length) {
-        handleSelect(matchedArticles[selectedIndex].slug);
+        handleSelect(matchedArticles[selectedIndex].slug, query.trim());
       } else {
         const textIdx = selectedIndex - matchedArticles.length;
         const match = textMatches[textIdx];
@@ -375,7 +375,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                 return (
                   <li
                     key={`art-${art.id}`}
-                    onMouseDown={() => handleSelect(art.slug)}
+                    onMouseDown={() => handleSelect(art.slug, query.trim())}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
                       isCurrent
                         ? 'bg-indigo-500/10 text-indigo-900 dark:text-indigo-200 font-medium'
@@ -686,7 +686,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                               {matchedArticles.map((art) => (
                                 <li
                                   key={`art-${art.id}`}
-                                  onClick={() => handleSelect(art.slug)}
+                                  onClick={() => handleSelect(art.slug, query.trim())}
                                   className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer hover:bg-muted text-foreground"
                                 >
                                   <div className="flex items-center gap-2">
