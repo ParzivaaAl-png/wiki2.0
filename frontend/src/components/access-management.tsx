@@ -76,11 +76,14 @@ const roleTone = (code: string) => {
   return 'border-border bg-muted text-muted-foreground';
 };
 
+import AdminFilterBar from './admin-filter-bar';
+
 export default function AccessManagement() {
   const [overview, setOverview] = React.useState<AccessOverview | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSeeding, setIsSeeding] = React.useState(false);
   const [departmentFilterId, setDepartmentFilterId] = React.useState<string>('all');
+  const [isMatrixFilterOpen, setIsMatrixFilterOpen] = React.useState(false);
   const [positionModal, setPositionModal] = React.useState<PositionModalState | null>(null);
   const [positionForm, setPositionForm] = React.useState({
     name: '',
@@ -332,34 +335,7 @@ export default function AccessManagement() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        <div className="p-4 rounded-lg border border-border bg-card text-card-foreground">
-          <div className="text-[10px] uppercase font-bold text-muted-foreground">Пользователи</div>
-          <div className="mt-2 text-2xl font-bold text-foreground">{overview.summary.users}</div>
-        </div>
-        <div className="p-4 rounded-lg border border-border bg-card text-card-foreground">
-          <div className="text-[10px] uppercase font-bold text-muted-foreground">Wiki-роли</div>
-          <div className="mt-2 text-2xl font-bold text-foreground">{overview.summary.roles}</div>
-        </div>
-        <div className="p-4 rounded-lg border border-border bg-card text-card-foreground">
-          <div className="text-[10px] uppercase font-bold text-muted-foreground">Должности</div>
-          <div className="mt-2 text-2xl font-bold text-foreground">{overview.summary.positions}</div>
-        </div>
-        <div className="p-4 rounded-lg border border-border bg-card text-card-foreground">
-          <div className="text-[10px] uppercase font-bold text-muted-foreground">Разделы</div>
-          <div className="mt-2 text-2xl font-bold text-foreground">{overview.summary.sections}</div>
-        </div>
-        <div className="p-4 rounded-lg border border-border bg-card text-card-foreground">
-          <div className="text-[10px] uppercase font-bold text-muted-foreground">Правила</div>
-          <div className="mt-2 text-2xl font-bold text-foreground">{overview.summary.rules}</div>
-        </div>
-        <div className="p-4 rounded-lg border border-border bg-card text-card-foreground">
-          <div className="text-[10px] uppercase font-bold text-muted-foreground">Публичные</div>
-          <div className="mt-2 text-2xl font-bold text-foreground">
-            {overview.sections.filter((section) => section.visibility_scope === 'public').length}
-          </div>
-        </div>
-      </div>
+
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
         {overview.roles.map((role) => (

@@ -56,6 +56,7 @@ import WikiManagement from '../components/wiki-management';
 import AnalyticsDashboard from '../components/analytics-dashboard';
 import TeamAccessManagement from '../components/team-access-management';
 import { ModalPortal } from '../components/modal-portal';
+import AdminFilterBar from '../components/admin-filter-bar';
 import { AnimatePresence, motion } from 'framer-motion';
 
 type SectionMeta = {
@@ -96,6 +97,26 @@ export default function Admin() {
   const [authorFilter, setAuthorFilter] = React.useState('all');
   const [spaceFilter, setSpaceFilter] = React.useState('all');
   const [sectionFilter, setSectionFilter] = React.useState('all');
+  const [isArticleFilterOpen, setIsArticleFilterOpen] = React.useState(false);
+
+  const activeArticleFilterCount = React.useMemo(() => {
+    let count = 0;
+    if (searchQuery.trim()) count++;
+    if (spaceFilter !== 'all') count++;
+    if (sectionFilter !== 'all') count++;
+    if (statusFilter !== 'all') count++;
+    if (authorFilter !== 'all') count++;
+    return count;
+  }, [searchQuery, spaceFilter, sectionFilter, statusFilter, authorFilter]);
+
+  const handleResetArticleFilters = () => {
+    setSearchQuery('');
+    setSpaceFilter('all');
+    setSectionFilter('all');
+    setStatusFilter('all');
+    setAuthorFilter('all');
+  };
+
   const [activeTab, setActiveTab] = React.useState<'articles' | 'archive' | 'analytics' | 'news' | 'team' | 'wiki'>('articles');
   const [collapsedSpaceIds, setCollapsedSpaceIds] = React.useState<Set<string>>(new Set());
   const [collapsedSectionIds, setCollapsedSectionIds] = React.useState<Set<string>>(new Set());
@@ -1190,59 +1211,35 @@ export default function Admin() {
         <AnalyticsDashboard />
       )}
 
-      {/* STATS AND MAIN ARTICLES TAB */}
+      {/* MAIN ARTICLES TAB */}
       {activeTab === 'articles' && (
         <>
-          {/* Stats Widgets */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-            <div className="p-5 rounded-xl border border-border bg-card text-card-foreground shadow-premium dark:shadow-premium-dark">
-              <div className="flex items-center justify-between mb-3 text-muted-foreground">
-                <span className="text-xs font-semibold uppercase tracking-wider">Активные статьи</span>
-                <BookOpen className="w-5 h-5 text-indigo-500" />
-              </div>
-              <div className="text-2xl font-bold font-outfit text-foreground">{stats.total}</div>
-              <p className="text-[10px] text-muted-foreground mt-1">{stats.drafts} в черновиках</p>
-            </div>
-
-            <div className="p-5 rounded-xl border border-border bg-card text-card-foreground shadow-premium dark:shadow-premium-dark">
-              <div className="flex items-center justify-between mb-3 text-muted-foreground">
-                <span className="text-xs font-semibold uppercase tracking-wider">Архивировано</span>
-                <Trash2 className="w-5 h-5 text-violet-500" />
-              </div>
-              <div className="text-2xl font-bold font-outfit text-foreground">{stats.archived}</div>
-              <p className="text-[10px] text-muted-foreground mt-1">скрытых статей в системе</p>
-            </div>
-
-            <div className="p-5 rounded-xl border border-border bg-card text-card-foreground shadow-premium dark:shadow-premium-dark">
-              <div className="flex items-center justify-between mb-3 text-muted-foreground">
-                <span className="text-xs font-semibold uppercase tracking-wider">Поиск</span>
-                <TrendingUp className="w-5 h-5 text-emerald-500" />
-              </div>
-              <div className="text-2xl font-bold font-outfit text-foreground">Активен</div>
-              <p className="text-[10px] text-muted-foreground mt-1">Meilisearch синхронизирован</p>
-            </div>
-          </div>
-
           {/* Structured Article Tree */}
           <div className="border border-border bg-card text-card-foreground rounded-xl overflow-hidden shadow-premium dark:shadow-premium-dark">
-            <div className="p-4 border-b border-border space-y-3">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 bg-muted/30 w-full lg:max-w-md focus-within:border-indigo-500 transition-colors">
-                  <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <input
-                    type="text"
-                    placeholder="Поиск по статье, разделу или автору..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="bg-transparent text-xs text-foreground outline-none w-full placeholder-muted-foreground"
-                  />
-                </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
+            <div className="p-4 border-b border-border">
+              <AdminFilterBar
+                isOpen={isArticleFilterOpen}
+                onToggle={() => setIsArticleFilterOpen((prev) => !prev)}
+                activeCount={activeArticleFilterCount}
+                onReset={handleResetArticleFilters}
+                searchControl={
+                  <div className="flex items-center gap-2 border border-border rounded-xl px-3 py-2 bg-muted/30 w-full focus-within:border-indigo-500 transition-colors">
+                    <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Поиск по статье, разделу или автору..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="bg-transparent text-xs text-foreground outline-none w-full placeholder-muted-foreground"
+                    />
+                  </div>
+                }
+                actions={
                   <button
+                    type="button"
                     onClick={handleClearCache}
                     disabled={isClearingCache}
-                    className="inline-flex items-center justify-center gap-1 px-3 py-2 border border-border hover:bg-muted rounded-lg text-xs font-semibold shadow-sm transition-colors text-muted-foreground cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border hover:bg-muted rounded-xl text-xs font-semibold shadow-sm transition-colors text-muted-foreground cursor-pointer"
                     title="Очистить серверный кэш"
                   >
                     {isClearingCache ? (
@@ -1250,58 +1247,70 @@ export default function Admin() {
                     ) : (
                       <RotateCcw className="w-3.5 h-3.5" />
                     )}
-                    <span>Сбросить кэш</span>
+                    <span className="hidden sm:inline">Сбросить кэш</span>
                   </button>
+                }
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-muted-foreground mb-1">Отдел / Пространство</label>
+                    <select
+                      value={spaceFilter}
+                      onChange={(e) => {
+                        setSpaceFilter(e.target.value);
+                        setSectionFilter('all');
+                      }}
+                      className="w-full text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+                    >
+                      <option value="all">Все отделы</option>
+                      {navigationTree.map((space) => (
+                        <option key={space.id} value={space.id}>{space.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-muted-foreground mb-1">Должность / Раздел</label>
+                    <select
+                      value={sectionFilter}
+                      onChange={(e) => setSectionFilter(e.target.value)}
+                      className="w-full text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+                    >
+                      <option value="all">Все должности / разделы</option>
+                      {sectionFilterOptions.map((section) => (
+                        <option key={section.id} value={section.id}>{section.path}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-muted-foreground mb-1">Статус публикации</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as ArticleStatusFilter)}
+                      className="w-full text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+                    >
+                      {statusFilterOptions.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-muted-foreground mb-1">Автор статьи</label>
+                    <select
+                      value={authorFilter}
+                      onChange={(e) => setAuthorFilter(e.target.value)}
+                      className="w-full text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+                    >
+                      <option value="all">Все авторы</option>
+                      {authorFilterOptions.map((author) => (
+                        <option key={author} value={author}>{author}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
-                <select
-                  value={spaceFilter}
-                  onChange={(e) => {
-                    setSpaceFilter(e.target.value);
-                    setSectionFilter('all');
-                  }}
-                  className="text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
-                >
-                  <option value="all">Все отделы</option>
-                  {navigationTree.map((space) => (
-                    <option key={space.id} value={space.id}>{space.name}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={sectionFilter}
-                  onChange={(e) => setSectionFilter(e.target.value)}
-                  className="text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
-                >
-                  <option value="all">Все должности / разделы</option>
-                  {sectionFilterOptions.map((section) => (
-                    <option key={section.id} value={section.id}>{section.path}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as ArticleStatusFilter)}
-                  className="text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
-                >
-                  {statusFilterOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={authorFilter}
-                  onChange={(e) => setAuthorFilter(e.target.value)}
-                  className="text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
-                >
-                  <option value="all">Все авторы</option>
-                  {authorFilterOptions.map((author) => (
-                    <option key={author} value={author}>{author}</option>
-                  ))}
-                </select>
-              </div>
+              </AdminFilterBar>
             </div>
 
             {renderArticleTree(activeArticleTree, 'active')}

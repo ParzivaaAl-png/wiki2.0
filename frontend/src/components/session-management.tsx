@@ -26,12 +26,15 @@ import {
   adminToggleBlock
 } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
+import AdminFilterBar from './admin-filter-bar';
 
 export default function SessionManagement() {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = React.useState<UserWithSessions[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState<'all' | 'active' | 'blocked'>('all');
+  const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const [expandedUserIds, setExpandedUserIds] = React.useState<Set<number>>(new Set());
   const [temporaryPassword, setTemporaryPassword] = React.useState<{ userName: string; password: string } | null>(null);
 
@@ -191,11 +194,17 @@ export default function SessionManagement() {
   };
 
   const filteredUsers = React.useMemo(() => {
-    return users.filter(u => 
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      u.username.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [users, searchQuery]);
+    return users.filter(u => {
+      const matchesSearch =
+        u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        u.username.toLowerCase().includes(searchQuery.toLowerCase());
+
+      if (!matchesSearch) return false;
+      if (statusFilter === 'blocked') return u.is_blocked;
+      if (statusFilter === 'active') return !u.is_blocked;
+      return true;
+    });
+  }, [users, searchQuery, statusFilter]);
 
   if (isLoading) {
     return (
@@ -209,27 +218,53 @@ export default function SessionManagement() {
   return (
     <div className="space-y-6">
       
-      {/* Search and Refresh */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-1.5 bg-neutral-50 dark:bg-neutral-900/30 w-full sm:max-w-xs">
-          <Search className="w-4 h-4 text-neutral-400 shrink-0" />
-          <input
-            type="text"
-            placeholder="Поиск по пользователям..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-transparent text-xs text-neutral-950 dark:text-neutral-100 outline-none w-full placeholder-neutral-400"
-          />
+      {/* Search and Refresh Filter Bar */}
+      <AdminFilterBar
+        isOpen={isFilterOpen}
+        onToggle={() => setIsFilterOpen((prev) => !prev)}
+        activeCount={(searchQuery.trim() ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0)}
+        onReset={() => {
+          setSearchQuery('');
+          setStatusFilter('all');
+        }}
+        searchControl={
+          <div className="flex items-center gap-2 border border-neutral-200 dark:border-neutral-800 rounded-xl px-3 py-2 bg-neutral-50 dark:bg-neutral-900/30 w-full focus-within:border-indigo-500 transition-colors">
+            <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+            <input
+              type="text"
+              placeholder="Поиск по пользователям..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-transparent text-xs text-neutral-950 dark:text-neutral-100 outline-none w-full placeholder-neutral-400"
+            />
+          </div>
+        }
+        actions={
+          <button
+            type="button"
+            onClick={loadSessions}
+            className="p-2 rounded-xl border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-neutral-500 hover:text-indigo-500 transition-colors cursor-pointer shadow-sm"
+            title="Обновить список"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
+        }
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Статус аккаунта</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="w-full text-xs border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
+            >
+              <option value="all">Все аккаунты</option>
+              <option value="active">Активные</option>
+              <option value="blocked">Заблокированные</option>
+            </select>
+          </div>
         </div>
-
-        <button
-          onClick={loadSessions}
-          className="p-2 rounded-lg border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-neutral-500 hover:text-indigo-500 transition-colors"
-          title="Обновить список"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
-      </div>
+      </AdminFilterBar>
 
       {/* Users list with sessions count */}
       <div className="border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 rounded-xl overflow-hidden shadow-premium dark:shadow-premium-dark divide-y divide-neutral-200/50 dark:divide-neutral-800/80">

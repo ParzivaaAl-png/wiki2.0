@@ -53,6 +53,7 @@ import GuestManagement from './guest-management';
 import { ModalPortal } from './modal-portal';
 import SessionManagement from './session-management';
 import { useAuth } from '../lib/auth-context';
+import AdminFilterBar from './admin-filter-bar';
 
 type TeamTab = 'org' | 'access' | 'archive' | 'sessions' | 'guest';
 
@@ -140,6 +141,8 @@ export default function TeamAccessManagement() {
   const [guestAccessCount, setGuestAccessCount] = React.useState(0);
   const [expandedDepartmentIds, setExpandedDepartmentIds] = React.useState<Set<number | 'none'>>(new Set());
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [deptFilter, setDeptFilter] = React.useState<string>('all');
+  const [isOrgFilterOpen, setIsOrgFilterOpen] = React.useState(false);
 
   const [employeeModal, setEmployeeModal] = React.useState<EmployeeModalState | null>(null);
   const [departmentModal, setDepartmentModal] = React.useState<DepartmentModalState | null>(null);
@@ -242,9 +245,15 @@ export default function TeamAccessManagement() {
 
   const visibleDepartments = React.useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return departments;
+    let filtered = departments;
 
-    return departments.filter((department) => {
+    if (deptFilter !== 'all') {
+      filtered = filtered.filter((d) => String(d.id) === deptFilter);
+    }
+
+    if (!query) return filtered;
+
+    return filtered.filter((department) => {
       const departmentPositions = positions.filter((position) => position.department_id === department.id);
       const departmentEmployees = employees.filter((employee) => employee.department_id === department.id);
       return (
@@ -254,7 +263,7 @@ export default function TeamAccessManagement() {
         departmentEmployees.some((employee) => employeeMatchesQuery(employee, query))
       );
     });
-  }, [departments, employees, positions, searchQuery]);
+  }, [departments, employees, positions, searchQuery, deptFilter]);
 
   const unassignedEmployees = React.useMemo(() => (
     employees.filter((employee) => !employee.department_id)
@@ -1196,38 +1205,63 @@ export default function TeamAccessManagement() {
 
       {activeTab === 'org' && (
         <div className="space-y-4">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 bg-card text-card-foreground w-full lg:max-w-md">
-              <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-              <input
-                type="text"
-                placeholder="Поиск отдела, сотрудника, должности или логина"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                className="bg-transparent text-xs text-foreground outline-none w-full placeholder-muted-foreground"
-              />
+          <AdminFilterBar
+            isOpen={isOrgFilterOpen}
+            onToggle={() => setIsOrgFilterOpen((prev) => !prev)}
+            activeCount={(searchQuery.trim() ? 1 : 0) + (deptFilter !== 'all' ? 1 : 0)}
+            onReset={() => {
+              setSearchQuery('');
+              setDeptFilter('all');
+            }}
+            searchControl={
+              <div className="flex items-center gap-2 border border-border rounded-xl px-3 py-2 bg-card text-card-foreground w-full focus-within:border-indigo-500 transition-colors">
+                <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Поиск отдела, сотрудника, должности или логина"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  className="bg-transparent text-xs text-foreground outline-none w-full placeholder-muted-foreground"
+                />
+              </div>
+            }
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openEmployeeModal(null)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold transition-colors cursor-pointer shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Добавить сотрудника
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openDepartmentModal(null)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-muted text-xs font-bold transition-colors cursor-pointer shadow-sm"
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  Добавить отдел
+                </button>
+              </div>
+            }
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-muted-foreground mb-1">Фильтр по отделу</label>
+                <select
+                  value={deptFilter}
+                  onChange={(e) => setDeptFilter(e.target.value)}
+                  className="w-full text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+                >
+                  <option value="all">Все отделы ({departments.length})</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => openEmployeeModal(null)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Добавить сотрудника
-              </button>
-              <button
-                onClick={() => openDepartmentModal(null)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border hover:bg-muted text-xs font-bold transition-colors"
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                Добавить отдел
-              </button>
-              <span className="text-[11px] text-muted-foreground">
-                Отдел выбирается в карточке сотрудника.
-              </span>
-            </div>
-          </div>
+          </AdminFilterBar>
 
           {isLoading ? (
             <div className="p-8 text-center border border-border bg-card text-card-foreground rounded-lg">

@@ -8,6 +8,7 @@ import {
   uploadImage, uploadNewsAttachment, fetchDepartments, News, Department
 } from '../lib/api';
 import WYSIWYGEditor from './wysiwyg-editor';
+import AdminFilterBar from './admin-filter-bar';
 
 type NewsStatus = 'draft' | 'published' | 'archived';
 type NewsSubmitAction = 'draft' | 'publish' | 'bump';
@@ -40,6 +41,8 @@ export function NewsAdmin() {
   const [isUploadingImage, setIsUploadingImage] = React.useState(false);
   const [isUploadingFile, setIsUploadingFile] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState('');
+  const [filterStatus, setFilterStatus] = React.useState<'all' | 'published' | 'draft'>('all');
+  const [isFilterOpen, setIsFilterOpen] = React.useState(false);
 
   const hasEditorContent = React.useCallback((value: string) => {
     const plainText = value
@@ -317,11 +320,17 @@ export function NewsAdmin() {
   };
 
   // Filtered list
-  const filteredNews = newsList.filter(n =>
-    n.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    n.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    n.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredNews = newsList.filter(n => {
+    const matchesSearch =
+      n.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      n.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      n.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    if (!matchesSearch) return false;
+    if (filterStatus === 'published') return n.is_published;
+    if (filterStatus === 'draft') return !n.is_published;
+    return true;
+  });
 
   const selectedNewsStatus = selectedNews ? getNewsStatus(selectedNews) : 'draft';
   const isEditingPublishedNews = selectedNewsStatus === 'published';
@@ -689,16 +698,44 @@ export function NewsAdmin() {
         /* NEWS LIST TABLE PANEL */
         <div className="bg-white dark:bg-neutral-950 border border-neutral-200/50 dark:border-neutral-900 rounded-xl overflow-hidden shadow-sm">
           
-          {/* Search bar inside list */}
-          <div className="p-4 border-b border-neutral-200/50 dark:border-neutral-900 flex items-center gap-3">
-            <Search className="w-4 h-4 text-neutral-400 shrink-0" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Поиск по новостям в базе..."
-              className="flex-1 bg-transparent text-sm outline-none text-neutral-900 dark:text-white placeholder-neutral-400"
-            />
+          {/* Search & Filter bar inside list */}
+          <div className="p-4 border-b border-neutral-200/50 dark:border-neutral-900">
+            <AdminFilterBar
+              isOpen={isFilterOpen}
+              onToggle={() => setIsFilterOpen((prev) => !prev)}
+              activeCount={(searchTerm.trim() ? 1 : 0) + (filterStatus !== 'all' ? 1 : 0)}
+              onReset={() => {
+                setSearchTerm('');
+                setFilterStatus('all');
+              }}
+              searchControl={
+                <div className="flex items-center gap-2 border border-neutral-200 dark:border-neutral-800 rounded-xl px-3 py-2 bg-neutral-50/50 dark:bg-neutral-900/50 w-full focus-within:border-indigo-500 transition-colors">
+                  <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Поиск по новостям в базе..."
+                    className="flex-1 bg-transparent text-xs text-neutral-900 dark:text-white outline-none placeholder-neutral-400"
+                  />
+                </div>
+              }
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Статус публикации</label>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value as any)}
+                    className="w-full text-xs border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-indigo-500"
+                  >
+                    <option value="all">Все новости</option>
+                    <option value="published">Опубликованные</option>
+                    <option value="draft">Черновики</option>
+                  </select>
+                </div>
+              </div>
+            </AdminFilterBar>
           </div>
 
           {isLoading ? (

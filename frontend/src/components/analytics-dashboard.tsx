@@ -14,6 +14,7 @@ import {
   Users,
 } from 'lucide-react';
 import { AnalyticsReport, fetchAnalyticsReport } from '../lib/api';
+import AdminFilterBar from './admin-filter-bar';
 
 const numberFormatter = new Intl.NumberFormat('ru-RU');
 
@@ -83,6 +84,7 @@ const excelSheet = (name: string, rows: ExcelCell[][]) => `
 export default function AnalyticsDashboard() {
   const [periodDays, setPeriodDays] = React.useState(30);
   const [staleDays, setStaleDays] = React.useState(90);
+  const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const [activeAnalyticsTab, setActiveAnalyticsTab] = React.useState<'overview' | 'mandatory'>('overview');
   const [mandatoryStatus, setMandatoryStatus] = React.useState('all');
   const [mandatoryViewMode, setMandatoryViewMode] = React.useState<'employees' | 'articles'>('employees');
@@ -339,48 +341,83 @@ export default function AnalyticsDashboard() {
           </h2>
           <p className="text-xs text-muted-foreground mt-1">Данные обновлены {new Date(report.generatedAt).toLocaleString('ru-RU')}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs text-muted-foreground" htmlFor="analytics-period">Период</label>
-          <select
-            id="analytics-period"
-            value={periodDays}
-            onChange={(event) => setPeriodDays(Number(event.target.value))}
-            className="h-9 rounded-lg border border-border bg-card px-3 text-xs text-foreground outline-none focus:border-indigo-500"
-          >
-            <option value={7}>7 дней</option>
-            <option value={30}>30 дней</option>
-            <option value={90}>90 дней</option>
-          </select>
-          <label className="text-xs text-muted-foreground ml-2" htmlFor="analytics-stale">Актуальность</label>
-          <select
-            id="analytics-stale"
-            value={staleDays}
-            onChange={(event) => setStaleDays(Number(event.target.value))}
-            className="h-9 rounded-lg border border-border bg-card px-3 text-xs text-foreground outline-none focus:border-indigo-500"
-          >
-            <option value={30}>30 дней</option>
-            <option value={60}>60 дней</option>
-            <option value={90}>90 дней</option>
-            <option value={180}>180 дней</option>
-          </select>
-          <button
-            type="button"
-            onClick={loadReport}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
-            title="Обновить отчёт"
-            aria-label="Обновить отчёт"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            type="button"
-            onClick={exportExcel}
-            className="inline-flex h-9 items-center gap-1.5 px-3 rounded-lg border border-border bg-card text-xs font-semibold text-foreground hover:bg-muted"
-          >
-            <Download className="w-4 h-4" />
-            Excel
-          </button>
-        </div>
+
+        <AdminFilterBar
+          isOpen={isFilterOpen}
+          onToggle={() => setIsFilterOpen((prev) => !prev)}
+          activeCount={(periodDays !== 30 ? 1 : 0) + (staleDays !== 90 ? 1 : 0) + (mandatoryStatus !== 'all' ? 1 : 0)}
+          onReset={() => {
+            setPeriodDays(30);
+            setStaleDays(90);
+            setMandatoryStatus('all');
+          }}
+          actions={
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={loadReport}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground shadow-sm cursor-pointer"
+                title="Обновить отчёт"
+                aria-label="Обновить отчёт"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </button>
+              <button
+                type="button"
+                onClick={exportExcel}
+                className="inline-flex h-9 items-center gap-1.5 px-3 rounded-xl border border-border bg-card text-xs font-bold text-foreground hover:bg-muted shadow-sm cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-indigo-500" />
+                <span className="hidden sm:inline">Выгрузить</span> Excel
+              </button>
+            </div>
+          }
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-muted-foreground mb-1" htmlFor="analytics-period">Период аналитики</label>
+              <select
+                id="analytics-period"
+                value={periodDays}
+                onChange={(event) => setPeriodDays(Number(event.target.value))}
+                className="w-full text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+              >
+                <option value={7}>7 дней</option>
+                <option value={30}>30 дней</option>
+                <option value={90}>90 дней</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-muted-foreground mb-1" htmlFor="analytics-stale">Порог актуальности</label>
+              <select
+                id="analytics-stale"
+                value={staleDays}
+                onChange={(event) => setStaleDays(Number(event.target.value))}
+                className="w-full text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+              >
+                <option value={30}>30 дней</option>
+                <option value={60}>60 дней</option>
+                <option value={90}>90 дней</option>
+                <option value={180}>180 дней</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-muted-foreground mb-1" htmlFor="analytics-mandatory-status">Статус ознакомлений</label>
+              <select
+                id="analytics-mandatory-status"
+                value={mandatoryStatus}
+                onChange={(event) => setMandatoryStatus(event.target.value)}
+                className="w-full text-xs border border-border rounded-lg px-3 py-2 bg-muted text-foreground outline-none focus:border-indigo-500"
+              >
+                {Object.entries(mandatoryStatusLabels).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </AdminFilterBar>
       </div>
 
       <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1">
