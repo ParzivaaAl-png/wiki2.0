@@ -2061,20 +2061,31 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string): bo
   };
 
   const cleanText = textToHighlight.trim().replace(/\u00a0/g, ' ');
-  const pattern = escapeRegExp(cleanText).replace(/\s+/g, '[\\s\\u00a0]+');
-  const testRegex = new RegExp(pattern, 'i'); // Non-global regex for safe test() without lastIndex mutation
-  const matchRegex = new RegExp(`(${pattern})`, 'gi'); // Global regex for string replacement
+  // Use stem matching for words longer than 4 chars (e.g. "Департамент" -> "департ")
+  const stem = cleanText.length > 4 ? cleanText.substring(0, Math.min(cleanText.length, 5)) : cleanText;
+  
+  const exactPattern = escapeRegExp(cleanText).replace(/\s+/g, '[\\s\\u00a0]+');
+  const stemPattern = escapeRegExp(stem).replace(/\s+/g, '[\\s\\u00a0]+');
+
+  const testRegex = new RegExp(stemPattern, 'i');
+  const matchRegex = new RegExp(`(${exactPattern}|${stemPattern}[a-яа-z0-9_-]*)`, 'gi');
 
   // 1. FIRST PASS: Instantly open any <details> / .wiki-collapsible-block whose textContent matches!
-  const allDetails = container.querySelectorAll<HTMLDetailsElement>('details, .wiki-collapsible-block, [data-wiki-collapsible]');
+  const allDetails = container.querySelectorAll<HTMLDetailsElement>('details, .wiki-collapsible-block, [data-wiki-collapsible], [data-state]');
   let openedAny = false;
   allDetails.forEach((details) => {
-    if (details.textContent && testRegex.test(details.textContent.replace(/\u00a0/g, ' '))) {
-      if (!details.open) {
-        details.open = true;
-        details.dispatchEvent(new Event('toggle'));
-        openedAny = true;
+    const textContent = (details.textContent || '').replace(/\u00a0/g, ' ');
+    if (testRegex.test(textContent)) {
+      details.open = true;
+      details.setAttribute('open', '');
+      details.dataset.open = 'true';
+      if (details.getAttribute('data-state') === 'closed') {
+        details.setAttribute('data-state', 'open');
       }
+      try {
+        details.dispatchEvent(new Event('toggle', { bubbles: true }));
+      } catch (e) {}
+      openedAny = true;
     }
   });
 
@@ -2120,11 +2131,13 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string): bo
         currentParent.classList.contains('wiki-collapsible-block')
       ) {
         const detailsEl = currentParent as HTMLDetailsElement;
-        if (!detailsEl.open) {
-          detailsEl.open = true;
-          detailsEl.dispatchEvent(new Event('toggle'));
-          openedAny = true;
-        }
+        detailsEl.open = true;
+        detailsEl.setAttribute('open', '');
+        detailsEl.dataset.open = 'true';
+        try {
+          detailsEl.dispatchEvent(new Event('toggle', { bubbles: true }));
+        } catch (e) {}
+        openedAny = true;
       }
       currentParent = currentParent.parentElement;
     }
@@ -2169,10 +2182,13 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string): bo
 
   if (firstMark) {
     const markEl = firstMark as HTMLElement;
-    markEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTimeout(() => {
+    const doScroll = () => {
       markEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 300);
+    };
+    doScroll();
+    setTimeout(doScroll, 100);
+    setTimeout(doScroll, 350);
+    setTimeout(doScroll, 700);
     return true;
   }
 
