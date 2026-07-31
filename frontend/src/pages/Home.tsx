@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { Link } from 'react-router-dom';
-import { Search, Sparkles, Clock, ChevronRight, ChevronLeft, Check, Plus, Star, X, ShieldCheck } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Search, Sparkles, Clock, ChevronRight, ChevronLeft, Check, Plus, Star, X, ShieldCheck, Folder } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   fetchArticles, 
@@ -27,6 +27,12 @@ const PRESET_ICONS = ['file-text', 'book', 'layers', 'layout', 'database', 'sett
 
 export default function Home() {
   const { user, isStaff } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = React.useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const activeSectionId = searchParams.get('sectionId');
+  const activeSectionName = searchParams.get('sectionName');
+
   const [allArticles, setAllArticles] = React.useState<Article[]>([]);
   const [trendingArticles, setTrendingArticles] = React.useState<Article[]>([]);
   const [recommendedArticles, setRecommendedArticles] = React.useState<Article[]>([]);
@@ -92,10 +98,15 @@ export default function Home() {
   const getArticleColor = (id: number) => PRESET_COLORS[id % PRESET_COLORS.length];
   const getArticleIcon = (id: number) => PRESET_ICONS[id % PRESET_ICONS.length];
 
-  // COMPUTED ARTICLES LIST BASED ON ACTIVE FILTER TAB
+  // COMPUTED ARTICLES LIST BASED ON ACTIVE FILTER TAB AND SECTION FILTER
   const displayedArticles = React.useMemo(() => {
     const visibleArticles = allArticles.filter(a => a.is_visible !== false && a.published);
     let result = visibleArticles;
+
+    if (activeSectionId) {
+      const secIdNum = Number(activeSectionId);
+      return visibleArticles.filter(a => a.section_ids?.includes(secIdNum));
+    }
 
     // If Admin/Editor global editing mode is on, display visible articles (no hidden/archived ones) so they can reorder them
     if (isEditMode) {
@@ -120,7 +131,7 @@ export default function Home() {
     }
 
     return result.slice(0, 6);
-  }, [filterTab, allArticles, trendingArticles, recommendedArticles, isEditMode]);
+  }, [filterTab, allArticles, trendingArticles, recommendedArticles, isEditMode, activeSectionId]);
 
   const filteredFavs = React.useMemo(() => {
     if (!searchFavQuery.trim()) return favoriteArticles;
@@ -666,6 +677,27 @@ export default function Home() {
         {/* ARTICLES CATALOG CARD */}
         <div className="p-5 rounded-xl border border-neutral-200/50 dark:border-border bg-white dark:bg-card shadow-premium dark:shadow-premium-dark space-y-4">
           
+          {activeSectionName && (
+            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                  <Folder className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider text-indigo-600/70 dark:text-indigo-400/70 font-bold block">Должность / Раздел</span>
+                  <span className="text-sm font-bold text-neutral-900 dark:text-white">{activeSectionName} ({displayedArticles.length} статей)</span>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate('/')}
+                className="px-3 py-1.5 hover:bg-indigo-500/20 rounded-xl text-indigo-700 dark:text-indigo-300 font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                Показать все
+              </button>
+            </div>
+          )}
+
           {/* Header & Tabs */}
           <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-neutral-105 dark:border-border pb-3 gap-3">
             <div className="flex bg-neutral-100 dark:bg-muted p-1 rounded-xl border border-neutral-200/30 dark:border-border/50 shadow-inner gap-0.5 overflow-x-auto max-w-full select-none scrollbar-none shrink-0">

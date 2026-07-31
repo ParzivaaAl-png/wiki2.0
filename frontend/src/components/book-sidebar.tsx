@@ -139,28 +139,42 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
       .filter((space): space is Space => space !== null);
   }, [spaces, searchQuery]);
 
-  // Рекурсивный рендер узла раздела (Section)
+  // Helper to count articles for a position/section
+  const getSectionArticleCount = (sec: Section): number => {
+    let count = sec.articles ? sec.articles.length : 0;
+    if (sec.subsections) {
+      sec.subsections.forEach(sub => {
+        count += getSectionArticleCount(sub);
+      });
+    }
+    return count;
+  };
+
+  // Рекурсивный рендер узла должности (Section) — максимум 2 уровня
   const renderSectionNode = (section: Section, depth = 0) => {
     const expandKey = `section_${section.id}`;
     const isExpanded = !!expandedKeys[expandKey];
-    const hasChildren = (section.subsections && section.subsections.length > 0) || (section.articles && section.articles.length > 0);
+    const hasSubsections = section.subsections && section.subsections.length > 0;
+    const articleCount = getSectionArticleCount(section);
 
     return (
       <div key={section.id} className="select-none">
-        {/* Кнопка Раздела */}
+        {/* Кнопка Должности/Раздела */}
         <div
-          onClick={(e) => hasChildren && toggleExpand(expandKey, e)}
+          onClick={() => {
+            onClose();
+            navigate(`/?sectionId=${section.id}&sectionName=${encodeURIComponent(section.name)}`);
+          }}
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
-          className={`group flex items-center justify-between py-1.5 pr-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-            hasChildren 
-              ? 'text-neutral-750 dark:text-neutral-300 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/40' 
-              : 'text-neutral-500 dark:text-neutral-500'
-          }`}
+          className="group flex items-center justify-between py-1.5 pr-2 rounded-lg text-xs font-semibold transition-all cursor-pointer text-neutral-700 dark:text-neutral-300 hover:bg-indigo-500/10 hover:text-indigo-600 dark:hover:text-indigo-300"
         >
           <div className="flex items-center gap-2 min-w-0">
-            {hasChildren ? (
+            {hasSubsections ? (
               <button 
-                onClick={(e) => toggleExpand(expandKey, e)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleExpand(expandKey, e);
+                }}
                 className="p-0.5 hover:bg-neutral-300/50 dark:hover:bg-neutral-700/50 rounded transition-colors shrink-0"
               >
                 <ChevronRight 
@@ -168,17 +182,15 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                 />
               </button>
             ) : (
-              <span className="w-4.5 shrink-0" />
-            )}
-
-            {isExpanded ? (
-              <FolderOpen className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />
-            ) : (
-              <Folder className="w-3.5 h-3.5 text-amber-500/70 shrink-0" />
+              <Folder className="w-3.5 h-3.5 text-indigo-500/70 shrink-0" />
             )}
 
             <span className="truncate" title={section.description || section.name}>
               {section.name}
+            </span>
+
+            <span className="ml-0.5 text-[11px] text-neutral-400 dark:text-neutral-500 font-medium">
+              ({articleCount})
             </span>
 
             {section.guest_access && (
@@ -191,7 +203,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
             )}
           </div>
 
-          {/* Быстрый плюс для создания статьи в этой секции */}
+          {/* Быстрый плюс для создания статьи в этой должности */}
           {canEdit && (
             <button
               onClick={(e) => {
@@ -200,73 +212,18 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                 onClose();
                 navigate(`/admin/editor/new?sectionId=${section.id}`);
               }}
-              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-indigo-500/10 hover:text-indigo-500 text-neutral-400 rounded-md transition-all shrink-0"
-              title="Создать статью в этом разделе"
+              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-indigo-500/20 hover:text-indigo-600 text-neutral-400 rounded-md transition-all shrink-0"
+              title={`Создать статью для должности ${section.name}`}
             >
-              <Plus className="w-3 h-3" />
+              <Plus className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
-        {/* Содержимое раздела (подразделы и статьи) */}
-        {hasChildren && isExpanded && (
+        {/* Подразделы если есть */}
+        {hasSubsections && isExpanded && (
           <div className="mt-0.5 space-y-0.5">
-            {/* Подразделы */}
-            {section.subsections && section.subsections.map(sub => renderSectionNode(sub, depth + 1))}
-
-            {/* Статьи раздела */}
-            {section.articles && section.articles.map(art => {
-              const isActive = activeArticleSlug === art.slug;
-              const isDraft = art.status === 'draft';
-              const isPending = art.status === 'on_approval';
-              const isWarning = art.status === 'requires_verification';
-              const isJobDescription = art.article_type === 'job_description';
-
-              return (
-                <div key={art.id} style={{ paddingLeft: `${(depth + 1) * 12 + 12}px` }}>
-                  <Link
-                    to={`/articles/${art.slug}`}
-                    onClick={onClose}
-                    className={`group flex items-center justify-between py-1.5 px-2 rounded-lg text-xs transition-all border ${
-                      isActive
-                        ? 'bg-indigo-500/10 dark:bg-indigo-500/10 border-indigo-500/20 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-semibold shadow-sm'
-                        : isJobDescription
-                          ? 'text-indigo-650 dark:text-indigo-400 bg-indigo-500/5 dark:bg-indigo-500/5 hover:bg-indigo-500/10 dark:hover:bg-indigo-500/10 border-indigo-550/10 hover:translate-x-0.5 font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]'
-                          : 'text-neutral-600 dark:text-neutral-400 hover:bg-white/60 dark:hover:bg-card/30 hover:text-neutral-900 dark:hover:text-neutral-200 border-transparent hover:translate-x-0.5'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {isJobDescription ? (
-                        <ClipboardList className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-600' : 'text-indigo-500'}`} />
-                      ) : (
-                        <FileText className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-500' : 'text-neutral-400'}`} />
-                      )}
-                      <span className="truncate">{art.title}</span>
-                    </div>
-
-                    {/* Статусы в виде компактных точек/значков */}
-                    <div className="flex items-center gap-1 shrink-0 ml-1.5">
-                      {art.guest_access && (
-                        <GuestAccessTimer
-                          expiresAt={art.guest_access.expires_at}
-                          scope={art.guest_access.type}
-                          compact
-                        />
-                      )}
-                      {isDraft && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Черновик" />
-                      )}
-                      {isPending && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" title="На согласовании" />
-                      )}
-                      {isWarning && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="Требует проверки" />
-                      )}
-                    </div>
-                  </Link>
-                </div>
-              );
-            })}
+            {section.subsections!.map(sub => renderSectionNode(sub, depth + 1))}
           </div>
         )}
       </div>
@@ -370,21 +327,8 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
             <div className="p-4 border-b border-neutral-200/40 dark:border-border flex items-center justify-between lg:pl-6 pl-14 shrink-0">
               <div className="flex items-center gap-2 text-indigo-500 font-semibold tracking-tight text-sm uppercase">
                 <BookOpen className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
-                <span className="font-outfit font-bold text-neutral-800 dark:text-neutral-200">База Знаний</span>
+                <span className="font-outfit font-bold text-neutral-800 dark:text-neutral-200">Оргструктура</span>
               </div>
-              
-              {canEdit && (
-                <button
-                  onClick={() => {
-                    onClose();
-                    navigate('/admin/editor/new');
-                  }}
-                  className="px-2 py-1 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/25 text-indigo-650 dark:text-indigo-400 rounded-lg text-[10px] font-bold uppercase transition-all shadow-sm cursor-pointer flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" />
-                  Создать
-                </button>
-              )}
             </div>
 
             {/* Quick Search */}
