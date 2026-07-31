@@ -35,6 +35,7 @@ import {
   Calculator,
   Monitor,
   ShieldCheck,
+  ArrowRight,
 } from 'lucide-react';
 import { 
   fetchArticles, 
@@ -140,6 +141,7 @@ export default function Admin() {
   const [isWebsiteImportOpen, setIsWebsiteImportOpen] = React.useState(false);
   const [websiteImportUrl, setWebsiteImportUrl] = React.useState('');
   const [isImportingWebsite, setIsImportingWebsite] = React.useState(false);
+  const [selectedSpaceModalGroup, setSelectedSpaceModalGroup] = React.useState<{ group: ArticleSpaceGroup; mode: 'active' | 'archive' } | null>(null);
 
   const loadNotifications = React.useCallback(async () => {
     if (!isStaff) return;
@@ -761,10 +763,6 @@ export default function Admin() {
       );
     }
 
-    const tableGridClass = 'grid grid-cols-[minmax(260px,1.5fr)_130px_145px_130px_108px_190px] gap-3';
-    const stickyActionsClass = 'sticky right-0 z-10 bg-card pl-3 shadow-[-16px_0_20px_-20px_rgba(15,23,42,0.65)]';
-    const stickyActionsHeaderClass = 'sticky right-0 z-20 bg-muted/95 pl-3 text-right shadow-[-16px_0_20px_-20px_rgba(15,23,42,0.65)] dark:bg-neutral-900/95';
-
     return (
       <div className="max-w-full overflow-hidden bg-muted/20 p-4 sm:p-5">
         <div className="flex items-center justify-between mb-4">
@@ -775,22 +773,15 @@ export default function Admin() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {tree.map((spaceGroup) => {
-          const spaceOpen = forceTreeExpanded || !collapsedSpaceIds.has(spaceGroup.id);
           const DeptIcon = getDepartmentIcon(spaceGroup.title);
 
           return (
             <div
               key={spaceGroup.id}
-              className={`group flex flex-col justify-between rounded-2xl border transition-all duration-200 cursor-pointer ${
-                spaceOpen
-                  ? 'border-indigo-500/60 bg-card shadow-md ring-2 ring-indigo-500/20 col-span-1 md:col-span-2 lg:col-span-3'
-                  : 'border-border bg-card hover:border-indigo-500/40 hover:shadow-md'
-              }`}
+              onClick={() => setSelectedSpaceModalGroup({ group: spaceGroup, mode })}
+              className="group flex flex-col justify-between rounded-2xl border border-border bg-card p-5 hover:border-indigo-500/50 hover:shadow-lg transition-all cursor-pointer"
             >
-              <div
-                onClick={() => toggleSpaceCollapsed(spaceGroup.id)}
-                className="p-5 flex items-start justify-between gap-4"
-              >
+              <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3.5 min-w-0">
                   <span className="mt-0.5 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-500 shrink-0 group-hover:scale-105 transition-transform">
                     <DeptIcon className="w-5.5 h-5.5" />
@@ -815,234 +806,9 @@ export default function Admin() {
                   </div>
                 </div>
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground shrink-0 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
-                  {spaceOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  <ArrowRight className="w-4 h-4" />
                 </span>
               </div>
-
-              {spaceOpen && (
-                <div className="border-t border-border bg-muted/15 p-4 sm:p-5 rounded-b-2xl">
-                  {spaceGroup.sections.map((sectionGroup) => {
-                    const sectionOpen = forceTreeExpanded || !collapsedSectionIds.has(sectionGroup.id);
-                    return (
-                      <div key={sectionGroup.id} className="relative max-w-full pl-0 sm:pl-6 [&+&]:mt-3">
-                        <div className="absolute left-2 top-0 hidden h-full w-px bg-border sm:block" />
-                        <div className="max-w-full overflow-hidden rounded-xl border border-border bg-background/80">
-                          <button
-                            type="button"
-                            onClick={() => toggleSectionCollapsed(sectionGroup.id)}
-                            className="w-full flex items-center justify-between gap-3 px-3 py-3 text-left hover:bg-muted/35 transition-colors sm:px-4"
-                          >
-                            <div className="flex items-start gap-2.5 min-w-0">
-                              <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-500/20 bg-sky-500/10 text-sky-600 dark:text-sky-300 shrink-0">
-                                <Briefcase className="w-4 h-4" />
-                              </span>
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <h4 className="font-outfit text-sm font-bold text-foreground truncate">{sectionGroup.title}</h4>
-                                  <span className="inline-flex items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
-                                    {sectionGroup.articles.length} статей
-                                  </span>
-                                </div>
-                                <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
-                                  {sectionGroup.description || `Раздел для должности ${sectionGroup.title}`}
-                                </p>
-                              </div>
-                            </div>
-                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shrink-0">
-                              {sectionOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                            </span>
-                          </button>
-
-                          {sectionOpen && (
-                            <div className="max-w-full overflow-hidden border-t border-border bg-card">
-                              <div className="hidden max-w-full overflow-x-auto xl:block">
-                                <div className="min-w-[1040px]">
-                                  <div className={`${tableGridClass} border-b border-border bg-muted/35 px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground`}>
-                                    <div>Статья</div>
-                                    <div>Автор</div>
-                                    <div>{mode === 'archive' ? 'Архивировано' : 'Обновлено'}</div>
-                                    <div>Статус</div>
-                                    <div>Просмотры</div>
-                                    <div className={stickyActionsHeaderClass}>Действия</div>
-                                  </div>
-
-                                  <div className="divide-y divide-border">
-                                    {sectionGroup.articles.map((article) => {
-                                      const extraSections = Math.max((article.section_ids?.length || 0) - 1, 0);
-                                      return (
-                                        <div
-                                          key={`${sectionGroup.id}-${article.id}-table`}
-                                          className={`${tableGridClass} group items-center px-4 py-3 transition-colors hover:bg-muted/25`}
-                                        >
-                                          <div className="min-w-0">
-                                            <div className="flex min-w-0 items-center gap-2.5">
-                                              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground shrink-0">
-                                                <FileText className="w-4 h-4" />
-                                              </span>
-                                              <div className="min-w-0">
-                                                {mode === 'active' ? (
-                                                  <Link
-                                                    to={`/articles/${article.slug}`}
-                                                    className="inline-flex max-w-full min-w-0 items-center gap-1 font-bold text-sm text-foreground hover:text-indigo-600 dark:hover:text-indigo-300 hover:underline"
-                                                  >
-                                                    <span className="block min-w-0 truncate whitespace-nowrap">{article.title}</span>
-                                                    <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0" />
-                                                  </Link>
-                                                ) : (
-                                                  <div className="truncate whitespace-nowrap text-sm font-bold text-foreground">{article.title}</div>
-                                                )}
-                                                <div className="mt-1 flex min-w-0 items-center gap-2">
-                                                  <span className="min-w-0 truncate whitespace-nowrap text-[10px] text-muted-foreground font-mono">/{article.slug}</span>
-                                                  {extraSections > 0 && (
-                                                    <span className="shrink-0 rounded-full bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
-                                                      +{extraSections}
-                                                    </span>
-                                                  )}
-                                                  {article.source_url && mode === 'active' && (
-                                                    <a
-                                                      href={article.source_url}
-                                                      target="_blank"
-                                                      rel="noopener noreferrer"
-                                                      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-indigo-500/15 bg-indigo-500/5 px-1.5 py-0.5 text-[9px] font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-300 dark:hover:text-indigo-200"
-                                                    >
-                                                      <ExternalLink className="w-2.5 h-2.5" />
-                                                      Источник
-                                                    </a>
-                                                  )}
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-
-                                          <div className="min-w-0 text-[11px] text-muted-foreground">
-                                            <span className="block truncate whitespace-nowrap font-medium text-foreground/85">{article.author_name || 'Не указан'}</span>
-                                          </div>
-
-                                          <div className="whitespace-nowrap text-[11px] font-mono text-muted-foreground">
-                                            {formatDateTime(article.updated_at)}
-                                          </div>
-
-                                          <div>
-                                            {renderArticleStatusBadge(article)}
-                                          </div>
-
-                                          <div className="whitespace-nowrap text-[11px] font-medium text-muted-foreground">
-                                            {formatViews(article.views)}
-                                          </div>
-
-                                          <div className={`${stickyActionsClass} flex justify-end group-hover:bg-muted/25`}>
-                                            {renderArticleActions(article, mode)}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="divide-y divide-border xl:hidden">
-                                {sectionGroup.articles.map((article) => {
-                                  const extraSections = Math.max((article.section_ids?.length || 0) - 1, 0);
-                                  return (
-                                    <div
-                                      key={`${sectionGroup.id}-${article.id}-card`}
-                                      className="grid grid-cols-1 gap-3 px-3 py-3 transition-colors hover:bg-muted/25 sm:px-4"
-                                    >
-                                      <div className="min-w-0">
-                                        <div className="flex items-start gap-2.5">
-                                          <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground shrink-0">
-                                            <FileText className="w-4 h-4" />
-                                          </span>
-                                          <div className="min-w-0">
-                                            {mode === 'active' ? (
-                                              <Link
-                                                to={`/articles/${article.slug}`}
-                                                className="inline-flex max-w-full min-w-0 items-center gap-1 font-bold text-sm text-foreground hover:text-indigo-600 dark:hover:text-indigo-300 hover:underline"
-                                              >
-                                                <span className="block min-w-0 truncate whitespace-nowrap">{article.title}</span>
-                                                <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0" />
-                                              </Link>
-                                            ) : (
-                                              <div className="truncate whitespace-nowrap text-sm font-bold text-foreground">{article.title}</div>
-                                            )}
-                                            <div className="mt-1 flex flex-wrap items-center gap-2">
-                                              <span className="max-w-full truncate whitespace-nowrap text-[10px] text-muted-foreground font-mono">/{article.slug}</span>
-                                              {extraSections > 0 && (
-                                                <span className="rounded-full bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
-                                                  +{extraSections} разделов
-                                                </span>
-                                              )}
-                                              {article.source_url && mode === 'active' && (
-                                                <a
-                                                  href={article.source_url}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="inline-flex items-center gap-1 rounded-full border border-indigo-500/15 bg-indigo-500/5 px-1.5 py-0.5 text-[9px] font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-300 dark:hover:text-indigo-200"
-                                                >
-                                                  <ExternalLink className="w-2.5 h-2.5" />
-                                                  Источник
-                                                </a>
-                                              )}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      <div className="hidden min-w-0 text-[11px] text-muted-foreground xl:block">
-                                        <span className="block truncate font-medium text-foreground/85">{article.author_name || 'Не указан'}</span>
-                                      </div>
-
-                                      <div className="hidden whitespace-nowrap text-[11px] font-mono text-muted-foreground xl:block">
-                                        {formatDateTime(article.updated_at)}
-                                      </div>
-
-                                      <div className="hidden xl:block">
-                                        {renderArticleStatusBadge(article)}
-                                      </div>
-
-                                      <div className="hidden whitespace-nowrap text-[11px] font-medium text-muted-foreground xl:block">
-                                        {formatViews(article.views)}
-                                      </div>
-
-                                      <div className="hidden xl:flex xl:justify-end">
-                                        {renderArticleActions(article, mode)}
-                                      </div>
-
-                                      <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-muted/20 p-3 text-[11px] xl:hidden">
-                                        <div>
-                                          <div className="font-bold uppercase tracking-wide text-muted-foreground text-[9px]">Автор</div>
-                                          <div className="mt-0.5 truncate text-foreground">{article.author_name || 'Не указан'}</div>
-                                        </div>
-                                        <div>
-                                          <div className="font-bold uppercase tracking-wide text-muted-foreground text-[9px]">
-                                            {mode === 'archive' ? 'Архивировано' : 'Обновлено'}
-                                          </div>
-                                          <div className="mt-0.5 font-mono text-muted-foreground">{formatDateTime(article.updated_at)}</div>
-                                        </div>
-                                        <div>
-                                          <div className="font-bold uppercase tracking-wide text-muted-foreground text-[9px]">Статус</div>
-                                          <div className="mt-1">{renderArticleStatusBadge(article)}</div>
-                                        </div>
-                                        <div>
-                                          <div className="font-bold uppercase tracking-wide text-muted-foreground text-[9px]">Просмотры</div>
-                                          <div className="mt-0.5 whitespace-nowrap text-muted-foreground">{formatViews(article.views)}</div>
-                                        </div>
-                                        <div className="col-span-2 flex justify-end pt-1">
-                                          {renderArticleActions(article, mode)}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           );
         })}
@@ -1834,6 +1600,161 @@ export default function Admin() {
           </ModalPortal>
         )}
       </AnimatePresence>
+
+      {/* Department Articles Modal Window Overlay */}
+      {selectedSpaceModalGroup && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-5xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card text-card-foreground shadow-2xl overflow-hidden">
+              {/* Modal Header */}
+              <div className="p-5 border-b border-border flex items-start justify-between gap-4 bg-muted/20 shrink-0">
+                <div className="flex items-start gap-4 min-w-0">
+                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-500 shrink-0">
+                    {React.createElement(getDepartmentIcon(selectedSpaceModalGroup.group.title), { className: 'w-6 h-6' })}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="font-outfit text-xl font-bold text-foreground truncate">{selectedSpaceModalGroup.group.title}</h2>
+                      <span className="inline-flex items-center rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                        {selectedSpaceModalGroup.mode === 'archive' ? 'Архив' : 'Активный отдел'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      {selectedSpaceModalGroup.group.description || 'Раздел Wiki без описания.'}
+                    </p>
+                    <div className="mt-2.5 flex items-center gap-2">
+                      <span className="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                        {selectedSpaceModalGroup.group.articleCount} статей
+                      </span>
+                      {selectedSpaceModalGroup.group.sections.length > 0 && (
+                        <span className="inline-flex items-center rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                          {selectedSpaceModalGroup.group.sections.length} подразделения
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSpaceModalGroup(null)}
+                  className="p-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                {selectedSpaceModalGroup.group.sections.length === 0 ? (
+                  <div className="p-8 text-center border border-dashed border-border rounded-xl text-xs text-muted-foreground">
+                    В этом отделе нет подразделений и статей.
+                  </div>
+                ) : (
+                  selectedSpaceModalGroup.group.sections.map((sectionGroup) => {
+                    const tableGridClass = 'grid grid-cols-[minmax(260px,1.5fr)_130px_145px_130px_108px_190px] gap-3';
+                    const stickyActionsClass = 'sticky right-0 z-10 bg-card pl-3 shadow-[-16px_0_20px_-20px_rgba(15,23,42,0.65)]';
+                    const stickyActionsHeaderClass = 'sticky right-0 z-20 bg-muted/95 pl-3 text-right shadow-[-16px_0_20px_-20px_rgba(15,23,42,0.65)] dark:bg-neutral-900/95';
+
+                    return (
+                      <div key={sectionGroup.id} className="overflow-hidden rounded-xl border border-border bg-background/80">
+                        <div className="px-4 py-3 bg-muted/40 border-b border-border flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-500/20 bg-sky-500/10 text-sky-600 dark:text-sky-300 shrink-0">
+                              <Briefcase className="w-4 h-4" />
+                            </span>
+                            <div className="min-w-0">
+                              <h4 className="font-outfit text-sm font-bold text-foreground truncate">{sectionGroup.title}</h4>
+                              <p className="text-[11px] text-muted-foreground truncate">{sectionGroup.description || `Раздел для должности ${sectionGroup.title}`}</p>
+                            </div>
+                          </div>
+                          <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                            {sectionGroup.articles.length} статей
+                          </span>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                          <div className="min-w-[1040px]">
+                            <div className={`${tableGridClass} border-b border-border bg-muted/35 px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground`}>
+                              <div>Статья</div>
+                              <div>Автор</div>
+                              <div>{selectedSpaceModalGroup.mode === 'archive' ? 'Архивировано' : 'Обновлено'}</div>
+                              <div>Статус</div>
+                              <div>Просмотры</div>
+                              <div className={stickyActionsHeaderClass}>Действия</div>
+                            </div>
+
+                            <div className="divide-y divide-border">
+                              {sectionGroup.articles.map((article) => {
+                                const extraSections = Math.max((article.section_ids?.length || 0) - 1, 0);
+                                return (
+                                  <div
+                                    key={`${sectionGroup.id}-${article.id}-table`}
+                                    className={`${tableGridClass} group items-center px-4 py-3 transition-colors hover:bg-muted/25`}
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="flex min-w-0 items-center gap-2.5">
+                                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground shrink-0">
+                                          <FileText className="w-4 h-4" />
+                                        </span>
+                                        <div className="min-w-0">
+                                          {selectedSpaceModalGroup.mode === 'active' ? (
+                                            <Link
+                                              to={`/articles/${article.slug}`}
+                                              onClick={() => setSelectedSpaceModalGroup(null)}
+                                              className="inline-flex max-w-full min-w-0 items-center gap-1 font-bold text-sm text-foreground hover:text-indigo-600 dark:hover:text-indigo-300 hover:underline"
+                                            >
+                                              <span className="block min-w-0 truncate whitespace-nowrap">{article.title}</span>
+                                              <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0" />
+                                            </Link>
+                                          ) : (
+                                            <div className="truncate whitespace-nowrap text-sm font-bold text-foreground">{article.title}</div>
+                                          )}
+                                          <div className="mt-1 flex min-w-0 items-center gap-2">
+                                            <span className="min-w-0 truncate whitespace-nowrap text-[10px] text-muted-foreground font-mono">/{article.slug}</span>
+                                            {extraSections > 0 && (
+                                              <span className="shrink-0 rounded-full bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                                                +{extraSections}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="min-w-0 text-[11px] text-muted-foreground">
+                                      <span className="block truncate whitespace-nowrap font-medium text-foreground/85">{article.author_name || 'Не указан'}</span>
+                                    </div>
+
+                                    <div className="whitespace-nowrap text-[11px] font-mono text-muted-foreground">
+                                      {formatDateTime(article.updated_at)}
+                                    </div>
+
+                                    <div>
+                                      {renderArticleStatusBadge(article)}
+                                    </div>
+
+                                    <div className="whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+                                      {formatViews(article.views)}
+                                    </div>
+
+                                    <div className={`${stickyActionsClass} flex justify-end group-hover:bg-muted/25`}>
+                                      {renderArticleActions(article, selectedSpaceModalGroup.mode)}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
 
     </div>
   );
