@@ -49,35 +49,36 @@ export default function Home() {
 
   const loadData = React.useCallback(async () => {
     try {
-      // Load all lists in parallel safely using Promise.allSettled
-      const [artsResult, trendingArtsResult, recommendedArtsResult] = await Promise.allSettled([
+      // Execute ALL queries in a single parallel HTTP roundtrip
+      const [
+        artsResult,
+        trendingArtsResult,
+        recommendedArtsResult,
+        favsResult,
+        historyResult,
+        mandatoryResult
+      ] = await Promise.allSettled([
         fetchArticles({ all: isStaff ? true : false }),
         fetchArticles({ filter: 'trending' }),
-        fetchArticles({ filter: 'recommended' })
+        fetchArticles({ filter: 'recommended' }),
+        user ? fetchFavoriteArticles() : Promise.resolve([]),
+        user ? fetchReadingHistory() : Promise.resolve([]),
+        user ? fetchMyMandatoryAcknowledgements() : Promise.resolve([])
       ]);
 
       const arts = artsResult.status === 'fulfilled' ? artsResult.value : [];
       const trendingArts = trendingArtsResult.status === 'fulfilled' ? trendingArtsResult.value : [];
       const recommendedArts = recommendedArtsResult.status === 'fulfilled' ? recommendedArtsResult.value : [];
+      const favs = favsResult.status === 'fulfilled' ? favsResult.value : [];
+      const history = historyResult.status === 'fulfilled' ? historyResult.value : [];
+      const mandatory = mandatoryResult.status === 'fulfilled' ? mandatoryResult.value : [];
 
       setAllArticles(arts.filter(art => !art.slug.startsWith('auto-list-')));
       setTrendingArticles(trendingArts.filter(art => !art.slug.startsWith('auto-list-')));
       setRecommendedArticles(recommendedArts.filter(art => !art.slug.startsWith('auto-list-')));
-
-      if (user) {
-        const [favs, history, mandatory] = await Promise.all([
-          fetchFavoriteArticles(),
-          fetchReadingHistory(),
-          fetchMyMandatoryAcknowledgements()
-        ]);
-        setFavoriteArticles(favs);
-        setReadingHistory(history);
-        setMandatoryAcknowledgements(mandatory);
-      } else {
-        setFavoriteArticles([]);
-        setReadingHistory([]);
-        setMandatoryAcknowledgements([]);
-      }
+      setFavoriteArticles(favs);
+      setReadingHistory(history);
+      setMandatoryAcknowledgements(mandatory);
     } catch (error) {
       console.error('Home data load failed:', error);
     } finally {

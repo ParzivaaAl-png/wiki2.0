@@ -1044,7 +1044,7 @@ export const getArticles = async (req: Request, res: Response) => {
     let articles: any[] = [];
     if (filter === 'new') {
       const resData = await query(
-        `SELECT a.*, u.name as author_name,
+        `SELECT a.id, a.title, a.slug, '' as content, a.summary, a.category_id, a.author_id, a.published, a.is_visible, a.status, a.views, a.position, a.created_at, a.updated_at, a.article_type, a.owner_id, a.approver_id, a.source_url, a.sync_interval, a.last_sync_at, a.next_sync_at, a.structured_data, a.mandatory_ack_enabled, a.mandatory_ack_settings, a.ip_restriction_enabled, a.ip_restriction_settings, u.name as author_name,
                 COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
                 COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
          FROM articles a
@@ -1061,7 +1061,7 @@ export const getArticles = async (req: Request, res: Response) => {
       articles = resData.rows;
     } else if (filter === 'popular') {
       const resData = await query(
-        `SELECT a.*, u.name as author_name,
+        `SELECT a.id, a.title, a.slug, '' as content, a.summary, a.category_id, a.author_id, a.published, a.is_visible, a.status, a.views, a.position, a.created_at, a.updated_at, a.article_type, a.owner_id, a.approver_id, a.source_url, a.sync_interval, a.last_sync_at, a.next_sync_at, a.structured_data, a.mandatory_ack_enabled, a.mandatory_ack_settings, a.ip_restriction_enabled, a.ip_restriction_settings, u.name as author_name,
                 COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
                 COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
          FROM articles a
@@ -1078,7 +1078,7 @@ export const getArticles = async (req: Request, res: Response) => {
       articles = resData.rows;
     } else if (filter === 'actual' || filter === 'trending') {
       const resData = await query(
-        `SELECT a.*, COUNT(DISTINCT COALESCE(vl.user_id::text, vl.ip_address)) as trending_views, u.name as author_name,
+        `SELECT a.id, a.title, a.slug, '' as content, a.summary, a.category_id, a.author_id, a.published, a.is_visible, a.status, a.views, a.position, a.created_at, a.updated_at, a.article_type, a.owner_id, a.approver_id, a.source_url, a.sync_interval, a.last_sync_at, a.next_sync_at, a.structured_data, a.mandatory_ack_enabled, a.mandatory_ack_settings, a.ip_restriction_enabled, a.ip_restriction_settings, COUNT(DISTINCT COALESCE(vl.user_id::text, vl.ip_address)) as trending_views, u.name as author_name,
                 COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
                 COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
          FROM articles a
@@ -1096,7 +1096,7 @@ export const getArticles = async (req: Request, res: Response) => {
       articles = resData.rows;
     } else if (filter === 'recommended') {
       const resData = await query(
-        `SELECT a.*, COUNT(fa.user_id) as favorites_count, u.name as author_name,
+        `SELECT a.id, a.title, a.slug, '' as content, a.summary, a.category_id, a.author_id, a.published, a.is_visible, a.status, a.views, a.position, a.created_at, a.updated_at, a.article_type, a.owner_id, a.approver_id, a.source_url, a.sync_interval, a.last_sync_at, a.next_sync_at, a.structured_data, a.mandatory_ack_enabled, a.mandatory_ack_settings, a.ip_restriction_enabled, a.ip_restriction_settings, COUNT(fa.user_id) as favorites_count, u.name as author_name,
                 COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
                 COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
          FROM articles a
@@ -1133,7 +1133,7 @@ export const getArticles = async (req: Request, res: Response) => {
 
     if (missingDirectGuestArticleIds.length > 0) {
       const directGuestArticlesRes = await query(
-        `SELECT a.*, u.name as author_name,
+        `SELECT a.id, a.title, a.slug, '' as content, a.summary, a.category_id, a.author_id, a.published, a.is_visible, a.status, a.views, a.position, a.created_at, a.updated_at, a.article_type, a.owner_id, a.approver_id, a.source_url, a.sync_interval, a.last_sync_at, a.next_sync_at, a.structured_data, a.mandatory_ack_enabled, a.mandatory_ack_settings, a.ip_restriction_enabled, a.ip_restriction_settings, u.name as author_name,
                 COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
                 COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
          FROM articles a

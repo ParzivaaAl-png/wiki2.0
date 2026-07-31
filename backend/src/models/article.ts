@@ -46,7 +46,12 @@ export const getAllArticles = async (options: {
   let paramIndex = 1;
 
   let sql = `
-    SELECT a.*, u.name as author_name,
+    SELECT a.id, a.title, a.slug, '' as content, a.summary, a.category_id, a.author_id, a.published,
+           a.is_visible, a.status, a.views, a.position, a.created_at, a.updated_at, a.article_type,
+           a.owner_id, a.approver_id, a.source_url, a.sync_interval, a.last_sync_at, a.next_sync_at,
+           a.structured_data, a.mandatory_ack_enabled, a.mandatory_ack_settings,
+           a.ip_restriction_enabled, a.ip_restriction_settings,
+           u.name as author_name,
            uo.name as owner_name,
            ua.name as approver_name,
            COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags,
