@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, BookOpen, Search, Sparkles, Home, ShieldAlert, Plus, FileText, Folder, FolderOpen, Layers, ClipboardList, Pin } from 'lucide-react';
+import { ChevronRight, BookOpen, Search, Sparkles, Home, ShieldAlert, Plus, FileText, Folder, FolderOpen, Layers, ClipboardList, Pin, X } from 'lucide-react';
 import { fetchNavigationTree, Space, Section } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import GuestAccessTimer from './guest-access-timer';
@@ -419,12 +419,15 @@ export function BookSidebar({ isOpen, onToggle, onClose, isPinned, onTogglePin, 
         <AnimatePresence>
           {(isOpen || isPinned) && (
             <motion.div
-              initial={{ x: '-100%' }}
+              initial={isPinned ? false : { x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              style={{ width: `${sidebarWidth}px` }}
-              className={`fixed lg:left-14 left-0 top-0 h-screen bg-neutral-100/90 dark:bg-sidebar-bg border-r border-neutral-200/50 dark:border-border flex flex-col z-40 overflow-hidden ${
+              transition={isPinned ? { duration: 0 } : { type: 'spring', damping: 25, stiffness: 220 }}
+              style={{ 
+                width: `${sidebarWidth}px`,
+                transform: isPinned ? 'none' : undefined 
+              }}
+              className={`fixed lg:left-14 left-0 top-0 h-screen h-dvh bg-neutral-100/90 dark:bg-sidebar-bg border-r border-neutral-200/50 dark:border-border flex flex-col z-40 overflow-hidden overscroll-contain ${
                 isPinned ? 'shadow-none' : 'shadow-2xl'
               }`}
             >
@@ -445,57 +448,80 @@ export function BookSidebar({ isOpen, onToggle, onClose, isPinned, onTogglePin, 
                   <span className="font-outfit font-bold text-neutral-800 dark:text-neutral-200">Оргструктура</span>
                 </div>
 
-                {/* Pin / Unpin Button (Desktop >= 1200px / xl breakpoint only) */}
-                <button
-                  type="button"
-                  onClick={onTogglePin}
-                  className={`hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
-                    isPinned
-                      ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-600 dark:text-indigo-300 shadow-sm'
-                      : 'bg-neutral-200/60 dark:bg-neutral-800/60 border-neutral-300/60 dark:border-border text-neutral-600 dark:text-neutral-400 hover:text-indigo-500 hover:bg-neutral-200 dark:hover:bg-neutral-800'
-                  }`}
-                  title={isPinned ? 'Открепить панель' : 'Закрепить панель'}
-                >
-                  <Pin className={`w-3.5 h-3.5 transition-transform ${isPinned ? 'rotate-45 text-indigo-500 fill-indigo-500' : ''}`} />
-                  <span>{isPinned ? 'Открепить' : 'Закрепить'}</span>
-                </button>
-              </div>
+                <div className="flex items-center gap-1">
+                  {/* Pin / Unpin Button */}
+                  <button
+                    type="button"
+                    onClick={onTogglePin}
+                    className={`p-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+                      isPinned 
+                        ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30' 
+                        : 'text-neutral-500 dark:text-neutral-400 hover:bg-neutral-200/60 dark:hover:bg-neutral-800/60'
+                    }`}
+                    title={isPinned ? 'Открепить панель' : 'Закрепить панель'}
+                  >
+                    <Pin className={`w-3.5 h-3.5 transition-transform ${isPinned ? 'rotate-45 fill-indigo-500' : ''}`} />
+                    <span className="text-[11px] font-semibold hidden sm:inline">
+                      {isPinned ? 'Закреплено' : 'Закрепить'}
+                    </span>
+                  </button>
 
-              {/* Quick Search */}
-              <div className="px-4 pt-4 pb-2 shrink-0 pl-6">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
-                  <input
-                    type="text"
-                    placeholder="Поиск по оглавлению..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 text-xs bg-white/60 dark:bg-background/80 border border-neutral-200/60 dark:border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder-neutral-400 dark:placeholder-neutral-500 text-neutral-800 dark:text-neutral-100"
-                  />
+                  {!isPinned && (
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="p-1.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Quick Links Section */}
-              <div className="px-4 py-2 shrink-0 pl-6 space-y-1">
+              {/* Quick Search */}
+              <div className="p-4 border-b border-neutral-200/40 dark:border-border shrink-0">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Поиск по оглавлению..."
+                    className="w-full pl-8 pr-3 py-1.5 bg-white/60 dark:bg-card/40 border border-neutral-200/60 dark:border-border/60 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all placeholder:text-neutral-400"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Main Links */}
+              <div className="px-4 py-2 space-y-1 shrink-0">
                 <Link
                   to="/"
                   onClick={handleNavClose}
                   aria-current={isHomeActive ? 'page' : undefined}
                   className={`group flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs border transition-colors ${
                     isHomeActive
-                      ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-700 dark:text-indigo-300'
-                      : 'text-neutral-700 dark:text-neutral-300 hover:bg-white/50 dark:hover:bg-card/70 hover:text-neutral-950 dark:hover:text-white border-transparent'
+                      ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-semibold'
+                      : 'text-neutral-700 dark:text-neutral-300 hover:bg-white/50 dark:hover:bg-card/70 hover:text-neutral-950 dark:hover:text-white border-transparent font-medium'
                   }`}
                 >
                   <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
-                    isHomeActive
-                      ? 'bg-indigo-500/15 text-indigo-500'
+                    isHomeActive 
+                      ? 'bg-indigo-500/15 text-indigo-500' 
                       : 'bg-white/65 dark:bg-card text-neutral-500 dark:text-neutral-400 group-hover:bg-indigo-500/10 group-hover:text-indigo-500'
                   }`}>
                     <Home className="w-3.5 h-3.5" />
                   </div>
-                  <span className="font-semibold">Главная</span>
+                  <span>Главная</span>
                 </Link>
+
                 {isStaff && (
                   <Link
                     to="/admin"
@@ -503,20 +529,20 @@ export function BookSidebar({ isOpen, onToggle, onClose, isPinned, onTogglePin, 
                     aria-current={isAdminActive ? 'page' : undefined}
                     className={`group flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs border transition-colors ${
                       isAdminActive
-                        ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-700 dark:text-indigo-300'
-                        : 'text-neutral-700 dark:text-neutral-300 hover:bg-white/50 dark:hover:bg-card/70 hover:text-neutral-950 dark:hover:text-white border-transparent'
+                        ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-semibold'
+                        : 'text-neutral-700 dark:text-neutral-300 hover:bg-white/50 dark:hover:bg-card/70 hover:text-neutral-950 dark:hover:text-white border-transparent font-medium'
                     }`}
                   >
-                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
-                    isAdminActive
-                      ? 'bg-indigo-500/15 text-indigo-500'
-                      : 'bg-white/65 dark:bg-card text-neutral-500 dark:text-neutral-400 group-hover:bg-indigo-500/10 group-hover:text-indigo-500'
-                  }`}>
-                    <ShieldAlert className="w-3.5 h-3.5" />
-                  </div>
-                  <span className="font-semibold">Администрирование</span>
-                </Link>
-              )}
+                    <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                      isAdminActive
+                        ? 'bg-indigo-500/15 text-indigo-500'
+                        : 'bg-white/65 dark:bg-card text-neutral-500 dark:text-neutral-400 group-hover:bg-indigo-500/10 group-hover:text-indigo-500'
+                    }`}>
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                    </div>
+                    <span>Администрирование</span>
+                  </Link>
+                )}
             </div>
 
             <div className="mx-6 my-1 border-b border-neutral-200/30 dark:border-neutral-800/30 shrink-0" />
