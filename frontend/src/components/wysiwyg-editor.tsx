@@ -213,7 +213,8 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
 
   // Check if current block is the single compact block in its 2-column row
   const isSingleInRow = React.useMemo(() => {
-    if (currentSize === 'wide' || typeof getPos !== 'function' || !editor) return false;
+    if (currentSize === 'wide') return false;
+    if (typeof getPos !== 'function' || !editor) return true;
     try {
       const pos = getPos();
       const $pos = editor.doc.resolve(pos);
@@ -243,7 +244,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
 
       return true;
     } catch {
-      return false;
+      return true;
     }
   }, [editor?.doc, getPos, currentSize]);
 
@@ -262,10 +263,14 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
   return (
     <NodeViewWrapper 
       className={`wiki-collapsible-wrapper my-3 transition-all duration-200 ${
-        currentSize === 'wide' ? 'w-full block' : 'w-full sm:w-[calc(50%-0.375rem)] inline-block align-top mr-2'
+        currentSize === 'wide' || isSingleInRow
+          ? 'w-full block'
+          : 'w-full sm:w-[calc(50%-0.375rem)] inline-block align-top mr-2'
       }`}
     >
-      <div className="relative rounded-2xl border border-border bg-card p-3.5 shadow-sm transition-all duration-200 hover:border-indigo-500/30">
+      <div className={`relative rounded-2xl border border-border bg-card p-3.5 shadow-sm transition-all duration-200 hover:border-indigo-500/30 ${
+        isSingleInRow ? 'w-full sm:w-[calc(50%-0.375rem)] inline-block align-top' : 'w-full'
+      }`}>
         {/* Delete Confirmation Overlay */}
         {isConfirmingDelete ? (
           <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-center animate-scaleUp select-none">
@@ -393,10 +398,10 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
       {isSingleInRow && (
         <div 
           onClick={handleAddBlockAlongside}
-          className="w-full sm:w-[calc(50%-0.375rem)] inline-block align-top ml-2 my-3 rounded-2xl border-2 border-dashed border-neutral-300 dark:border-neutral-700/80 bg-neutral-50/50 dark:bg-neutral-900/30 p-3.5 hover:border-indigo-500 hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-500/[0.08] transition-all cursor-pointer select-none text-center"
+          className="w-full sm:w-[calc(50%-0.375rem)] inline-block align-top sm:ml-3 mt-2 sm:mt-0 rounded-2xl border-2 border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/40 p-3.5 hover:border-indigo-500 hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-500/[0.08] transition-all cursor-pointer select-none text-center"
           title="Добавить второй компактный блок в эту же строку"
         >
-          <div className="flex items-center justify-center gap-2 text-xs font-bold text-neutral-500 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 py-0.5">
+          <div className="flex items-center justify-center gap-2 text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:text-indigo-600 dark:hover:text-indigo-400 py-0.5">
             <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500">
               <Plus className="w-3.5 h-3.5" />
             </span>
