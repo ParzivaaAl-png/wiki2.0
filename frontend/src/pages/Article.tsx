@@ -2086,6 +2086,28 @@ export default function ArticlePage() {
   );
 }
 
+function forceOpenDetails(detailsEl: HTMLElement) {
+  if (detailsEl instanceof HTMLDetailsElement || detailsEl.tagName === 'DETAILS') {
+    (detailsEl as HTMLDetailsElement).open = true;
+  }
+  detailsEl.setAttribute('open', 'open');
+  detailsEl.dataset.open = 'true';
+  detailsEl.setAttribute('data-state', 'open');
+  detailsEl.classList.add('open', 'is-open');
+
+  const contentChild = detailsEl.querySelector('.wiki-collapsible-content, [data-wiki-collapsible-content]');
+  if (contentChild) {
+    (contentChild as HTMLElement).style.display = 'block';
+    contentChild.removeAttribute('hidden');
+    contentChild.classList.remove('hidden');
+  }
+
+  const summaryChild = detailsEl.querySelector('summary, .wiki-collapsible-summary');
+  if (summaryChild) {
+    summaryChild.setAttribute('aria-expanded', 'true');
+  }
+}
+
 function highlightTextInDOM(container: HTMLElement, textToHighlight: string): boolean {
   if (!textToHighlight || textToHighlight.trim().length === 0) return false;
 
@@ -2109,15 +2131,7 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string): bo
   allDetails.forEach((details) => {
     const textContent = (details.textContent || '').replace(/\u00a0/g, ' ');
     if (testRegex.test(textContent)) {
-      details.open = true;
-      details.setAttribute('open', '');
-      details.dataset.open = 'true';
-      if (details.getAttribute('data-state') === 'closed') {
-        details.setAttribute('data-state', 'open');
-      }
-      try {
-        details.dispatchEvent(new Event('toggle', { bubbles: true }));
-      } catch (e) {}
+      forceOpenDetails(details);
       openedAny = true;
     }
   });
@@ -2163,13 +2177,7 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string): bo
         currentParent.hasAttribute('data-wiki-collapsible') ||
         currentParent.classList.contains('wiki-collapsible-block')
       ) {
-        const detailsEl = currentParent as HTMLDetailsElement;
-        detailsEl.open = true;
-        detailsEl.setAttribute('open', '');
-        detailsEl.dataset.open = 'true';
-        try {
-          detailsEl.dispatchEvent(new Event('toggle', { bubbles: true }));
-        } catch (e) {}
+        forceOpenDetails(currentParent as HTMLElement);
         openedAny = true;
       }
       currentParent = currentParent.parentElement;
