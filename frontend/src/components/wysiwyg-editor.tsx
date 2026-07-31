@@ -284,144 +284,144 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
   }, [editor, getPos, node.nodeSize]);
 
   return (
-    <NodeViewWrapper 
-      className={`wiki-collapsible-wrapper my-3 transition-all duration-200 ${
-        currentSize === 'wide' || isLastUnpairedCompact
-          ? 'w-full block'
-          : 'w-full sm:w-[calc(50%-0.375rem)] inline-block align-top mr-2'
-      }`}
-    >
-      <div className={`relative rounded-2xl border border-border bg-card p-3.5 shadow-sm transition-all duration-200 hover:border-indigo-500/30 ${
-        isLastUnpairedCompact ? 'w-full sm:w-[calc(50%-0.375rem)] inline-block align-top' : 'w-full'
-      }`}>
-        {/* Delete Confirmation Overlay */}
-        {isConfirmingDelete ? (
-          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-center animate-scaleUp select-none">
-            <p className="text-xs font-bold text-red-600 dark:text-red-400 mb-2.5">
-              Удалить раскрывающийся блок вместе с его содержимым?
-            </p>
-            <div className="flex items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => setIsConfirmingDelete(false)}
-                className="px-3 py-1 text-xs font-semibold bg-muted hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-lg text-foreground transition-colors cursor-pointer"
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                onClick={() => deleteNode()}
-                className="px-3 py-1 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors cursor-pointer shadow-sm"
-              >
-                Удалить
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Card Header Row */}
-            <div className="flex items-center justify-between gap-2">
-              {/* Left: Icon Selector Button */}
-              <div ref={iconPickerRef} className="relative shrink-0">
+    <>
+      <NodeViewWrapper 
+        className={`wiki-collapsible-wrapper my-2.5 transition-all duration-200 ${
+          currentSize === 'wide'
+            ? 'w-full block'
+            : 'w-full sm:w-[calc(50%-0.5rem)] inline-block align-top sm:mr-2'
+        }`}
+      >
+        <div className="relative rounded-2xl border border-border bg-card p-3.5 shadow-sm transition-all duration-200 hover:border-indigo-500/30 w-full">
+          {/* Delete Confirmation Overlay */}
+          {isConfirmingDelete ? (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-center animate-scaleUp select-none">
+              <p className="text-xs font-bold text-red-600 dark:text-red-400 mb-2.5">
+                Удалить раскрывающийся блок вместе с его содержимым?
+              </p>
+              <div className="flex items-center justify-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsIconPickerOpen((prev) => !prev)}
-                  className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 transition-all cursor-pointer flex items-center justify-center border border-indigo-500/15"
-                  title="Выбрать иконку блока"
+                  onClick={() => setIsConfirmingDelete(false)}
+                  className="px-3 py-1 text-xs font-semibold bg-muted hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-lg text-foreground transition-colors cursor-pointer"
                 >
-                  <CurrentIconComponent className="w-4 h-4" />
+                  Отмена
                 </button>
-
-                {/* Icon Palette Popover */}
-                {isIconPickerOpen && (
-                  <div className="absolute top-full left-0 mt-2 p-2 bg-card border border-border rounded-2xl shadow-xl z-50 min-w-[180px] grid grid-cols-4 gap-1.5 animate-scaleUp">
-                    {ICON_OPTIONS.map((opt) => {
-                      const IconComp = opt.icon;
-                      return (
-                        <button
-                          key={opt.key}
-                          type="button"
-                          onClick={() => {
-                            updateAttributes({ icon: opt.key });
-                            setIsIconPickerOpen(false);
-                          }}
-                          className={`p-2.5 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
-                            currentIconKey === opt.key
-                              ? 'bg-indigo-600 text-white shadow-sm scale-105'
-                              : 'bg-muted/60 hover:bg-muted text-foreground hover:scale-105'
-                          }`}
-                          title={opt.name}
-                        >
-                          <IconComp className="w-4 h-4" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Center: Title Input (Inline Editing) */}
-              <input
-                type="text"
-                value={attrs.title || ''}
-                onChange={(e) => updateAttributes({ title: e.target.value })}
-                className="w-full text-sm font-bold text-foreground bg-transparent border-none outline-none focus:ring-0 placeholder:text-muted-foreground/60 px-1"
-                placeholder="Введите название блока..."
-              />
-
-              {/* Right: Actions (Size Toggle, Expand Toggle, Delete) */}
-              <div className="flex items-center gap-1 shrink-0">
-                {/* Size Toggle */}
                 <button
                   type="button"
-                  onClick={() => updateAttributes({ size: currentSize === 'wide' ? 'compact' : 'wide' })}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                  title={currentSize === 'wide' ? 'Вернуть компактный размер' : 'Растянуть на всю ширину'}
+                  onClick={() => deleteNode()}
+                  className="px-3 py-1 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors cursor-pointer shadow-sm"
                 >
-                  {currentSize === 'wide' ? (
-                    <Minimize2 className="w-3.5 h-3.5" />
-                  ) : (
-                    <Maximize2 className="w-3.5 h-3.5" />
+                  Удалить
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Card Header Row */}
+              <div className="flex items-center justify-between gap-2">
+                {/* Left: Icon Selector Button */}
+                <div ref={iconPickerRef} className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsIconPickerOpen((prev) => !prev)}
+                    className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 transition-all cursor-pointer flex items-center justify-center border border-indigo-500/15"
+                    title="Выбрать иконку блока"
+                  >
+                    <CurrentIconComponent className="w-4 h-4" />
+                  </button>
+
+                  {/* Icon Palette Popover */}
+                  {isIconPickerOpen && (
+                    <div className="absolute top-full left-0 mt-2 p-2 bg-card border border-border rounded-2xl shadow-xl z-50 min-w-[180px] grid grid-cols-4 gap-1.5 animate-scaleUp">
+                      {ICON_OPTIONS.map((opt) => {
+                        const IconComp = opt.icon;
+                        return (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            onClick={() => {
+                              updateAttributes({ icon: opt.key });
+                              setIsIconPickerOpen(false);
+                            }}
+                            className={`p-2.5 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                              currentIconKey === opt.key
+                                ? 'bg-indigo-600 text-white shadow-sm scale-105'
+                                : 'bg-muted/60 hover:bg-muted text-foreground hover:scale-105'
+                            }`}
+                            title={opt.name}
+                          >
+                            <IconComp className="w-4 h-4" />
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
-                </button>
+                </div>
 
-                {/* Expand / Collapse Content Toggle */}
-                <button
-                  type="button"
-                  onClick={() => setIsOpen((prev) => !prev)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                  title={isOpen ? 'Свернуть содержимое' : 'Раскрыть содержимое'}
-                >
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-                </button>
+                {/* Center: Title Input (Inline Editing) */}
+                <input
+                  type="text"
+                  value={attrs.title || ''}
+                  onChange={(e) => updateAttributes({ title: e.target.value })}
+                  className="w-full text-sm font-bold text-foreground bg-transparent border-none outline-none focus:ring-0 placeholder:text-muted-foreground/60 px-1"
+                  placeholder="Введите название блока..."
+                />
 
-                {/* Delete Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsConfirmingDelete(true)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                  title="Удалить блок"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                {/* Right: Actions (Size Toggle, Expand Toggle, Delete) */}
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* Size Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => updateAttributes({ size: currentSize === 'wide' ? 'compact' : 'wide' })}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                    title={currentSize === 'wide' ? 'Вернуть компактный размер' : 'Растянуть на всю ширину'}
+                  >
+                    {currentSize === 'wide' ? (
+                      <Minimize2 className="w-3.5 h-3.5" />
+                    ) : (
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+
+                  {/* Expand / Collapse Content Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setIsOpen((prev) => !prev)}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                    title={isOpen ? 'Свернуть содержимое' : 'Раскрыть содержимое'}
+                  >
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Delete Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsConfirmingDelete(true)}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                    title="Удалить блок"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Editable Content Area */}
-            {isOpen && (
-              <div className="mt-3 pt-3 border-t border-border/60">
-                <NodeViewContent className="wiki-collapsible-editor-content min-h-12 text-foreground focus:outline-none" />
-              </div>
-            )}
-          </>
-        )}
-      </div>
+              {/* Editable Content Area */}
+              {isOpen && (
+                <div className="mt-3 pt-3 border-t border-border/60">
+                  <NodeViewContent className="wiki-collapsible-editor-content min-h-12 text-foreground focus:outline-none" />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </NodeViewWrapper>
 
       {/* Placeholder Card: "+ Добавить блок рядом" */}
       {isLastUnpairedCompact && (
         <div 
           onClick={handleAddBlockAlongside}
-          className="w-full sm:w-[calc(50%-0.375rem)] inline-block align-top sm:ml-3 mt-2 sm:mt-0 rounded-2xl border-2 border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/40 p-3.5 hover:border-indigo-500 hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-500/[0.08] transition-all cursor-pointer select-none text-center"
+          className="w-full sm:w-[calc(50%-0.5rem)] inline-block align-top my-2.5 rounded-2xl border-2 border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/40 p-3.5 hover:border-indigo-500 hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-500/[0.08] transition-all cursor-pointer select-none text-center"
           title="Добавить второй компактный блок в эту же строку"
         >
           <div className="flex items-center justify-center gap-2 text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:text-indigo-600 dark:hover:text-indigo-400 py-0.5">
@@ -432,7 +432,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
           </div>
         </div>
       )}
-    </NodeViewWrapper>
+    </>
   );
 };
 
@@ -1023,6 +1023,16 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
         .dark .ProseMirror blockquote {
           border-left-color: #475569;
           color: #94a3b8;
+        }
+        .ProseMirror > .wiki-collapsible-wrapper {
+          display: inline-block !important;
+          vertical-align: top !important;
+          box-sizing: border-box !important;
+        }
+        .ProseMirror > .wiki-collapsible-wrapper.wiki-collapsible-wide {
+          display: block !important;
+          width: 100% !important;
+          margin-right: 0 !important;
         }
         .ProseMirror .wiki-collapsible-editor-content > *:first-child {
           margin-top: 0;
