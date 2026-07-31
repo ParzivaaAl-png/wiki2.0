@@ -375,7 +375,8 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                 return (
                   <li
                     key={`art-${art.id}`}
-                    onMouseDown={() => handleSelect(art.slug, query.trim())}
+                    onClick={() => handleSelect(art.slug, query.trim())}
+                    onMouseDown={(e) => { e.preventDefault(); handleSelect(art.slug, query.trim()); }}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
                       isCurrent
                         ? 'bg-indigo-500/10 text-indigo-900 dark:text-indigo-200 font-medium'
@@ -409,7 +410,8 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                 return (
                   <li
                     key={`match-${match.slug}-${idx}`}
-                    onMouseDown={() => handleSelect(match.slug, match.matchedWord)}
+                    onClick={() => handleSelect(match.slug, match.matchedWord)}
+                    onMouseDown={(e) => { e.preventDefault(); handleSelect(match.slug, match.matchedWord); }}
                     className={`p-2.5 rounded-lg cursor-pointer transition-colors border ${
                       isCurrent
                         ? 'bg-indigo-500/5 border-indigo-500/20 text-foreground'

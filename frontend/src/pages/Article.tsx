@@ -2214,14 +2214,13 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string): bo
   });
 
 function scrollToElementCenter(el: HTMLElement) {
-  let top = 0;
-  let current: HTMLElement | null = el;
-  while (current && current !== document.body) {
-    top += current.offsetTop || 0;
-    current = current.offsetParent as HTMLElement | null;
-  }
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  if (rect.top === 0 && rect.height === 0) return;
+
+  const absoluteTop = rect.top + window.scrollY;
   const viewportHeight = window.innerHeight;
-  const targetY = Math.max(0, top - viewportHeight / 3);
+  const targetY = Math.max(0, absoluteTop - viewportHeight / 3);
 
   window.scrollTo({
     top: targetY,
