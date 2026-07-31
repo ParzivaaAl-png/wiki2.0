@@ -315,8 +315,9 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
   const [showEmoji, setShowEmoji] = React.useState(false);
   const [lastAutosaved, setLastAutosaved] = React.useState<string | null>(null);
   const [activeFontSize, setActiveFontSize] = React.useState('');
-  const [selectionCoords, setSelectionCoords] = React.useState<{ top: number; left: number } | null>(null);
+  const [contextMenuCoords, setContextMenuCoords] = React.useState<{ top: number; left: number } | null>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const contextMenuRef = React.useRef<HTMLDivElement>(null);
 
   // States for internal article linking autocomplete
   const [showLinkSuggestions, setShowLinkSuggestions] = React.useState(false);
@@ -342,9 +343,25 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
       if (highlightMenuRef.current && !highlightMenuRef.current.contains(target)) {
         setIsHighlightMenuOpen(false);
       }
+      if (contextMenuRef.current && !contextMenuRef.current.contains(target)) {
+        setContextMenuCoords(null);
+      }
     };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsColorMenuOpen(false);
+        setIsHighlightMenuOpen(false);
+        setContextMenuCoords(null);
+      }
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   const withArticleScope = React.useCallback((url: string) => {
@@ -459,6 +476,8 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
       editor.chain().focus().unsetColor().run();
     }
     setIsColorMenuOpen(false);
+    setIsHighlightMenuOpen(false);
+    setContextMenuCoords(null);
   }, [editor]);
 
   const handleApplyHighlight = React.useCallback((highlightValue: string) => {
@@ -470,7 +489,28 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
       editor.chain().focus().unsetHighlight().run();
     }
     setIsHighlightMenuOpen(false);
+    setIsColorMenuOpen(false);
+    setContextMenuCoords(null);
   }, [editor]);
+
+  const handleContextMenu = React.useCallback((e: React.MouseEvent) => {
+    if (isPreview || !editor) return;
+    const { empty } = editor.state.selection;
+    if (empty) {
+      setContextMenuCoords(null);
+      return;
+    }
+    e.preventDefault();
+    setIsColorMenuOpen(false);
+    setIsHighlightMenuOpen(false);
+
+    if (!containerRef.current) return;
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const top = Math.max(8, Math.min(e.clientY - containerRect.top + 8, containerRect.height - 50));
+    const left = Math.max(8, Math.min(e.clientX - containerRect.left + 8, containerRect.width - 240));
+
+    setContextMenuCoords({ top, left });
+  }, [editor, isPreview]);
 
   React.useEffect(() => {
     if (!editor) return;
@@ -483,41 +523,22 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
       setActiveFontSize(editor.getAttributes('textStyle').fontSize || '');
     };
 
-    const updateSelectionMenu = () => {
-      const { from, to, empty } = editor.state.selection;
-      if (empty || isPreview) {
-        setSelectionCoords(null);
-        return;
-      }
-
-      if (!containerRef.current) return;
-
-      try {
-        const view = editor.view;
-        const startCoords = view.coordsAtPos(from);
-        const endCoords = view.coordsAtPos(to);
-        const containerRect = containerRef.current.getBoundingClientRect();
-
-        const top = Math.max(8, Math.min(startCoords.top, endCoords.top) - containerRect.top - 46);
-        const left = Math.max(8, Math.min((startCoords.left + endCoords.left) / 2 - containerRect.left - 150, containerRect.width - 320));
-
-        setSelectionCoords({ top, left });
-      } catch (err) {
-        setSelectionCoords(null);
+    const handleSelectionChange = () => {
+      const { empty } = editor.state.selection;
+      if (empty) {
+        setContextMenuCoords(null);
       }
     };
 
     editor.on('selectionUpdate', syncFontSize);
     editor.on('transaction', syncFontSize);
-    editor.on('selectionUpdate', updateSelectionMenu);
-    editor.on('transaction', updateSelectionMenu);
+    editor.on('selectionUpdate', handleSelectionChange);
     syncFontSize();
 
     return () => {
       editor.off('selectionUpdate', syncFontSize);
       editor.off('transaction', syncFontSize);
-      editor.off('selectionUpdate', updateSelectionMenu);
-      editor.off('transaction', updateSelectionMenu);
+      editor.off('selectionUpdate', handleSelectionChange);
     };
   }, [editor, isPreview]);
 
@@ -1387,68 +1408,44 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
       )}
 
       {/* Editor Content Area */}
-      <div ref={containerRef} className="bg-card transition-all select-text relative">
-        {/* Floating Selection Menu for Instant Heading & Text Conversion */}
-        {selectionCoords && !isPreview && editor && (
+      <div 
+        ref={containerRef} 
+        onContextMenu={handleContextMenu}
+        className="bg-card transition-all select-text relative overflow-visible"
+      >
+        {/* Right-Click Context Menu (Shows ONLY on right-click on selected text) */}
+        {contextMenuCoords && !isPreview && editor && (
           <div
-            style={{ top: `${selectionCoords.top}px`, left: `${selectionCoords.left}px` }}
+            ref={contextMenuRef}
+            style={{ top: `${contextMenuCoords.top}px`, left: `${contextMenuCoords.left}px` }}
             className="absolute flex items-center gap-1.5 p-1.5 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-2xl text-card-foreground z-50 animate-scaleUp select-none"
           >
             <div className="flex items-center gap-1 border-r border-border pr-1.5">
-              <span className="text-[10px] font-bold uppercase text-indigo-500 px-1">Сделать заголовком:</span>
               <button
                 type="button"
-                onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-                className={`px-2 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
-                  editor.isActive('heading', { level: 1 })
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  editor.chain().focus().toggleHeading({ level: 2 }).run();
+                  setContextMenuCoords(null);
+                }}
+                className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+                  editor.isActive('heading')
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'hover:bg-muted text-foreground'
                 }`}
-                title="Заголовок H1"
+                title="Преобразовать выделенный текст в заголовок статьи"
               >
-                H1
-              </button>
-              <button
-                type="button"
-                onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-                className={`px-2 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
-                  editor.isActive('heading', { level: 2 })
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'hover:bg-muted text-foreground'
-                }`}
-                title="Заголовок H2"
-              >
-                H2
-              </button>
-              <button
-                type="button"
-                onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-                className={`px-2 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
-                  editor.isActive('heading', { level: 3 })
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'hover:bg-muted text-foreground'
-                }`}
-                title="Заголовок H3"
-              >
-                H3
-              </button>
-              <button
-                type="button"
-                onClick={() => editor.chain().focus().toggleHeading({ level: 4 }).run()}
-                className={`px-2 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
-                  editor.isActive('heading', { level: 4 })
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'hover:bg-muted text-foreground'
-                }`}
-                title="Заголовок H4"
-              >
-                H4
+                Сделать заголовком
               </button>
 
               <button
                 type="button"
-                onClick={() => editor.chain().focus().setParagraph().run()}
-                className={`px-2 py-1 rounded text-xs font-medium transition-all cursor-pointer ${
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  editor.chain().focus().setParagraph().run();
+                  setContextMenuCoords(null);
+                }}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-all cursor-pointer ${
                   !editor.isActive('heading')
                     ? 'bg-muted text-indigo-500 font-semibold'
                     : 'hover:bg-red-500/10 text-red-500'
@@ -1462,24 +1459,36 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
             <div className="flex items-center gap-0.5 pl-0.5">
               <button
                 type="button"
-                onClick={() => editor.chain().focus().toggleBold().run()}
-                className={`p-1.5 rounded hover:bg-muted transition-colors ${editor.isActive('bold') ? 'text-indigo-500 font-bold' : 'text-muted-foreground'}`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  editor.chain().focus().toggleBold().run();
+                  setContextMenuCoords(null);
+                }}
+                className={`p-1.5 rounded hover:bg-muted transition-colors cursor-pointer ${editor.isActive('bold') ? 'text-indigo-500 font-bold' : 'text-muted-foreground'}`}
                 title="Полужирный"
               >
                 <Bold className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
-                onClick={() => editor.chain().focus().toggleItalic().run()}
-                className={`p-1.5 rounded hover:bg-muted transition-colors ${editor.isActive('italic') ? 'text-indigo-500' : 'text-muted-foreground'}`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  editor.chain().focus().toggleItalic().run();
+                  setContextMenuCoords(null);
+                }}
+                className={`p-1.5 rounded hover:bg-muted transition-colors cursor-pointer ${editor.isActive('italic') ? 'text-indigo-500' : 'text-muted-foreground'}`}
                 title="Курсив"
               >
                 <Italic className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
-                onClick={() => editor.chain().focus().toggleUnderline().run()}
-                className={`p-1.5 rounded hover:bg-muted transition-colors ${editor.isActive('underline') ? 'text-indigo-500' : 'text-muted-foreground'}`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  editor.chain().focus().toggleUnderline().run();
+                  setContextMenuCoords(null);
+                }}
+                className={`p-1.5 rounded hover:bg-muted transition-colors cursor-pointer ${editor.isActive('underline') ? 'text-indigo-500' : 'text-muted-foreground'}`}
                 title="Подчеркнутый"
               >
                 <UnderlineIcon className="w-3.5 h-3.5" />
