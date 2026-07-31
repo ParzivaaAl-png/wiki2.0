@@ -1165,14 +1165,12 @@ export default function ArticlePage() {
                   <span>Содержание статьи</span>
                   <ChevronDown className="w-4 h-4 text-neutral-400 group-open:rotate-180 transition-transform" />
                 </summary>
-                <nav className="mt-3 space-y-2 border-l border-neutral-200 dark:border-border pl-3">
+                <nav className="mt-3 space-y-1">
                   {headings.map((heading) => (
                     <a
                       key={heading.id}
                       href={`#${heading.id}`}
-                      className={`block text-xs text-neutral-650 dark:text-neutral-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors ${
-                        heading.level >= 3 ? 'pl-3 text-[11px] text-neutral-500' : 'font-medium'
-                      }`}
+                      className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors py-1 truncate"
                     >
                       {heading.text}
                     </a>
@@ -1457,14 +1455,12 @@ export default function ArticlePage() {
             <h4 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">
               На этой странице
             </h4>
-            <nav className="space-y-2">
+            <nav className="space-y-1">
               {headings.map((heading) => (
                 <a
                   key={heading.id}
                   href={`#${heading.id}`}
-                  className={`block text-xs text-neutral-500 dark:text-neutral-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors ${
-                    heading.level >= 3 ? 'pl-3 text-[11px] text-neutral-400' : 'font-semibold'
-                  }`}
+                  className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors py-1 truncate"
                 >
                   {heading.text}
                 </a>
