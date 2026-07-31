@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, BookOpen, Search, Sparkles, Home, ShieldAlert, Plus, FileText, Folder, FolderOpen, Layers, ClipboardList } from 'lucide-react';
+import { ChevronRight, BookOpen, Search, Sparkles, Home, ShieldAlert, Plus, FileText, Folder, FolderOpen, Layers, ClipboardList, Pin } from 'lucide-react';
 import { fetchNavigationTree, Space, Section } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import GuestAccessTimer from './guest-access-timer';
@@ -10,6 +10,8 @@ interface BookSidebarProps {
   isOpen: boolean;
   onToggle: () => void;
   onClose: () => void;
+  isPinned: boolean;
+  onTogglePin: () => void;
 }
 
 const line1Variants = {
@@ -27,7 +29,7 @@ const line3Variants = {
   open: { rotate: -45, y: -5, width: 20 }
 };
 
-export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
+export function BookSidebar({ isOpen, onToggle, onClose, isPinned, onTogglePin }: BookSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isStaff } = useAuth();
@@ -70,20 +72,27 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
     return match ? match[1] : null;
   }, [location.pathname]);
 
-  // Close on ESC key
+  // Helper for closing sidebar conditionally when unpinned
+  const handleNavClose = React.useCallback(() => {
+    if (!isPinned) {
+      onClose();
+    }
+  }, [isPinned, onClose]);
+
+  // Close on ESC key (only if unpinned)
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !isPinned) onClose();
     };
-    if (isOpen) {
+    if (isOpen && !isPinned) {
       window.addEventListener('keydown', handleKeyDown);
     }
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, isPinned, onClose]);
 
-  // Prevent scroll propagation
+  // Prevent scroll propagation only when unpinned floating modal
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !isPinned) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -91,7 +100,7 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isOpen]);
+  }, [isOpen, isPinned]);
 
   const toggleExpand = (key: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -362,83 +371,100 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
         </div>
       </div>
 
-      {/* 2. BACKDROP OVERLAY */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-neutral-950/30 dark:bg-black/50 lg:hidden z-30"
-          />
-        )}
-      </AnimatePresence>
+        {/* 2. BACKDROP OVERLAY (Only when unpinned) */}
+        <AnimatePresence>
+          {isOpen && !isPinned && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+              className="fixed inset-0 bg-neutral-950/30 dark:bg-black/50 z-30"
+            />
+          )}
+        </AnimatePresence>
 
-      {/* 3. SLIDE-OUT DRAWER PANEL */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ x: '-100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-            className="fixed lg:left-14 left-0 top-0 h-screen w-[300px] bg-neutral-100/90 dark:bg-sidebar-bg border-r border-neutral-200/50 dark:border-border shadow-2xl flex flex-col z-40 overflow-hidden"
-          >
-            {/* Header */}
-            <div className="p-4 border-b border-neutral-200/40 dark:border-border flex items-center justify-between lg:pl-6 pl-14 shrink-0">
-              <div className="flex items-center gap-2 text-indigo-500 font-semibold tracking-tight text-sm uppercase">
-                <BookOpen className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
-                <span className="font-outfit font-bold text-neutral-800 dark:text-neutral-200">Оргструктура</span>
-              </div>
-            </div>
-
-            {/* Quick Search */}
-            <div className="px-4 pt-4 pb-2 shrink-0 pl-6">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
-                <input
-                  type="text"
-                  placeholder="Поиск по оглавлению..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 text-xs bg-white/60 dark:bg-background/80 border border-neutral-200/60 dark:border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder-neutral-400 dark:placeholder-neutral-500 text-neutral-800 dark:text-neutral-100"
-                />
-              </div>
-            </div>
-
-            {/* Quick Links Section */}
-            <div className="px-4 py-2 shrink-0 pl-6 space-y-1">
-              <Link
-                to="/"
-                onClick={onClose}
-                aria-current={isHomeActive ? 'page' : undefined}
-                className={`group flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs border transition-colors ${
-                  isHomeActive
-                    ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-700 dark:text-indigo-300'
-                    : 'text-neutral-700 dark:text-neutral-300 hover:bg-white/50 dark:hover:bg-card/70 hover:text-neutral-950 dark:hover:text-white border-transparent'
-                }`}
-              >
-                <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
-                  isHomeActive
-                    ? 'bg-indigo-500/15 text-indigo-500'
-                    : 'bg-white/65 dark:bg-card text-neutral-500 dark:text-neutral-400 group-hover:bg-indigo-500/10 group-hover:text-indigo-500'
-                }`}>
-                  <Home className="w-3.5 h-3.5" />
+        {/* 3. SLIDE-OUT / PINNED DRAWER PANEL */}
+        <AnimatePresence>
+          {(isOpen || isPinned) && (
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className={`fixed lg:left-14 left-0 top-0 h-screen w-[300px] bg-neutral-100/90 dark:bg-sidebar-bg border-r border-neutral-200/50 dark:border-border flex flex-col z-40 overflow-hidden ${
+                isPinned ? 'shadow-none' : 'shadow-2xl'
+              }`}
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-neutral-200/40 dark:border-border flex items-center justify-between lg:pl-6 pl-14 shrink-0">
+                <div className="flex items-center gap-2 text-indigo-500 font-semibold tracking-tight text-sm uppercase">
+                  <BookOpen className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+                  <span className="font-outfit font-bold text-neutral-800 dark:text-neutral-200">Оргструктура</span>
                 </div>
-                <span className="font-semibold">Главная</span>
-              </Link>
-              {isStaff && (
+
+                {/* Pin / Unpin Button (Desktop >= 1200px / xl breakpoint only) */}
+                <button
+                  type="button"
+                  onClick={onTogglePin}
+                  className={`hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
+                    isPinned
+                      ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                      : 'bg-neutral-200/60 dark:bg-neutral-800/60 border-neutral-300/60 dark:border-border text-neutral-600 dark:text-neutral-400 hover:text-indigo-500 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+                  }`}
+                  title={isPinned ? 'Открепить панель' : 'Закрепить панель'}
+                >
+                  <Pin className={`w-3.5 h-3.5 transition-transform ${isPinned ? 'rotate-45 text-indigo-500 fill-indigo-500' : ''}`} />
+                  <span>{isPinned ? 'Открепить' : 'Закрепить'}</span>
+                </button>
+              </div>
+
+              {/* Quick Search */}
+              <div className="px-4 pt-4 pb-2 shrink-0 pl-6">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
+                  <input
+                    type="text"
+                    placeholder="Поиск по оглавлению..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 text-xs bg-white/60 dark:bg-background/80 border border-neutral-200/60 dark:border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder-neutral-400 dark:placeholder-neutral-500 text-neutral-800 dark:text-neutral-100"
+                  />
+                </div>
+              </div>
+
+              {/* Quick Links Section */}
+              <div className="px-4 py-2 shrink-0 pl-6 space-y-1">
                 <Link
-                  to="/admin"
-                  onClick={onClose}
-                  aria-current={isAdminActive ? 'page' : undefined}
+                  to="/"
+                  onClick={handleNavClose}
+                  aria-current={isHomeActive ? 'page' : undefined}
                   className={`group flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs border transition-colors ${
-                    isAdminActive
+                    isHomeActive
                       ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-700 dark:text-indigo-300'
                       : 'text-neutral-700 dark:text-neutral-300 hover:bg-white/50 dark:hover:bg-card/70 hover:text-neutral-950 dark:hover:text-white border-transparent'
                   }`}
                 >
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                    isHomeActive
+                      ? 'bg-indigo-500/15 text-indigo-500'
+                      : 'bg-white/65 dark:bg-card text-neutral-500 dark:text-neutral-400 group-hover:bg-indigo-500/10 group-hover:text-indigo-500'
+                  }`}>
+                    <Home className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="font-semibold">Главная</span>
+                </Link>
+                {isStaff && (
+                  <Link
+                    to="/admin"
+                    onClick={handleNavClose}
+                    aria-current={isAdminActive ? 'page' : undefined}
+                    className={`group flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs border transition-colors ${
+                      isAdminActive
+                        ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-700 dark:text-indigo-300'
+                        : 'text-neutral-700 dark:text-neutral-300 hover:bg-white/50 dark:hover:bg-card/70 hover:text-neutral-950 dark:hover:text-white border-transparent'
+                    }`}
+                  >
                   <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
                     isAdminActive
                       ? 'bg-indigo-500/15 text-indigo-500'

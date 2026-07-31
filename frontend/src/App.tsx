@@ -383,10 +383,24 @@ function AppContent() {
   const location = useLocation();
   const { user, isUser, refreshUser } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const [isSidebarPinned, setIsSidebarPinned] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('wiki_sidebar_pinned') === 'true';
+  });
+
+  const handleTogglePin = () => {
+    setIsSidebarPinned((prev) => {
+      const next = !prev;
+      localStorage.setItem('wiki_sidebar_pinned', String(next));
+      return next;
+    });
+  };
 
   React.useEffect(() => {
-    setIsSidebarOpen(false);
-  }, [location.pathname]);
+    if (!isSidebarPinned) {
+      setIsSidebarOpen(false);
+    }
+  }, [location.pathname, isSidebarPinned]);
 
   // Effect to disable context menu, copy, print, and developer hotkeys for regular users (role === 'User')
   React.useEffect(() => {
@@ -399,12 +413,19 @@ function AppContent() {
     window.addEventListener('cut', preventDefault);
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent Copy / Cut
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'x')) {
+      // Prevent Print Screen (Cmd+Shift+3, Cmd+Shift+4, Cmd+Shift+5 on Mac, PrintScreen on Windows)
+      if (
+        e.key === 'PrintScreen' || 
+        ((e.metaKey || e.ctrlKey) && e.shiftKey && ['3', '4', '5'].includes(e.key))
+      ) {
         e.preventDefault();
       }
-      // Prevent Print
+      // Prevent Print (Ctrl+P)
       if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+      }
+      // Prevent Save As (Ctrl+S)
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
       }
       // Prevent Source View (Ctrl+U)
@@ -430,13 +451,21 @@ function AppContent() {
   }, [user]);
 
   return (
-    <div className={`flex flex-col min-h-screen min-h-dvh bg-background text-foreground transition-all duration-300 ${user ? 'lg:pl-[56px] pl-0' : ''} ${isUser ? 'select-none' : ''}`}>
+    <div className={`flex flex-col min-h-screen min-h-dvh bg-background text-foreground transition-all duration-300 ${
+      user 
+        ? isSidebarPinned 
+          ? 'xl:pl-[356px] lg:pl-[56px] pl-0' 
+          : 'lg:pl-[56px] pl-0' 
+        : ''
+    } ${isUser ? 'select-none' : ''}`}>
       <Header />
       {user && (
         <BookSidebar 
           isOpen={isSidebarOpen} 
           onToggle={() => setIsSidebarOpen(prev => !prev)} 
           onClose={() => setIsSidebarOpen(false)} 
+          isPinned={isSidebarPinned}
+          onTogglePin={handleTogglePin}
         />
       )}
       {user?.must_change_password && (
