@@ -61,16 +61,6 @@ export default function Home() {
       setReadingHistory(cached.readingHistory || []);
       setMandatoryAcknowledgements(cached.mandatoryAcknowledgements || []);
       setIsLoading(false);
-
-      // Silent background revalidation (Stale-While-Revalidate)
-      fetchHomeData({ force: true }).then((data) => {
-        setAllArticles(data.allArticles.filter(art => !art.slug.startsWith('auto-list-')));
-        setTrendingArticles(data.trendingArticles.filter(art => !art.slug.startsWith('auto-list-')));
-        setRecommendedArticles(data.recommendedArticles.filter(art => !art.slug.startsWith('auto-list-')));
-        setFavoriteArticles(data.favoriteArticles || []);
-        setReadingHistory(data.readingHistory || []);
-        setMandatoryAcknowledgements(data.mandatoryAcknowledgements || []);
-      }).catch(() => undefined);
       return;
     }
 
@@ -87,7 +77,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, isStaff]);
+  }, [user?.id, isStaff]);
 
   React.useEffect(() => {
     loadData();
