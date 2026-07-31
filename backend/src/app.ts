@@ -104,7 +104,7 @@ app.use('/uploads', async (req, res, next) => {
     console.error('Failed to check upload IP restriction:', error);
     return res.status(500).json({ error: 'Failed to check file access.' });
   }
-}, express.static(path.join(__dirname, '../uploads')));
+}, express.static(path.join(__dirname, '../uploads'), { maxAge: '7d', etag: true }));
 
 // Routes
 app.use('/api', apiRouter);

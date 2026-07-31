@@ -12,14 +12,23 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { BookSidebar } from './components/book-sidebar';
 import { updateMyAccount, type User } from './lib/api';
 
-// Import Pages
-import Home from './pages/Home';
-import ArticlePage from './pages/Article';
-import AdminPage from './pages/Admin';
-import EditorPage from './pages/Editor';
-import ImportPreviewPage from './pages/ImportPreview';
-import LoginPage from './pages/Login';
-import ProfilePage from './pages/Profile';
+// Lazy-loaded Pages for Maximum Initial Load Speed & Code Splitting
+const Home = React.lazy(() => import('./pages/Home'));
+const ArticlePage = React.lazy(() => import('./pages/Article'));
+const AdminPage = React.lazy(() => import('./pages/Admin'));
+const EditorPage = React.lazy(() => import('./pages/Editor'));
+const ImportPreviewPage = React.lazy(() => import('./pages/ImportPreview'));
+const LoginPage = React.lazy(() => import('./pages/Login'));
+const ProfilePage = React.lazy(() => import('./pages/Profile'));
+
+function PageFallback() {
+  return (
+    <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+      <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+      <span className="text-xs font-semibold text-muted-foreground">Загрузка страницы...</span>
+    </div>
+  );
+}
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode; allowedRoles?: ('Admin' | 'Editor' | 'User')[] }) {
   const { user, isLoading, isAdmin, isEditor, isUser } = useAuth();
@@ -439,8 +448,9 @@ function AppContent() {
         />
       )}
       <main className="flex-1 relative min-h-0 overflow-x-clip bg-background">
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
+        <React.Suspense fallback={<PageFallback />}>
+          <AnimatePresence mode="wait">
+            <Routes location={location} key={location.pathname}>
             {/* Login Route (Public, but will redirect if user is already logged in) */}
             <Route 
               path="/login" 
@@ -525,8 +535,9 @@ function AppContent() {
                 </ProtectedRoute>
               }
             />
-          </Routes>
-        </AnimatePresence>
+            </Routes>
+          </AnimatePresence>
+        </React.Suspense>
       </main>
     </div>
   );
