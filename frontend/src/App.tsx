@@ -412,59 +412,11 @@ function AppContent() {
     }
   }, [location.pathname, isSidebarPinned]);
 
-  // Effect to disable context menu, copy, print, and developer hotkeys for regular users (role === 'User')
-  React.useEffect(() => {
-    if (!isUser) return;
-
-    const preventDefault = (e: Event) => e.preventDefault();
-
-    window.addEventListener('contextmenu', preventDefault);
-    window.addEventListener('copy', preventDefault);
-    window.addEventListener('cut', preventDefault);
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent Print Screen (Cmd+Shift+3, Cmd+Shift+4, Cmd+Shift+5 on Mac, PrintScreen on Windows)
-      if (
-        e.key === 'PrintScreen' || 
-        ((e.metaKey || e.ctrlKey) && e.shiftKey && ['3', '4', '5'].includes(e.key))
-      ) {
-        e.preventDefault();
-      }
-      // Prevent Print (Ctrl+P)
-      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
-        e.preventDefault();
-      }
-      // Prevent Save As (Ctrl+S)
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-      }
-      // Prevent Source View (Ctrl+U)
-      if ((e.ctrlKey || e.metaKey) && e.key === 'u') {
-        e.preventDefault();
-      }
-      // Prevent DevTools (F12 or Ctrl+Shift+I / Cmd+Opt+I)
-      if (e.key === 'F12' || 
-          ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'I') ||
-          ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'i') ||
-          (e.metaKey && e.altKey && (e.key === 'i' || e.key === 'I'))) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      window.removeEventListener('contextmenu', preventDefault);
-      window.removeEventListener('copy', preventDefault);
-      window.removeEventListener('cut', preventDefault);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [user]);
-
   return (
     <div 
       className={`flex flex-col min-h-screen min-h-dvh bg-background text-foreground transition-all duration-300 ${
         user ? (isSidebarPinned ? '' : 'lg:pl-[56px] pl-0') : ''
-      } ${isUser ? 'select-none' : ''}`}
+      }`}
       style={user && isSidebarPinned ? { paddingLeft: `${sidebarWidth + 56}px` } : undefined}
     >
       <Header />

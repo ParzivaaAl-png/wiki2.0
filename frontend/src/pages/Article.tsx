@@ -55,6 +55,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import TariffsClassifier from '../components/tariffs-classifier';
 import TariffDetails from '../components/tariff-details';
 import GuestAccessTimer from '../components/guest-access-timer';
+import { ImageLightboxModal, LightboxImage } from '../components/image-lightbox-modal';
 
 const getTariffKeyFromSlug = (slug: string): string | null => {
   switch (slug) {
@@ -73,6 +74,51 @@ export default function ArticlePage() {
   const { slug } = useParams<{ slug: string }>();
   const location = useLocation();
   const [article, setArticle] = React.useState<ArticleType | null>(null);
+  const [lightboxImages, setLightboxImages] = React.useState<LightboxImage[]>([]);
+  const [lightboxIndex, setLightboxIndex] = React.useState(0);
+  const [isLightboxOpen, setIsLightboxOpen] = React.useState(false);
+
+  // Attach click listeners to article images for lightbox viewing
+  React.useEffect(() => {
+    if (!article?.content) return;
+
+    const timer = setTimeout(() => {
+      const container = document.querySelector('article') || document.querySelector('[data-article-content]');
+      if (!container) return;
+
+      const imgElements = Array.from(container.querySelectorAll<HTMLImageElement>('img'));
+      const imgs: LightboxImage[] = imgElements.map(img => ({
+        src: img.src,
+        alt: img.alt || img.title || 'Изображение статьи',
+        title: img.title || img.alt || ''
+      }));
+
+      const handleImgClick = (e: MouseEvent) => {
+        const target = e.currentTarget as HTMLImageElement;
+        const index = imgElements.indexOf(target);
+        if (index !== -1 && imgs.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          setLightboxImages(imgs);
+          setLightboxIndex(index);
+          setIsLightboxOpen(true);
+        }
+      };
+
+      imgElements.forEach(img => {
+        img.style.cursor = 'pointer';
+        img.addEventListener('click', handleImgClick);
+      });
+
+      return () => {
+        imgElements.forEach(img => {
+          img.removeEventListener('click', handleImgClick);
+        });
+      };
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [article?.content, article?.id]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -2121,6 +2167,12 @@ export default function ArticlePage() {
         )}
       </AnimatePresence>
 
+      <ImageLightboxModal 
+        isOpen={isLightboxOpen} 
+        onClose={() => setIsLightboxOpen(false)} 
+        images={lightboxImages} 
+        initialIndex={lightboxIndex} 
+      />
     </div>
   );
 }

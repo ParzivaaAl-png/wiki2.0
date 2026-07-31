@@ -16,6 +16,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { Article } from '../lib/api';
+import { ImageLightboxModal, LightboxImage } from './image-lightbox-modal';
 
 interface PreviewModalProps {
   article?: Article | null;
@@ -31,6 +32,51 @@ export default function PreviewModal({
   onClose 
 }: PreviewModalProps) {
   const [viewport, setViewport] = React.useState<'desktop' | 'mobile'>('desktop');
+  const [lightboxImages, setLightboxImages] = React.useState<LightboxImage[]>([]);
+  const [lightboxIndex, setLightboxIndex] = React.useState(0);
+  const [isLightboxOpen, setIsLightboxOpen] = React.useState(false);
+
+  // Attach click listeners to preview images
+  React.useEffect(() => {
+    if (!article?.content) return;
+
+    const timer = setTimeout(() => {
+      const container = document.querySelector('article');
+      if (!container) return;
+
+      const imgElements = Array.from(container.querySelectorAll<HTMLImageElement>('img'));
+      const imgs: LightboxImage[] = imgElements.map(img => ({
+        src: img.src,
+        alt: img.alt || img.title || 'Изображение статьи',
+        title: img.title || img.alt || ''
+      }));
+
+      const handleImgClick = (e: MouseEvent) => {
+        const target = e.currentTarget as HTMLImageElement;
+        const index = imgElements.indexOf(target);
+        if (index !== -1 && imgs.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          setLightboxImages(imgs);
+          setLightboxIndex(index);
+          setIsLightboxOpen(true);
+        }
+      };
+
+      imgElements.forEach(img => {
+        img.style.cursor = 'pointer';
+        img.addEventListener('click', handleImgClick);
+      });
+
+      return () => {
+        imgElements.forEach(img => {
+          img.removeEventListener('click', handleImgClick);
+        });
+      };
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [article?.content]);
   
   // URL address bar simulation
   const mockUrl = React.useMemo(() => {
@@ -313,8 +359,14 @@ export default function PreviewModal({
           </div>
 
         </div>
-
       </div>
+
+      <ImageLightboxModal 
+        isOpen={isLightboxOpen} 
+        onClose={() => setIsLightboxOpen(false)} 
+        images={lightboxImages} 
+        initialIndex={lightboxIndex} 
+      />
     </div>
   );
 }
