@@ -787,6 +787,32 @@ export default function ArticlePage() {
       });
     }
 
+    // Inject icons into <summary> for collapsible blocks
+    const ICON_EMOJIS: Record<string, string> = {
+      'file-text': '📄',
+      'car': '🚕',
+      'user': '👤',
+      'phone': '🎧',
+      'building': '🏢',
+      'banknote': '💵',
+      'wrench': '🛠️',
+      'shield-alert': '⚠️',
+    };
+
+    html = html.replace(/<details\b([^>]*)>([\s\S]*?)<\/details>/gi, (match, attrs, innerContent) => {
+      const iconMatch = attrs.match(/data-icon="([^"]+)"/i);
+      const iconKey = iconMatch ? iconMatch[1] : 'file-text';
+      const emoji = ICON_EMOJIS[iconKey] || '📄';
+
+      let updatedInner = innerContent;
+      if (!innerContent.includes('wiki-collapsible-icon')) {
+        updatedInner = innerContent.replace(/<summary\b([^>]*)>([\s\S]*?)<\/summary>/i, (_: string, sAttrs: string, sText: string) => {
+          return `<summary ${sAttrs}><span class="wiki-collapsible-icon inline-block mr-2 text-base select-none">${emoji}</span>${sText}</summary>`;
+        });
+      }
+      return `<details ${attrs}>${updatedInner}</details>`;
+    });
+
     // 2. Add IDs to headings
     const headingRegex = /(<h([1-4]))([^>]*>)([\s\S]*?)(<\/h\2>)/gi;
     html = html.replace(headingRegex, (m, openTag, level, attrs, text, closeTag) => {
@@ -1254,46 +1280,71 @@ export default function ArticlePage() {
           {/* Article content renderer */}
           <style>{`
             .wiki-collapsible-block {
-              margin: 1rem 0;
+              margin: 0.75rem 0;
               border: 1px solid var(--border);
-              border-radius: 0.875rem;
+              border-radius: 1rem;
               background: var(--card);
-              box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+              box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+              transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+              overflow: hidden;
             }
-            .dark .wiki-collapsible-block {
-              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            .wiki-collapsible-block.wiki-collapsible-compact {
+              display: inline-block;
+              width: 100%;
+              vertical-align: top;
+            }
+            @media (min-width: 640px) {
+              .wiki-collapsible-block.wiki-collapsible-compact {
+                width: calc(50% - 0.375rem);
+                margin-right: 0.75rem;
+              }
+            }
+            .wiki-collapsible-block.wiki-collapsible-wide,
+            .wiki-collapsible-block[open] {
+              display: block;
+              width: 100% !important;
+              margin-right: 0 !important;
             }
             .wiki-collapsible-summary {
               display: flex;
               align-items: center;
-              gap: 0.625rem;
-              padding: 0.95rem 1rem;
+              justify-content: space-between;
+              gap: 0.75rem;
+              padding: 0.875rem 1.125rem;
               cursor: pointer;
               list-style: none;
-              font-weight: 800;
+              font-weight: 700;
+              font-size: 0.9375rem;
               color: var(--foreground);
-              background: var(--muted);
+              background: transparent;
               user-select: none;
+              transition: background-color 150ms ease;
+            }
+            .wiki-collapsible-summary:hover {
+              background: rgba(148, 163, 184, 0.08);
             }
             .wiki-collapsible-summary::-webkit-details-marker {
               display: none;
             }
-            .wiki-collapsible-summary::before {
+            .wiki-collapsible-summary::after {
               content: '';
               width: 0.45rem;
               height: 0.45rem;
               border-right: 2px solid currentColor;
               border-bottom: 2px solid currentColor;
               transform: rotate(-45deg);
-              transition: transform 160ms ease;
+              transition: transform 200ms ease;
               opacity: 0.7;
+              margin-left: auto;
+              flex-shrink: 0;
             }
-            .wiki-collapsible-block[open] > .wiki-collapsible-summary::before {
+            .wiki-collapsible-block[open] > .wiki-collapsible-summary::after {
               transform: rotate(45deg);
             }
             .wiki-collapsible-content {
-              padding: 1rem;
+              padding: 1rem 1.125rem;
               border-top: 1px solid var(--border);
+              background: var(--card);
             }
             .wiki-collapsible-content > :first-child {
               margin-top: 0;

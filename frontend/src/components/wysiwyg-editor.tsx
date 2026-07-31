@@ -26,7 +26,7 @@ import {
   Link as LinkIcon, Quote, Code, Heading1, Heading2, Heading3, Heading4,
   Undo, Redo, Table as TableIcon, Smile, Eye, EyeOff, Save,
   Youtube as YoutubeIcon, Paperclip, BookOpen, AlertTriangle, ChevronDown, Type,
-  Palette, Highlighter, Ban
+  Palette, Highlighter, Ban, FileText, Car, User, PhoneCall, Building2, Banknote, Wrench, ShieldAlert, Maximize2, Minimize2, X
 } from 'lucide-react';
 import { uploadImage, suggestArticles, Suggestion } from '../lib/api';
 
@@ -124,6 +124,8 @@ declare module '@tiptap/core' {
     collapsibleBlock: {
       insertCollapsibleBlock: (attrs?: {
         title?: string;
+        icon?: string;
+        size?: string;
         defaultOpen?: boolean;
         allowMultiple?: boolean;
         requiredForAck?: boolean;
@@ -175,57 +177,168 @@ const FontSize = Extension.create({
   },
 });
 
-const CollapsibleBlockView = ({ node, updateAttributes }: any) => {
+const ICON_OPTIONS = [
+  { key: 'file-text', name: 'Документ', icon: FileText },
+  { key: 'car', name: 'Автомобиль', icon: Car },
+  { key: 'user', name: 'Водитель', icon: User },
+  { key: 'phone', name: 'Поддержка', icon: PhoneCall },
+  { key: 'building', name: 'Офис', icon: Building2 },
+  { key: 'banknote', name: 'Выплаты', icon: Banknote },
+  { key: 'wrench', name: 'Настройки', icon: Wrench },
+  { key: 'shield-alert', name: 'Безопасность', icon: ShieldAlert },
+];
+
+const CollapsibleBlockView = ({ node, updateAttributes, deleteNode }: any) => {
   const attrs = node.attrs || {};
+  const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
+  const [isIconPickerOpen, setIsIconPickerOpen] = React.useState(false);
+  const [isOpen, setIsOpen] = React.useState(true);
+  const iconPickerRef = React.useRef<HTMLDivElement>(null);
+
+  const currentIconKey = attrs.icon || 'file-text';
+  const currentSize = attrs.size || 'compact';
+
+  const CurrentIconComponent = ICON_OPTIONS.find((i) => i.key === currentIconKey)?.icon || FileText;
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as any;
+      if (iconPickerRef.current && !iconPickerRef.current.contains(target)) {
+        setIsIconPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
-    <NodeViewWrapper className="wiki-collapsible-editor my-4 rounded-xl border border-indigo-500/25 bg-indigo-500/[0.035] p-3">
-      <div className="mb-3 flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
-        <label className="text-[10px] font-extrabold uppercase text-muted-foreground">
-          Заголовок раскрывающегося блока
-        </label>
-        <input
-          value={attrs.title || ''}
-          onChange={(event) => updateAttributes({ title: event.target.value })}
-          className="h-9 rounded-lg border border-border bg-muted px-3 text-sm font-bold text-foreground outline-none focus:border-indigo-500"
-          placeholder="Например: Детали тарифа"
-        />
-        <div className="grid gap-2 text-[11px] font-semibold text-muted-foreground sm:grid-cols-3">
-          <label className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-2">
-            <input
-              type="checkbox"
-              checked={!!attrs.defaultOpen}
-              onChange={(event) => updateAttributes({ defaultOpen: event.target.checked })}
-              className="h-3.5 w-3.5 rounded border-border text-indigo-600"
-            />
-            <span>Открыт после публикации</span>
-          </label>
-          <label className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-2">
-            <input
-              type="checkbox"
-              checked={attrs.allowMultiple !== false}
-              onChange={(event) => updateAttributes({ allowMultiple: event.target.checked })}
-              className="h-3.5 w-3.5 rounded border-border text-indigo-600"
-            />
-            <span>Можно открывать несколько</span>
-          </label>
-          <label className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-2">
-            <input
-              type="checkbox"
-              checked={!!attrs.requiredForAck}
-              onChange={(event) => updateAttributes({ requiredForAck: event.target.checked })}
-              className="h-3.5 w-3.5 rounded border-border text-indigo-600"
-            />
-            <span>Обязательно открыть</span>
-          </label>
-        </div>
-      </div>
-      <div className="rounded-lg border border-dashed border-indigo-500/25 bg-card/70 p-3">
-        <div className="mb-2 flex items-center gap-2 text-[10px] font-extrabold uppercase text-indigo-500">
-          <ChevronDown className="h-3.5 w-3.5" />
-          Содержимое блока
-        </div>
-        <NodeViewContent className="wiki-collapsible-editor-content min-h-12 text-foreground" />
+    <NodeViewWrapper 
+      className={`wiki-collapsible-wrapper my-3 transition-all duration-200 ${
+        currentSize === 'wide' ? 'w-full block' : 'w-full sm:w-[calc(50%-0.375rem)] inline-block align-top mr-2'
+      }`}
+    >
+      <div className="relative rounded-2xl border border-border bg-card p-3.5 shadow-sm transition-all duration-200 hover:border-indigo-500/30">
+        {/* Delete Confirmation Overlay */}
+        {isConfirmingDelete ? (
+          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-center animate-scaleUp select-none">
+            <p className="text-xs font-bold text-red-600 dark:text-red-400 mb-2.5">
+              Удалить раскрывающийся блок вместе с его содержимым?
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsConfirmingDelete(false)}
+                className="px-3 py-1 text-xs font-semibold bg-muted hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-lg text-foreground transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteNode()}
+                className="px-3 py-1 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors cursor-pointer shadow-sm"
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Card Header Row */}
+            <div className="flex items-center justify-between gap-2">
+              {/* Left: Icon Selector Button */}
+              <div ref={iconPickerRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsIconPickerOpen((prev) => !prev)}
+                  className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 transition-all cursor-pointer flex items-center justify-center border border-indigo-500/15"
+                  title="Выбрать иконку блока"
+                >
+                  <CurrentIconComponent className="w-4 h-4" />
+                </button>
+
+                {/* Icon Palette Popover */}
+                {isIconPickerOpen && (
+                  <div className="absolute top-full left-0 mt-2 p-2 bg-card border border-border rounded-2xl shadow-xl z-50 min-w-[180px] grid grid-cols-4 gap-1.5 animate-scaleUp">
+                    {ICON_OPTIONS.map((opt) => {
+                      const IconComp = opt.icon;
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => {
+                            updateAttributes({ icon: opt.key });
+                            setIsIconPickerOpen(false);
+                          }}
+                          className={`p-2.5 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                            currentIconKey === opt.key
+                              ? 'bg-indigo-600 text-white shadow-sm scale-105'
+                              : 'bg-muted/60 hover:bg-muted text-foreground hover:scale-105'
+                          }`}
+                          title={opt.name}
+                        >
+                          <IconComp className="w-4 h-4" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Center: Title Input (Inline Editing) */}
+              <input
+                type="text"
+                value={attrs.title || ''}
+                onChange={(e) => updateAttributes({ title: e.target.value })}
+                className="w-full text-sm font-bold text-foreground bg-transparent border-none outline-none focus:ring-0 placeholder:text-muted-foreground/60 px-1"
+                placeholder="Введите название блока..."
+              />
+
+              {/* Right: Actions (Size Toggle, Expand Toggle, Delete) */}
+              <div className="flex items-center gap-1 shrink-0">
+                {/* Size Toggle */}
+                <button
+                  type="button"
+                  onClick={() => updateAttributes({ size: currentSize === 'wide' ? 'compact' : 'wide' })}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                  title={currentSize === 'wide' ? 'Вернуть компактный размер' : 'Растянуть на всю ширину'}
+                >
+                  {currentSize === 'wide' ? (
+                    <Minimize2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  )}
+                </button>
+
+                {/* Expand / Collapse Content Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsOpen((prev) => !prev)}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                  title={isOpen ? 'Свернуть содержимое' : 'Раскрыть содержимое'}
+                >
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Delete Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingDelete(true)}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                  title="Удалить блок"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Editable Content Area */}
+            {isOpen && (
+              <div className="mt-3 pt-3 border-t border-border/60">
+                <NodeViewContent className="wiki-collapsible-editor-content min-h-12 text-foreground focus:outline-none" />
+              </div>
+            )}
+          </>
+        )}
       </div>
     </NodeViewWrapper>
   );
@@ -244,6 +357,16 @@ const CollapsibleBlock = Node.create({
         default: 'Раскрывающийся блок',
         parseHTML: (element) => element.getAttribute('data-title') || element.querySelector('summary')?.textContent || 'Раскрывающийся блок',
         renderHTML: (attributes) => ({ 'data-title': attributes.title }),
+      },
+      icon: {
+        default: 'file-text',
+        parseHTML: (element) => element.getAttribute('data-icon') || 'file-text',
+        renderHTML: (attributes) => ({ 'data-icon': attributes.icon || 'file-text' }),
+      },
+      size: {
+        default: 'compact',
+        parseHTML: (element) => element.getAttribute('data-size') || 'compact',
+        renderHTML: (attributes) => ({ 'data-size': attributes.size || 'compact' }),
       },
       defaultOpen: {
         default: false,
@@ -267,15 +390,47 @@ const CollapsibleBlock = Node.create({
   },
 
   parseHTML() {
-    return [{ tag: 'details[data-wiki-collapsible="true"]' }];
+    return [
+      {
+        tag: 'details[data-wiki-collapsible="true"]',
+        getAttrs: (element) => {
+          const el = element as HTMLElement;
+          return {
+            title: el.getAttribute('data-title') || el.querySelector('summary')?.textContent || 'Раскрывающийся блок',
+            icon: el.getAttribute('data-icon') || 'file-text',
+            size: el.getAttribute('data-size') || 'compact',
+            defaultOpen: el.hasAttribute('open') || el.getAttribute('data-default-open') === 'true',
+            allowMultiple: el.getAttribute('data-allow-multiple') !== 'false',
+            requiredForAck: el.getAttribute('data-required-for-ack') === 'true',
+          };
+        },
+      },
+      {
+        tag: 'details',
+        getAttrs: (element) => {
+          const el = element as HTMLElement;
+          return {
+            title: el.querySelector('summary')?.textContent || 'Раскрывающийся блок',
+            icon: 'file-text',
+            size: 'wide',
+            defaultOpen: el.hasAttribute('open'),
+          };
+        },
+      },
+    ];
   },
 
   renderHTML({ node, HTMLAttributes }) {
+    const icon = node.attrs.icon || 'file-text';
+    const size = node.attrs.size || 'compact';
     return [
       'details',
       mergeAttributes(HTMLAttributes, {
         'data-wiki-collapsible': 'true',
-        class: 'wiki-collapsible-block',
+        'data-icon': icon,
+        'data-size': size,
+        'data-title': node.attrs.title || 'Раскрывающийся блок',
+        class: `wiki-collapsible-block ${size === 'wide' ? 'wiki-collapsible-wide' : 'wiki-collapsible-compact'}`,
       }),
       ['summary', { class: 'wiki-collapsible-summary' }, node.attrs.title || 'Раскрывающийся блок'],
       ['div', { class: 'wiki-collapsible-content' }, 0],
@@ -294,15 +449,17 @@ const CollapsibleBlock = Node.create({
           commands.insertContent({
             type: this.name,
             attrs: {
-              title: attrs.title || 'Раскрывающийся блок',
-              defaultOpen: !!attrs.defaultOpen,
-              allowMultiple: attrs.allowMultiple !== false,
-              requiredForAck: !!attrs.requiredForAck,
+              title: attrs.title || '',
+              icon: attrs.icon || 'file-text',
+              size: attrs.size || 'compact',
+              defaultOpen: false,
+              allowMultiple: true,
+              requiredForAck: false,
             },
             content: [
               {
                 type: 'paragraph',
-                content: [{ type: 'text', text: 'Добавьте содержимое блока...' }],
+                content: [{ type: 'text', text: 'Содержимое раскрывающегося блока...' }],
               },
             ],
           }),
