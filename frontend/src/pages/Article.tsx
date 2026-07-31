@@ -1173,7 +1173,21 @@ export default function ArticlePage() {
                     <a
                       key={heading.id}
                       href={`#${heading.id}`}
-                      className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors py-1 truncate"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        const targetEl = document.getElementById(heading.id);
+                        if (targetEl) {
+                          const headerHeight = document.querySelector('header')?.getBoundingClientRect().height || 64;
+                          const targetY = targetEl.getBoundingClientRect().top + window.scrollY - headerHeight - 24;
+                          window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+
+                          targetEl.classList.remove('heading-highlight-pulse');
+                          void targetEl.offsetWidth;
+                          targetEl.classList.add('heading-highlight-pulse');
+                          setTimeout(() => targetEl.classList.remove('heading-highlight-pulse'), 1800);
+                        }
+                      }}
+                      className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors py-1 truncate cursor-pointer"
                     >
                       {heading.text}
                     </a>
@@ -1463,7 +1477,21 @@ export default function ArticlePage() {
                 <a
                   key={heading.id}
                   href={`#${heading.id}`}
-                  className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors py-1 truncate"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const targetEl = document.getElementById(heading.id);
+                    if (targetEl) {
+                      const headerHeight = document.querySelector('header')?.getBoundingClientRect().height || 64;
+                      const targetY = targetEl.getBoundingClientRect().top + window.scrollY - headerHeight - 24;
+                      window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+
+                      targetEl.classList.remove('heading-highlight-pulse');
+                      void targetEl.offsetWidth;
+                      targetEl.classList.add('heading-highlight-pulse');
+                      setTimeout(() => targetEl.classList.remove('heading-highlight-pulse'), 1800);
+                    }
+                  }}
+                  className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors py-1 truncate cursor-pointer"
                 >
                   {heading.text}
                 </a>

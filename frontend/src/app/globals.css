@@ -422,3 +422,36 @@ p[style*="text-align"] {
 .animate-scaleUp {
   animation: scaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Scroll offset for article headings & anchors to account for fixed header + 24px padding */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 88px;
+}
+
+h1, h2, h3, h4, [id] {
+  scroll-margin-top: 88px;
+}
+
+@keyframes headingPulse {
+  0% {
+    background-color: rgba(99, 102, 241, 0.18);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4);
+    border-radius: 0.5rem;
+  }
+  70% {
+    background-color: rgba(99, 102, 241, 0.18);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4);
+    border-radius: 0.5rem;
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
+    border-radius: 0.5rem;
+  }
+}
+
+.heading-highlight-pulse {
+  animation: headingPulse 1.8s ease-in-out forwards;
+}
+

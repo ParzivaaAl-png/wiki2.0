@@ -117,7 +117,7 @@ export default function ArticleEditorNavigation({ editor, content }: ArticleEdit
     };
   }, [editor, extractHeadings]);
 
-  // Quick Jump to Heading in Editor
+  // Quick Jump to Heading in Editor with Sticky Header Offset & Pulse Highlight
   const handleJumpToHeading = (pos: number) => {
     if (!editor) return;
     try {
@@ -126,9 +126,14 @@ export default function ArticleEditorNavigation({ editor, content }: ArticleEdit
 
       const domNode = editor.view.nodeDOM(pos);
       if (domNode && domNode instanceof HTMLElement) {
-        domNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        domNode.classList.add('ring-2', 'ring-indigo-500', 'rounded-lg', 'transition-all');
-        setTimeout(() => domNode.classList.remove('ring-2', 'ring-indigo-500', 'rounded-lg'), 1500);
+        const headerHeight = document.querySelector('header')?.getBoundingClientRect().height || 64;
+        const targetY = domNode.getBoundingClientRect().top + window.scrollY - headerHeight - 24;
+        window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+
+        domNode.classList.remove('heading-highlight-pulse');
+        void domNode.offsetWidth; // reflow
+        domNode.classList.add('heading-highlight-pulse');
+        setTimeout(() => domNode.classList.remove('heading-highlight-pulse'), 1800);
       }
     } catch (err) {
       console.warn('Failed to jump to heading:', err);
