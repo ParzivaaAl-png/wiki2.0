@@ -375,18 +375,6 @@ export default function ArticleEditorNavigation({ editor, content }: ArticleEdit
                           <Type className="w-3.5 h-3.5" />
                           Убрать из заголовков
                         </button>
-
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleHideFromNavigation(item);
-                          }}
-                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-amber-500 hover:bg-amber-500/10 transition-colors text-left cursor-pointer"
-                        >
-                          <EyeOff className="w-3.5 h-3.5" />
-                          Скрыть из навигации
-                        </button>
                       </div>
                     )}
                   </div>
