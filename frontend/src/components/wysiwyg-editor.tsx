@@ -25,7 +25,8 @@ import {
   List, ListOrdered, CheckSquare, Image as ImageIcon,
   Link as LinkIcon, Quote, Code, Heading1, Heading2, Heading3, Heading4,
   Undo, Redo, Table as TableIcon, Smile, Eye, EyeOff, Save,
-  Youtube as YoutubeIcon, Paperclip, BookOpen, AlertTriangle, ChevronDown, Type
+  Youtube as YoutubeIcon, Paperclip, BookOpen, AlertTriangle, ChevronDown, Type,
+  Palette, Highlighter, Ban
 } from 'lucide-react';
 import { uploadImage, suggestArticles, Suggestion } from '../lib/api';
 
@@ -322,7 +323,29 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
   const [linkSearchQuery, setLinkSearchQuery] = React.useState('');
   const [linkSuggestions, setLinkSuggestions] = React.useState<Suggestion[]>([]);
 
+  // Color & Highlight states
+  const [selectedColor, setSelectedColor] = React.useState<string>('#ef4444');
+  const [selectedHighlight, setSelectedHighlight] = React.useState<string>('#fef08a');
+  const [isColorMenuOpen, setIsColorMenuOpen] = React.useState(false);
+  const [isHighlightMenuOpen, setIsHighlightMenuOpen] = React.useState(false);
+
+  const colorMenuRef = React.useRef<HTMLDivElement>(null);
+  const highlightMenuRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as any;
+      if (colorMenuRef.current && !colorMenuRef.current.contains(target)) {
+        setIsColorMenuOpen(false);
+      }
+      if (highlightMenuRef.current && !highlightMenuRef.current.contains(target)) {
+        setIsHighlightMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const withArticleScope = React.useCallback((url: string) => {
     if (!articleId || articleId === 'new' || !url.startsWith('/uploads/')) return url;
@@ -426,6 +449,28 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
       onChange(editor.getHTML());
     },
   });
+
+  const handleApplyColor = React.useCallback((colorValue: string) => {
+    if (!editor) return;
+    if (colorValue) {
+      setSelectedColor(colorValue);
+      editor.chain().focus().setColor(colorValue).run();
+    } else {
+      editor.chain().focus().unsetColor().run();
+    }
+    setIsColorMenuOpen(false);
+  }, [editor]);
+
+  const handleApplyHighlight = React.useCallback((highlightValue: string) => {
+    if (!editor) return;
+    if (highlightValue) {
+      setSelectedHighlight(highlightValue);
+      editor.chain().focus().setHighlight({ color: highlightValue }).run();
+    } else {
+      editor.chain().focus().unsetHighlight().run();
+    }
+    setIsHighlightMenuOpen(false);
+  }, [editor]);
 
   React.useEffect(() => {
     if (!editor) return;
@@ -900,35 +945,149 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
             </button>
           </div>
 
-          {/* Color & Highlight */}
+          {/* Color & Highlight Tools */}
           <div className="flex items-center gap-1 border-r border-border pr-1.5 mr-1.5">
-            <select
-              onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
-              className="text-[10px] border border-border rounded px-1 py-1 bg-card text-muted-foreground outline-none cursor-pointer"
-              title="Цвет текста"
-            >
-              <option value="">Цвет</option>
-              {COLORS.map(color => (
-                <option key={color.value} value={color.value}>{color.name}</option>
-              ))}
-            </select>
+            {/* 1. TEXT COLOR TOOL */}
+            <div ref={colorMenuRef} className="relative flex items-center">
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleApplyColor(selectedColor);
+                }}
+                className="p-1.5 rounded-l border border-r-0 border-border hover:bg-muted transition-all cursor-pointer flex items-center gap-1"
+                title={`Применить цвет текста (${COLORS.find(c => c.value === selectedColor)?.name || 'Выбранный'})`}
+              >
+                <div className="flex flex-col items-center">
+                  <span className="font-bold text-xs leading-none">A</span>
+                  <div 
+                    className="w-3.5 h-1 rounded-full mt-0.5" 
+                    style={{ backgroundColor: selectedColor }} 
+                  />
+                </div>
+              </button>
 
-            <select
-              onChange={(e) => {
-                if (e.target.value) {
-                  editor.chain().focus().toggleHighlight({ color: e.target.value }).run();
-                } else {
-                  editor.chain().focus().unsetHighlight().run();
-                }
-              }}
-              className="text-[10px] border border-border rounded px-1 py-1 bg-card text-muted-foreground outline-none cursor-pointer"
-              title="Маркер"
-            >
-              <option value="">Маркер</option>
-              {HIGHLIGHTS.map(hl => (
-                <option key={hl.value} value={hl.value}>{hl.name}</option>
-              ))}
-            </select>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsColorMenuOpen(prev => !prev);
+                  setIsHighlightMenuOpen(false);
+                }}
+                className="p-1 rounded-r border border-border hover:bg-muted transition-all cursor-pointer text-muted-foreground"
+                title="Выбрать цвет текста"
+              >
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {isColorMenuOpen && (
+                <div className="absolute top-full left-0 mt-1.5 p-2 bg-card border border-border rounded-xl shadow-xl z-50 min-w-[160px] animate-scaleUp">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5 px-1">
+                    Цвет текста
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5 mb-2">
+                    {COLORS.map((c) => (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleApplyColor(c.value);
+                        }}
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer border ${
+                          selectedColor === c.value ? 'ring-2 ring-indigo-500 ring-offset-1 border-transparent' : 'border-border/60 hover:scale-110'
+                        }`}
+                        style={{ backgroundColor: c.value }}
+                        title={c.name}
+                      />
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleApplyColor('');
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer font-medium"
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                    <span>Без цвета (Сбросить)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 2. HIGHLIGHT MARKER TOOL */}
+            <div ref={highlightMenuRef} className="relative flex items-center">
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleApplyHighlight(selectedHighlight);
+                }}
+                className="p-1.5 rounded-l border border-r-0 border-border hover:bg-muted transition-all cursor-pointer flex items-center gap-1"
+                title={`Применить маркер (${HIGHLIGHTS.find(h => h.value === selectedHighlight)?.name || 'Выбранный'})`}
+              >
+                <div className="flex flex-col items-center">
+                  <Highlighter className="w-3.5 h-3.5 text-foreground" />
+                  <div 
+                    className="w-3.5 h-1 rounded-full mt-0.5" 
+                    style={{ backgroundColor: selectedHighlight }} 
+                  />
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsHighlightMenuOpen(prev => !prev);
+                  setIsColorMenuOpen(false);
+                }}
+                className="p-1 rounded-r border border-border hover:bg-muted transition-all cursor-pointer text-muted-foreground"
+                title="Выбрать маркер"
+              >
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {isHighlightMenuOpen && (
+                <div className="absolute top-full left-0 mt-1.5 p-2 bg-card border border-border rounded-xl shadow-xl z-50 min-w-[160px] animate-scaleUp">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5 px-1">
+                    Цвет маркера
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5 mb-2">
+                    {HIGHLIGHTS.map((hl) => (
+                      <button
+                        key={hl.value}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleApplyHighlight(hl.value);
+                        }}
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer border ${
+                          selectedHighlight === hl.value ? 'ring-2 ring-indigo-500 ring-offset-1 border-transparent' : 'border-border/60 hover:scale-110'
+                        }`}
+                        style={{ backgroundColor: hl.value }}
+                        title={hl.name}
+                      />
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleApplyHighlight('');
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer font-medium"
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                    <span>Без маркера (Сбросить)</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Alignments */}
