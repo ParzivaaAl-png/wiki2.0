@@ -1279,6 +1279,26 @@ export default function ArticlePage() {
 
           {/* Article content renderer */}
           <style>{`
+            .wiki-collapsible-row {
+              display: grid;
+              grid-template-columns: repeat(1, minmax(0, 1fr));
+              gap: 0.75rem;
+              margin: 0.75rem 0;
+              width: 100%;
+            }
+            @media (min-width: 640px) {
+              .wiki-collapsible-row {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+              }
+            }
+            .wiki-collapsible-row > .wiki-collapsible-block.wiki-collapsible-wide {
+              grid-column: 1 / -1;
+              width: 100% !important;
+            }
+            .wiki-collapsible-row > .wiki-collapsible-block.wiki-collapsible-compact {
+              width: 100% !important;
+              margin-right: 0 !important;
+            }
             .wiki-collapsible-block {
               margin: 0.75rem 0;
               border: 1px solid var(--border);
