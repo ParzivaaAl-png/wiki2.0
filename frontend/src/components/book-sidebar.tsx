@@ -12,6 +12,8 @@ interface BookSidebarProps {
   onClose: () => void;
   isPinned: boolean;
   onTogglePin: () => void;
+  sidebarWidth: number;
+  onWidthChange: (width: number) => void;
 }
 
 const line1Variants = {
@@ -29,7 +31,7 @@ const line3Variants = {
   open: { rotate: -45, y: -5, width: 20 }
 };
 
-export function BookSidebar({ isOpen, onToggle, onClose, isPinned, onTogglePin }: BookSidebarProps) {
+export function BookSidebar({ isOpen, onToggle, onClose, isPinned, onTogglePin, sidebarWidth, onWidthChange }: BookSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isStaff } = useAuth();
@@ -38,10 +40,31 @@ export function BookSidebar({ isOpen, onToggle, onClose, isPinned, onTogglePin }
   const [isLoading, setIsLoading] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [expandedKeys, setExpandedKeys] = React.useState<Record<string, boolean>>({});
+  const [isResizing, setIsResizing] = React.useState(false);
 
   const canEdit = isStaff;
   const isHomeActive = location.pathname === '/';
   const isAdminActive = location.pathname.startsWith('/admin');
+
+  // Mouse Drag Resizing for Pinned Sidebar
+  const startResizing = React.useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const newWidth = Math.min(Math.max(moveEvent.clientX - 56, 240), 500);
+      onWidthChange(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [onWidthChange]);
 
   const loadData = React.useCallback(async () => {
     try {
@@ -119,7 +142,22 @@ export function BookSidebar({ isOpen, onToggle, onClose, isPinned, onTogglePin }
     return count;
   };
 
-  // Рекурсивный фильтр дерева навигации: скрываем пустые должности и пустые отделы
+  // Helper to flatten nested position hierarchies into a single 1-level list per space
+  const flattenSections = (secs: Section[]): Section[] => {
+    let flat: Section[] = [];
+    secs.forEach(sec => {
+      flat.push({
+        ...sec,
+        subsections: [] // Remove subsection nesting for clean flat position rendering
+      });
+      if (sec.subsections && sec.subsections.length > 0) {
+        flat = flat.concat(flattenSections(sec.subsections));
+      }
+    });
+    return flat;
+  };
+
+  // Рекурсивный фильтр дерева навигации: скрываем пустые должности и пустые отделы, сплющиваем оргструктуру в 1 уровень
   const filteredSpaces = React.useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
@@ -152,17 +190,18 @@ export function BookSidebar({ isOpen, onToggle, onClose, isPinned, onTogglePin }
 
     return spaces
       .map(space => {
-        const validSecs = processSections(space.sections || []);
+        const processedSecs = processSections(space.sections || []);
+        const flatSecs = flattenSections(processedSecs);
         const isSpaceMatching = query ? space.name.toLowerCase().includes(query) : false;
 
         // Скрывать отделы без доступных должностей/статей
-        if (validSecs.length === 0 && !isSpaceMatching) {
+        if (flatSecs.length === 0 && !isSpaceMatching) {
           return null;
         }
 
         return {
           ...space,
-          sections: validSecs
+          sections: flatSecs
         };
       })
       .filter((space): space is Space => space !== null);
@@ -265,7 +304,7 @@ export function BookSidebar({ isOpen, onToggle, onClose, isPinned, onTogglePin }
                 <div key={art.id} style={{ paddingLeft: `${(depth + 1) * 12 + 12}px` }}>
                   <Link
                     to={`/articles/${art.slug}`}
-                    onClick={onClose}
+                    onClick={handleNavClose}
                     className={`group flex items-center justify-between py-1 px-2 rounded-lg text-xs transition-all border ${
                       isActive
                         ? 'bg-indigo-500/10 dark:bg-indigo-500/10 border-indigo-500/20 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-semibold shadow-sm'
@@ -392,10 +431,21 @@ export function BookSidebar({ isOpen, onToggle, onClose, isPinned, onTogglePin }
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className={`fixed lg:left-14 left-0 top-0 h-screen w-[300px] bg-neutral-100/90 dark:bg-sidebar-bg border-r border-neutral-200/50 dark:border-border flex flex-col z-40 overflow-hidden ${
+              style={{ width: `${sidebarWidth}px` }}
+              className={`fixed lg:left-14 left-0 top-0 h-screen bg-neutral-100/90 dark:bg-sidebar-bg border-r border-neutral-200/50 dark:border-border flex flex-col z-40 overflow-hidden ${
                 isPinned ? 'shadow-none' : 'shadow-2xl'
               }`}
             >
+              {/* Drag Resizer Edge (Pinned Mode only) */}
+              {isPinned && (
+                <div
+                  onMouseDown={startResizing}
+                  className={`absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-indigo-500/60 transition-colors z-50 ${
+                    isResizing ? 'bg-indigo-500' : 'bg-transparent'
+                  }`}
+                  title="Потяните для изменения ширины панели"
+                />
+              )}
               {/* Header */}
               <div className="p-4 border-b border-neutral-200/40 dark:border-border flex items-center justify-between lg:pl-6 pl-14 shrink-0">
                 <div className="flex items-center gap-2 text-indigo-500 font-semibold tracking-tight text-sm uppercase">

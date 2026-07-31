@@ -387,6 +387,16 @@ function AppContent() {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('wiki_sidebar_pinned') === 'true';
   });
+  const [sidebarWidth, setSidebarWidth] = React.useState<number>(() => {
+    if (typeof window === 'undefined') return 300;
+    const saved = localStorage.getItem('wiki_sidebar_width');
+    return saved ? Math.min(Math.max(parseInt(saved, 10), 240), 500) : 300;
+  });
+
+  const handleWidthChange = React.useCallback((newWidth: number) => {
+    setSidebarWidth(newWidth);
+    localStorage.setItem('wiki_sidebar_width', String(newWidth));
+  }, []);
 
   const handleTogglePin = () => {
     setIsSidebarPinned((prev) => {
@@ -451,13 +461,12 @@ function AppContent() {
   }, [user]);
 
   return (
-    <div className={`flex flex-col min-h-screen min-h-dvh bg-background text-foreground transition-all duration-300 ${
-      user 
-        ? isSidebarPinned 
-          ? 'xl:pl-[356px] lg:pl-[56px] pl-0' 
-          : 'lg:pl-[56px] pl-0' 
-        : ''
-    } ${isUser ? 'select-none' : ''}`}>
+    <div 
+      className={`flex flex-col min-h-screen min-h-dvh bg-background text-foreground transition-all duration-300 ${
+        user ? (isSidebarPinned ? '' : 'lg:pl-[56px] pl-0') : ''
+      } ${isUser ? 'select-none' : ''}`}
+      style={user && isSidebarPinned ? { paddingLeft: `${sidebarWidth + 56}px` } : undefined}
+    >
       <Header />
       {user && (
         <BookSidebar 
@@ -466,6 +475,8 @@ function AppContent() {
           onClose={() => setIsSidebarOpen(false)} 
           isPinned={isSidebarPinned}
           onTogglePin={handleTogglePin}
+          sidebarWidth={sidebarWidth}
+          onWidthChange={handleWidthChange}
         />
       )}
       {user?.must_change_password && (
