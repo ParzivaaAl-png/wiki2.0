@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Edit3, Check, RotateCcw, ListTree, ChevronRight } from 'lucide-react';
+import { Edit3, Check, RotateCcw, ListTree, ChevronRight, X } from 'lucide-react';
 
 export interface TocHeadingItem {
   pos: number;
@@ -149,6 +149,28 @@ export default function ArticleEditorNavigation({ editor, content }: ArticleEdit
     setEditingPos(null);
   };
 
+  // Change Heading Level (H1, H2, H3, H4)
+  const handleChangeHeadingLevel = (item: TocHeadingItem, newLevel: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!editor) return;
+    try {
+      editor.chain().focus().setNodeSelection(item.pos).updateAttributes('heading', { level: newLevel }).run();
+    } catch (err) {
+      console.warn('Failed to change heading level:', err);
+    }
+  };
+
+  // Convert Heading back to Regular Text Paragraph (<p>)
+  const handleConvertToParagraph = (item: TocHeadingItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!editor) return;
+    try {
+      editor.chain().focus().setNodeSelection(item.pos).setParagraph().run();
+    } catch (err) {
+      console.warn('Failed to convert heading to paragraph:', err);
+    }
+  };
+
   return (
     <div className="p-5 border border-border bg-card text-card-foreground rounded-xl shadow-premium dark:shadow-premium-dark space-y-4">
       <div className="flex items-center justify-between">
@@ -178,8 +200,9 @@ export default function ArticleEditorNavigation({ editor, content }: ArticleEdit
             const hasCustomTitle = !!item.tocTitle && item.tocTitle !== item.text;
 
             let indentClass = 'font-bold text-xs text-foreground';
-            if (item.level === 3) indentClass = 'pl-3 text-[11px] font-medium text-muted-foreground';
-            if (item.level === 4) indentClass = 'pl-6 text-[11px] font-normal text-muted-foreground';
+            if (item.level === 2) indentClass = 'pl-2.5 font-semibold text-xs text-foreground/90';
+            if (item.level === 3) indentClass = 'pl-5 text-[11px] font-medium text-muted-foreground';
+            if (item.level === 4) indentClass = 'pl-7 text-[11px] font-normal text-muted-foreground/80';
 
             return (
               <div key={`${item.pos}-${idx}`} className="group relative">
@@ -236,10 +259,10 @@ export default function ArticleEditorNavigation({ editor, content }: ArticleEdit
                 ) : (
                   <div
                     onClick={() => handleJumpToHeading(item.pos)}
-                    className={`flex items-start justify-between gap-2 py-1 px-1.5 rounded-md hover:bg-indigo-500/10 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer ${indentClass}`}
+                    className={`flex items-center justify-between gap-2 py-1 px-1.5 rounded-md hover:bg-indigo-500/10 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer ${indentClass}`}
                   >
-                    <div className="flex items-start gap-1.5 min-w-0 flex-1">
-                      <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                       <div className="truncate">
                         <span className="truncate">{displayTitle || '(пустой заголовок)'}</span>
                         {hasCustomTitle && (
@@ -250,14 +273,42 @@ export default function ArticleEditorNavigation({ editor, content }: ArticleEdit
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={(e) => handleStartEditTitle(item, e)}
-                      title="Редактировать название пункта в навигации"
-                      className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-muted text-muted-foreground hover:text-indigo-500 transition-all shrink-0"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      {/* Level Selector Pill */}
+                      <div className="flex items-center bg-muted/80 rounded px-1 py-0.5 gap-0.5 text-[9px] font-bold text-muted-foreground">
+                        {[1, 2, 3, 4].map((lvl) => (
+                          <button
+                            key={lvl}
+                            type="button"
+                            onClick={(e) => handleChangeHeadingLevel(item, lvl, e)}
+                            className={`px-1 rounded hover:text-indigo-600 ${item.level === lvl ? 'bg-indigo-500 text-white font-extrabold' : ''}`}
+                            title={`Сменить на H${lvl}`}
+                          >
+                            H{lvl}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Convert to Paragraph button */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleConvertToParagraph(item, e)}
+                        title="Преобразовать в обычный текст"
+                        className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Edit Custom Title button */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleStartEditTitle(item, e)}
+                        title="Редактировать название в навигации"
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-indigo-500 transition-colors"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
