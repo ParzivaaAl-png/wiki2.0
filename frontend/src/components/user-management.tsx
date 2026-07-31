@@ -24,7 +24,7 @@ import {
   UserAuditLog
 } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
-import { ModalPortal } from './modal-portal';
+import { ModalPortal, ModalWrapper } from './modal-portal';
 
 export default function UserManagement() {
   const { user: currentUser } = useAuth();
@@ -223,9 +223,11 @@ export default function UserManagement() {
 
       {/* Create User Dialog */}
       {isCreateOpen && (
-        <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
-          <div className="w-full max-w-md bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-2xl">
+        <ModalWrapper
+          onClose={() => setIsCreateOpen(false)}
+          hasUnsavedChanges={newUsername.trim().length > 0 || newName.trim().length > 0 || newPassword.length > 0}
+        >
+          <div className="w-full max-w-md bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-2xl animate-scaleUp">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg text-neutral-900 dark:text-white">Новый пользователь</h3>
               <button 
@@ -305,15 +307,16 @@ export default function UserManagement() {
               </button>
             </form>
           </div>
-        </div>
-        </ModalPortal>
+        </ModalWrapper>
       )}
 
       {/* Edit User Modal with Audit History Accordion */}
       {editUser !== null && (
-        <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
-          <div className="w-full max-w-md bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-2xl space-y-4">
+        <ModalWrapper
+          onClose={() => setEditUser(null)}
+          hasUnsavedChanges={editName.trim().length > 0 || editPassword.length > 0}
+        >
+          <div className="w-full max-w-md bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-2xl space-y-4 animate-scaleUp">
             <div className="flex justify-between items-center">
               <h3 className="font-bold text-lg text-neutral-900 dark:text-white">Редактирование профиля</h3>
               <button 
@@ -416,8 +419,7 @@ export default function UserManagement() {
               )}
             </div>
           </div>
-        </div>
-        </ModalPortal>
+        </ModalWrapper>
       )}
 
       {/* Users Table */}

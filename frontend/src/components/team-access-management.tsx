@@ -55,7 +55,7 @@ import {
 } from '../lib/api';
 import AccessManagement from './access-management';
 import GuestManagement from './guest-management';
-import { ModalPortal } from './modal-portal';
+import { ModalPortal, ModalWrapper } from './modal-portal';
 import SessionManagement from './session-management';
 import { useAuth } from '../lib/auth-context';
 import AdminFilterBar from './admin-filter-bar';
@@ -1718,9 +1718,8 @@ export default function TeamAccessManagement() {
 
       {/* Department Employees & Positions Modal Overlay */}
       {selectedDeptModalView && (
-        <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
-            <div className="w-full max-w-5xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card text-card-foreground shadow-2xl overflow-hidden">
+        <ModalWrapper onClose={() => setSelectedDeptModalView(null)}>
+          <div className="w-full max-w-5xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card text-card-foreground shadow-2xl overflow-hidden animate-scaleUp">
               {/* Header */}
               <div className="p-5 border-b border-border flex items-start justify-between gap-4 bg-muted/20 shrink-0">
                 <div className="flex items-start gap-4 min-w-0">
@@ -1797,8 +1796,7 @@ export default function TeamAccessManagement() {
                 </div>
               </div>
             </div>
-          </div>
-        </ModalPortal>
+        </ModalWrapper>
       )}
     </div>
   );

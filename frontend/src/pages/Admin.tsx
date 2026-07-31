@@ -61,7 +61,7 @@ import { NewsAdmin } from '../components/news-admin';
 import WikiManagement from '../components/wiki-management';
 import AnalyticsDashboard from '../components/analytics-dashboard';
 import TeamAccessManagement from '../components/team-access-management';
-import { ModalPortal } from '../components/modal-portal';
+import { ModalPortal, ModalWrapper } from '../components/modal-portal';
 import AdminFilterBar from '../components/admin-filter-bar';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -1603,9 +1603,8 @@ export default function Admin() {
 
       {/* Department Articles Modal Window Overlay */}
       {selectedSpaceModalGroup && (
-        <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
-            <div className="w-full max-w-5xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card text-card-foreground shadow-2xl overflow-hidden">
+        <ModalWrapper onClose={() => setSelectedSpaceModalGroup(null)}>
+          <div className="w-full max-w-5xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card text-card-foreground shadow-2xl overflow-hidden animate-scaleUp">
               {/* Modal Header */}
               <div className="p-5 border-b border-border flex items-start justify-between gap-4 bg-muted/20 shrink-0">
                 <div className="flex items-start gap-4 min-w-0">
@@ -1752,8 +1751,7 @@ export default function Admin() {
                 )}
               </div>
             </div>
-          </div>
-        </ModalPortal>
+        </ModalWrapper>
       )}
 
     </div>

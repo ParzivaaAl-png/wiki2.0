@@ -6,7 +6,7 @@ import { ThemeToggle } from './components/theme-toggle';
 import { SearchModal } from './components/search-modal';
 import { NewsBell } from './components/news-bell';
 import { AuthProvider, useAuth } from './lib/auth-context';
-import { ModalPortal } from './components/modal-portal';
+import { ModalPortal, ModalWrapper } from './components/modal-portal';
 import { ErrorBoundary } from './components/error-boundary';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BookSidebar } from './components/book-sidebar';
@@ -137,12 +137,14 @@ function ProfileSettingsModal({
   };
 
   return (
-    <ModalPortal>
-      <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 bg-black/65">
-        <form
-          onSubmit={handleSubmit}
-          className="w-full max-w-lg rounded-2xl border border-border bg-card text-card-foreground shadow-2xl dark:bg-[#161A22]"
-        >
+    <ModalWrapper
+      onClose={() => !forcePasswordChange && onClose()}
+      hasUnsavedChanges={!forcePasswordChange && (currentPassword.length > 0 || newPassword.length > 0)}
+    >
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-lg rounded-2xl border border-border bg-card text-card-foreground shadow-2xl dark:bg-[#161A22] animate-scaleUp"
+      >
           <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
             <div>
               <div className="inline-flex items-center gap-2 text-sm font-bold text-primary">
@@ -263,9 +265,8 @@ function ProfileSettingsModal({
               {forcePasswordChange ? 'Сменить пароль' : 'Сохранить'}
             </button>
           </div>
-        </form>
-      </div>
-    </ModalPortal>
+      </form>
+    </ModalWrapper>
   );
 }
 

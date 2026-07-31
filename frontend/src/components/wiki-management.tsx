@@ -26,7 +26,7 @@ import {
   Position, 
   User 
 } from '../lib/api';
-import { ModalPortal } from './modal-portal';
+import { ModalPortal, ModalWrapper } from './modal-portal';
 
 export default function WikiManagement() {
   const [activeSubTab, setActiveSubTab] = React.useState<'spaces' | 'sections'>('spaces');
@@ -404,9 +404,11 @@ export default function WikiManagement() {
 
       {/* Edit/Create Dialog */}
       {isModalOpen && (
-        <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
-          <div className="w-full max-w-md bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-2xl">
+        <ModalWrapper
+          onClose={() => setIsModalOpen(false)}
+          hasUnsavedChanges={spaceName.trim().length > 0 || secName.trim().length > 0}
+        >
+          <div className="w-full max-w-md bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-2xl animate-scaleUp">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg text-neutral-900 dark:text-white">
                 {editId ? 'Редактировать' : 'Добавить'} {
@@ -573,8 +575,7 @@ export default function WikiManagement() {
               </button>
             </form>
           </div>
-        </div>
-        </ModalPortal>
+        </ModalWrapper>
       )}
     </div>
   );

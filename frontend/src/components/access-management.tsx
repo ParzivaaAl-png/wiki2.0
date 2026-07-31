@@ -35,7 +35,7 @@ import {
   updateOperatorIpRestrictions,
   OperatorIpRestrictionSettings,
 } from '../lib/api';
-import { ModalPortal } from './modal-portal';
+import { ModalPortal, ModalWrapper } from './modal-portal';
 
 type AccessTab = 'matrix' | 'users';
 
@@ -562,9 +562,11 @@ export default function AccessManagement() {
         </div>
 
       {positionModal && (
-        <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
-          <form onSubmit={handleSavePosition} className="w-full max-w-lg rounded-xl border border-border bg-card text-card-foreground p-6 shadow-2xl">
+        <ModalWrapper
+          onClose={() => setPositionModal(null)}
+          hasUnsavedChanges={positionForm.name.trim().length > 0}
+        >
+          <form onSubmit={handleSavePosition} className="w-full max-w-lg rounded-xl border border-border bg-card text-card-foreground p-6 shadow-2xl animate-scaleUp">
             <div className="flex items-center justify-between gap-3 mb-5">
               <div>
                 <h3 className="text-lg font-extrabold text-foreground">
@@ -659,14 +661,15 @@ export default function AccessManagement() {
               </button>
             </div>
           </form>
-        </div>
-        </ModalPortal>
+        </ModalWrapper>
       )}
 
       {departmentModal && (
-        <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/65">
-          <form onSubmit={handleSaveDepartment} className="w-full max-w-lg rounded-xl border border-border bg-card text-card-foreground p-6 shadow-2xl">
+        <ModalWrapper
+          onClose={() => setDepartmentModal(null)}
+          hasUnsavedChanges={departmentForm.name.trim().length > 0}
+        >
+          <form onSubmit={handleSaveDepartment} className="w-full max-w-lg rounded-xl border border-border bg-card text-card-foreground p-6 shadow-2xl animate-scaleUp">
             <div className="flex items-center justify-between gap-3 mb-5">
               <div>
                 <h3 className="text-lg font-extrabold text-foreground">{departmentModal.department ? 'Редактировать отдел' : 'Добавить отдел'}</h3>
@@ -735,8 +738,7 @@ export default function AccessManagement() {
               </button>
             </div>
           </form>
-        </div>
-        </ModalPortal>
+        </ModalWrapper>
       )}
 
     </div>
