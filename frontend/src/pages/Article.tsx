@@ -137,6 +137,8 @@ export default function ArticlePage() {
   const [links, setLinks] = React.useState<ArticleLink[]>([]);
   const [backlinks, setBacklinks] = React.useState<ArticleLink[]>([]);
   const [isLinksLoading, setIsLinksLoading] = React.useState(false);
+  const [showAllLinks, setShowAllLinks] = React.useState(false);
+  const [showAllBacklinks, setShowAllBacklinks] = React.useState(false);
   const [allArticles, setAllArticles] = React.useState<ArticleType[]>([]);
   const [navigationTree, setNavigationTree] = React.useState<Space[]>([]);
   const [isAddLinkModalOpen, setIsAddLinkModalOpen] = React.useState(false);
@@ -1331,189 +1333,125 @@ export default function ArticlePage() {
           })()}
         </article>
 
-        {/* Related Materials */}
-        <div className="mt-10 pt-6 border-t border-neutral-200/60 dark:border-neutral-800/60">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        {/* Compact Related Materials & Backlinks Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8 pt-6 border-t border-neutral-200/60 dark:border-neutral-800/60">
+          {/* 1. Связанные материалы */}
+          <div className="rounded-2xl border border-neutral-200/70 dark:border-neutral-800/80 bg-neutral-50/50 dark:bg-neutral-900/30 p-4 flex flex-col justify-between min-h-[90px]">
             <div>
-              <h3 className="text-sm font-bold text-neutral-900 dark:text-neutral-100 uppercase tracking-wider flex items-center gap-2 font-outfit">
-                <FileText className="w-4 h-4 text-indigo-500" />
-                Связанные материалы
-              </h3>
-              <p className="text-xs text-neutral-450 dark:text-neutral-500 mt-1">
-                Материалы, которые помогают раскрыть тему и перейти к смежным инструкциям.
-              </p>
-            </div>
-            {isStaff && (
-              <button
-                onClick={() => setIsAddLinkModalOpen(true)}
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/25 text-indigo-650 dark:text-indigo-400 rounded-lg text-xs font-bold uppercase transition-all cursor-pointer shadow-sm select-none shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" /> Добавить связь
-              </button>
-            )}
-          </div>
-
-          {isLinksLoading ? (
-            <div className="flex items-center gap-2 text-xs text-neutral-400 rounded-xl border border-neutral-200/60 dark:border-neutral-850 bg-neutral-50/60 dark:bg-neutral-900/30 p-5">
-              <Loader2 className="w-4 h-4 animate-spin text-indigo-500" /> Загрузка связей...
-            </div>
-          ) : links.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-indigo-300/70 dark:border-indigo-500/30 bg-indigo-500/[0.04] dark:bg-indigo-500/[0.08] p-6 text-center">
-              <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-500">
-                <FileText className="w-5 h-5" />
+              <div className="flex items-center justify-between gap-2 mb-2.5">
+                <h3 className="text-xs font-bold text-neutral-900 dark:text-neutral-100 uppercase tracking-wider flex items-center gap-1.5 font-outfit">
+                  <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                  Связанные материалы
+                </h3>
+                {isStaff && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddLinkModalOpen(true)}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-650 dark:text-indigo-400 rounded-md text-[11px] font-bold transition-all cursor-pointer select-none"
+                    title="Добавить связь"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Добавить</span>
+                  </button>
+                )}
               </div>
-              <h4 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100">
-                Связанных материалов пока нет
-              </h4>
-              <p className="mx-auto mt-1 max-w-lg text-xs text-neutral-500 dark:text-neutral-400">
-                Добавьте статьи, инструкции или регламенты, которые помогут лучше раскрыть тему.
-              </p>
-              {isStaff && (
-                <button
-                  onClick={() => setIsAddLinkModalOpen(true)}
-                  className="mt-4 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Добавить связь
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {links.map((link) => (
-                <div
-                  key={link.id}
-                  className="group relative overflow-hidden rounded-2xl border border-neutral-200/70 dark:border-neutral-850 bg-white dark:bg-neutral-950/50 hover:border-indigo-500/35 hover:shadow-premium dark:hover:shadow-premium-dark transition-all"
-                >
-                  <div className="p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-500/15 bg-indigo-500/10 text-indigo-500 shrink-0">
-                        <FileText className="w-5 h-5" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <Link
-                            to={`/articles/${link.target_slug}`}
-                            className="font-bold text-sm text-neutral-950 dark:text-neutral-100 hover:text-indigo-600 dark:hover:text-indigo-400 line-clamp-2"
-                          >
-                            {link.target_title}
-                          </Link>
-                          {isStaff && (
-                            <button
-                              onClick={() => handleDeleteLink(link.id)}
-                              className="p-1.5 hover:bg-rose-500/10 text-neutral-400 hover:text-rose-500 rounded-lg transition-all shrink-0 cursor-pointer"
-                              title="Удалить связь"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                        <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 line-clamp-2">
-                          {link.target_summary || link.link_text || 'Краткое описание пока не заполнено.'}
-                        </p>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-2 py-0.5 text-[10px] font-semibold text-neutral-500 dark:text-neutral-400">
-                            <Briefcase className="w-3 h-3" />
-                            {(link.target_section_paths || [])[0] || 'Без раздела'}
-                          </span>
-                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${getCompactStatusClass(link.target_status)}`}>
-                            {getCompactStatusBadge(link.target_status)}
-                          </span>
-                          <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400">
-                            <Clock3 className="w-3 h-3" />
-                            {formatCompactDate(link.target_updated_at)}
-                          </span>
-                        </div>
-                        {link.link_text && (
-                          <div className="mt-3 rounded-lg border border-neutral-200/60 dark:border-neutral-850 bg-neutral-50/70 dark:bg-neutral-900/35 px-3 py-2 text-[11px] text-neutral-500 dark:text-neutral-400">
-                            {link.link_text}
-                          </div>
-                        )}
+
+              {isLinksLoading ? (
+                <div className="flex items-center gap-2 text-xs text-neutral-400 py-1">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
+                  <span>Загрузка...</span>
+                </div>
+              ) : links.length === 0 ? (
+                <p className="text-xs text-neutral-400 dark:text-neutral-500 py-1 font-medium">
+                  Нет связанных статей
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {(showAllLinks ? links : links.slice(0, 5)).map((link) => (
+                      <div key={link.id} className="inline-flex items-center gap-1">
                         <Link
                           to={`/articles/${link.target_slug}`}
-                          className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-xs font-medium text-neutral-800 dark:text-neutral-200 hover:border-indigo-500/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all shadow-2xs"
                         >
-                          Открыть материал
-                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span className="text-indigo-500">•</span>
+                          <span className="truncate max-w-[220px]">{link.target_title}</span>
                         </Link>
+                        {isStaff && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteLink(link.id)}
+                            className="p-1 text-neutral-400 hover:text-rose-500 transition-colors cursor-pointer"
+                            title="Удалить связь"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
-                    </div>
+                    ))}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
-        {/* Backlinks */}
-        <div className="mt-8 pt-6 border-t border-neutral-200/60 dark:border-neutral-800/60">
-          <div className="mb-4">
-            <h3 className="text-sm font-bold text-neutral-900 dark:text-neutral-100 uppercase tracking-wider flex items-center gap-2 font-outfit">
-              <CornerDownRight className="w-4 h-4 text-indigo-500" />
-              Эта статья упоминается в
-            </h3>
-            <p className="text-xs text-neutral-450 dark:text-neutral-500 mt-1">
-              Обратные ссылки строятся автоматически на основе связанных материалов.
-            </p>
+                  {links.length > 5 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllLinks((prev) => !prev)}
+                      className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer pt-1"
+                    >
+                      {showAllLinks ? 'Свернуть' : `+ ещё ${links.length - 5}`}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
-          {isLinksLoading ? (
-            <div className="flex items-center gap-2 text-xs text-neutral-400 rounded-xl border border-neutral-200/60 dark:border-neutral-850 bg-neutral-50/60 dark:bg-neutral-900/30 p-5">
-              <Loader2 className="w-4 h-4 animate-spin text-indigo-500" /> Загрузка обратных ссылок...
-            </div>
-          ) : backlinks.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/30 p-6 text-center">
-              <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-neutral-200/70 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400">
-                <CornerDownRight className="w-5 h-5" />
+          {/* 2. Упоминается в */}
+          <div className="rounded-2xl border border-neutral-200/70 dark:border-neutral-800/80 bg-neutral-50/50 dark:bg-neutral-900/30 p-4 flex flex-col justify-between min-h-[90px]">
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-2.5">
+                <h3 className="text-xs font-bold text-neutral-900 dark:text-neutral-100 uppercase tracking-wider flex items-center gap-1.5 font-outfit">
+                  <CornerDownRight className="w-3.5 h-3.5 text-indigo-500" />
+                  Упоминается в
+                </h3>
               </div>
-              <h4 className="font-outfit text-sm font-bold text-neutral-900 dark:text-neutral-100">
-                Пока никто не ссылается на эту статью
-              </h4>
-              <p className="mx-auto mt-1 max-w-lg text-xs text-neutral-500 dark:text-neutral-400">
-                Когда другая статья будет ссылаться на этот материал, она появится здесь автоматически.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {backlinks.map((link) => (
-                <Link
-                  key={link.id}
-                  to={`/articles/${link.source_slug}`}
-                  className="group flex items-start gap-3 rounded-xl border border-neutral-200/70 dark:border-neutral-850 bg-white dark:bg-neutral-950/45 p-3 hover:border-indigo-500/35 hover:bg-neutral-50/60 dark:hover:bg-neutral-900/35 transition-all"
-                >
-                  <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-neutral-500 shrink-0">
-                    <FileText className="w-4 h-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                      <div className="font-bold text-sm text-neutral-900 dark:text-neutral-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                        {link.source_title}
-                      </div>
-                      <span className="text-[10px] text-neutral-400 shrink-0">
-                        {formatCompactDate(link.source_updated_at)}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-2 py-0.5 text-[10px] font-semibold text-neutral-500 dark:text-neutral-400">
-                        <Building2 className="w-3 h-3" />
-                        {(link.source_section_paths || [])[0] || 'Без раздела'}
-                      </span>
-                      {link.link_text && (
-                        <span className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
-                          Используется как: {link.link_text}
-                        </span>
-                      )}
-                    </div>
-                    {link.source_summary && (
-                      <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400 line-clamp-2">
-                        {link.source_summary}
-                      </p>
-                    )}
+
+              {isLinksLoading ? (
+                <div className="flex items-center gap-2 text-xs text-neutral-400 py-1">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
+                  <span>Загрузка...</span>
+                </div>
+              ) : backlinks.length === 0 ? (
+                <p className="text-xs text-neutral-400 dark:text-neutral-500 py-1 font-medium">
+                  Нет обратных ссылок
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {(showAllBacklinks ? backlinks : backlinks.slice(0, 5)).map((link) => (
+                      <Link
+                        key={link.id}
+                        to={`/articles/${link.source_slug}`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-xs font-medium text-neutral-800 dark:text-neutral-200 hover:border-indigo-500/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all shadow-2xs"
+                      >
+                        <span className="text-indigo-500">•</span>
+                        <span className="truncate max-w-[220px]">{link.source_title}</span>
+                      </Link>
+                    ))}
                   </div>
-                </Link>
-              ))}
+
+                  {backlinks.length > 5 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllBacklinks((prev) => !prev)}
+                      className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer pt-1"
+                    >
+                      {showAllBacklinks ? 'Свернуть' : `+ ещё ${backlinks.length - 5}`}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
