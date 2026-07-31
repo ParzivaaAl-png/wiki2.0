@@ -337,22 +337,30 @@ export default function AccessManagement() {
 
 
 
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
         {overview.roles.map((role) => (
-          <div key={role.id} className="rounded-lg border border-border bg-card text-card-foreground p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-bold text-foreground">{role.name}</h3>
-                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{role.description}</p>
+          <div
+            key={role.id}
+            className="flex flex-col justify-between rounded-xl border border-border bg-card p-3.5 hover:border-indigo-500/40 hover:shadow-md transition-all"
+          >
+            <div>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <h3 className="text-xs font-bold text-foreground font-outfit truncate">{role.name}</h3>
+                <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${roleTone(role.code)}`}>
+                  {role.code}
+                </span>
               </div>
-              <span className={`shrink-0 text-[9px] px-2 py-1 rounded border font-bold ${roleTone(role.code)}`}>
-                {role.code}
-              </span>
+              <p className="text-[10px] text-muted-foreground line-clamp-2 leading-relaxed mb-3">
+                {role.description}
+              </p>
             </div>
-            <div className="flex flex-wrap gap-1.5 mt-3">
+            <div className="flex flex-wrap gap-1 pt-2 border-t border-border/60">
               {activeCapabilities(roleCapabilities(role)).map((item) => (
-                <span key={item.key} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">
-                  <Check className="w-3 h-3 text-emerald-500" />
+                <span
+                  key={item.key}
+                  className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-muted/60 text-foreground/80 font-medium"
+                >
+                  <Check className="w-2.5 h-2.5 text-emerald-500" />
                   {item.label}
                 </span>
               ))}
@@ -362,22 +370,26 @@ export default function AccessManagement() {
       </div>
 
       {/* Operator IP Restriction Settings (For Wiki Admin) */}
-      <div className="rounded-xl border border-rose-500/20 bg-rose-500/[0.035] dark:bg-rose-950/10 p-5 space-y-4">
-        <div className="flex items-start justify-between gap-4 flex-wrap sm:flex-nowrap">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-sm font-extrabold text-foreground">
-              <ShieldCheck className="h-5 w-5 text-rose-500" />
-              Ограничение по IP для должности «Оператор»
+      <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.03] dark:bg-rose-950/15 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-500 shrink-0">
+              <ShieldCheck className="h-4.5 w-4.5" />
+            </span>
+            <div>
+              <div className="text-xs font-bold text-foreground">
+                Ограничение по IP для должности «Оператор»
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-tight">
+                Белый список IP/CIDR сетей. Для остальных должностей ограничение не применяется.
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground leading-relaxed max-w-3xl">
-              Настройка белого списка IP-адресов и сетей, с которых сотрудникам на должности <strong className="text-foreground">«Оператор»</strong> разрешено работать в Wiki. На неавторизованных IP доступ Операторов заблокирован на сервере. <strong className="text-foreground">Для остальных должностей и администраторов ограничение не применяется.</strong>
-            </p>
           </div>
 
           {opIpSettings && (
-            <div className="flex items-center gap-3">
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${opIpSettings.enabled ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' : 'border-border bg-muted text-muted-foreground'}`}>
-                {opIpSettings.enabled ? 'Ограничение включено' : 'Ограничение отключено'}
+            <div className="flex items-center gap-3 shrink-0">
+              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${opIpSettings.enabled ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' : 'border-border bg-muted text-muted-foreground'}`}>
+                {opIpSettings.enabled ? 'Включено' : 'Отключено'}
               </span>
               <label className="relative inline-flex cursor-pointer items-center">
                 <input
@@ -386,56 +398,42 @@ export default function AccessManagement() {
                   onChange={(e) => setOpIpSettings((prev) => prev ? { ...prev, enabled: e.target.checked } : null)}
                   className="peer sr-only"
                 />
-                <span className="h-6 w-11 rounded-full bg-muted after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-border after:bg-white after:transition-all peer-checked:bg-rose-600 peer-checked:after:translate-x-full" />
+                <span className="h-5 w-9 rounded-full bg-muted after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-border after:bg-white after:transition-all peer-checked:bg-rose-600 peer-checked:after:translate-x-full" />
               </label>
             </div>
           )}
         </div>
 
         {opIpSettings && (
-          <div className="space-y-3 pt-2 border-t border-rose-500/10">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="md:col-span-2 space-y-1.5">
-                <label className="block text-xs font-bold uppercase text-muted-foreground">
-                  Разрешенные IP-адреса для должности «Оператор» (CIDR)
-                </label>
-                <textarea
-                  rows={4}
-                  value={allowedRangesInput}
-                  onChange={(e) => setAllowedRangesInput(e.target.value)}
-                  placeholder={'192.168.1.10\n10.0.0.0/24\n172.16.0.0/16'}
-                  className="w-full resize-none rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-rose-500"
-                />
-                <p className="text-[11px] text-muted-foreground leading-normal">
-                  Укажите IP-адрес или подсеть (одна запись на строку), с которой разрешено работать Оператору. Если тумблер включён и список пуст, доступ с должности «Оператор» будет полностью заблокирован.
-                </p>
-              </div>
-
-              <div className="space-y-3 p-3.5 rounded-lg border border-border bg-card">
-                <div className="text-xs font-bold text-foreground">Информация о подключении</div>
-                <div className="text-xs space-y-1">
-                  <div className="text-muted-foreground text-[11px]">Ваш текущий IP-адрес:</div>
-                  <div className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs">
-                    {opIpSettings.client_ip || 'неизвестно'}
-                  </div>
-                </div>
-                {opIpSettings.updated_at && (
-                  <div className="text-[10px] text-muted-foreground pt-2 border-t border-border">
-                    Обновлено: {new Date(opIpSettings.updated_at).toLocaleString('ru-RU')} ({opIpSettings.updated_by_name || 'Администратор'})
-                  </div>
-                )}
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-rose-500/10">
+            <div className="md:col-span-2 space-y-1">
+              <textarea
+                rows={2}
+                value={allowedRangesInput}
+                onChange={(e) => setAllowedRangesInput(e.target.value)}
+                placeholder={'192.168.1.10\n10.0.0.0/24'}
+                className="w-full resize-none rounded-xl border border-border bg-card px-3 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-rose-500"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Укажите IP-адрес или CIDR подсеть (1 на строку).
+              </p>
             </div>
 
-            <div className="flex items-center justify-end pt-2">
+            <div className="flex flex-col justify-between p-3 rounded-xl border border-border bg-card">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground text-[10px]">Ваш IP:</span>
+                <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs">
+                  {opIpSettings.client_ip || 'неизвестно'}
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={handleSaveOpIpSettings}
                 disabled={isSavingOpIp}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-rose-600/15 transition-all cursor-pointer"
+                className="mt-2 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold transition-all cursor-pointer w-full"
               >
-                {isSavingOpIp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Сохранить IP-ограничения для Оператора
+                {isSavingOpIp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Сохранить IP-настройки
               </button>
             </div>
           </div>

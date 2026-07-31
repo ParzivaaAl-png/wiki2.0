@@ -207,169 +207,186 @@ export default function WikiManagement() {
   return (
     <div className="space-y-6">
       {/* Top action bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Sub-tabs switcher */}
-        <div className="flex bg-neutral-100 dark:bg-neutral-900 p-1 rounded-lg gap-1 select-none w-fit">
+        <div className="flex bg-muted/60 p-1 rounded-xl gap-1 select-none w-fit border border-border">
           <button
+            type="button"
             onClick={() => setActiveSubTab('spaces')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
               activeSubTab === 'spaces'
-                ? 'bg-white dark:bg-neutral-800 text-neutral-950 dark:text-white shadow-sm'
-                : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            <FolderOpen className="w-3.5 h-3.5" />
+            <FolderOpen className="w-3.5 h-3.5 text-indigo-500" />
             Пространства ({spaces.length})
           </button>
           <button
+            type="button"
             onClick={() => setActiveSubTab('sections')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
               activeSubTab === 'sections'
-                ? 'bg-white dark:bg-neutral-800 text-neutral-950 dark:text-white shadow-sm'
-                : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            <Layers className="w-3.5 h-3.5" />
+            <Layers className="w-3.5 h-3.5 text-sky-500" />
             Разделы ({sections.length})
           </button>
         </div>
 
         {/* Action Buttons */}
         <button
+          type="button"
           onClick={handleOpenCreate}
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 transition-all cursor-pointer w-fit"
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer w-fit"
         >
           <Plus className="w-4 h-4" />
-          Добавить
+          Добавить {activeSubTab === 'spaces' ? 'пространство' : 'раздел'}
         </button>
       </div>
 
-      {/* Grid lists */}
-      <div className="border border-neutral-200/50 dark:border-neutral-800/80 bg-white dark:bg-neutral-950 rounded-xl overflow-hidden shadow-premium">
-        <div className="overflow-x-auto">
-          {activeSubTab === 'spaces' && (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-neutral-50 dark:bg-neutral-950 text-neutral-400 dark:text-neutral-500 font-semibold text-xs border-b border-neutral-200 dark:border-neutral-800 select-none">
-                  <th className="p-4">Название пространства</th>
-                  <th className="p-4">Описание</th>
-                  <th className="p-4">Привязанный отдел</th>
-                  <th className="p-4">Статус</th>
-                  <th className="p-4 text-right">Действия</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-200/50 dark:divide-neutral-800/80 text-xs">
-                {spaces.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-neutral-400 dark:text-neutral-600 select-none">
-                      Пространства отсутствуют.
-                    </td>
-                  </tr>
-                ) : (
-                  spaces.map(sp => {
-                    const dept = departments.find(x => x.id === sp.department_id);
-                    return (
-                      <tr key={sp.id} className="hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20 transition-colors">
-                        <td className="p-4 font-bold text-neutral-900 dark:text-neutral-100">{sp.name}</td>
-                        <td className="p-4 text-neutral-500 font-light truncate max-w-xs">{sp.description || '-'}</td>
-                        <td className="p-4 text-neutral-600 dark:text-neutral-400">{dept ? dept.name : '-'}</td>
-                        <td className="p-4">
-                          <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded font-semibold border ${
-                            sp.status === 'Active' 
-                              ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' 
-                              : 'bg-neutral-500/10 text-neutral-500 border-neutral-500/20'
-                          }`}>
-                            {sp.status === 'Active' ? 'Активно' : 'Неактивно'}
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => handleOpenEdit('spaces', sp)}
-                              className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(sp.id, sp.name)}
-                              className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          )}
+      {/* Spaces List View */}
+      {activeSubTab === 'spaces' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {spaces.length === 0 ? (
+            <div className="col-span-full p-8 text-center border border-dashed border-border rounded-2xl text-xs text-muted-foreground">
+              Пространства отсутствуют.
+            </div>
+          ) : (
+            spaces.map((sp) => {
+              const dept = departments.find((x) => x.id === sp.department_id);
+              return (
+                <div
+                  key={sp.id}
+                  className="group flex flex-col justify-between rounded-2xl border border-border bg-card p-4 hover:border-indigo-500/40 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <span className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-500 shrink-0">
+                        <FolderOpen className="w-4.5 h-4.5" />
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="font-outfit text-sm font-bold text-foreground truncate">{sp.name}</h3>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+                          {sp.description || 'Описание отсутствует.'}
+                        </p>
+                      </div>
+                    </div>
 
-          {activeSubTab === 'sections' && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEdit('spaces', sp)}
+                        className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 hover:bg-muted transition-colors cursor-pointer"
+                        title="Редактировать"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(sp.id, sp.name)}
+                        className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-rose-500 hover:bg-muted transition-colors cursor-pointer"
+                        title="Удалить"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-2.5 border-t border-border/60 flex items-center justify-between gap-2 text-[10px]">
+                    <span className="truncate text-muted-foreground font-medium">
+                      Отдел: <strong className="text-foreground font-semibold">{dept ? dept.name : 'Не привязан'}</strong>
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full border font-bold ${
+                      sp.status === 'Active'
+                        ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+                        : 'border-neutral-500/25 bg-neutral-500/10 text-neutral-500'
+                    }`}>
+                      {sp.status === 'Active' ? 'Активно' : 'Неактивно'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* Sections Compact Table View */}
+      {activeSubTab === 'sections' && (
+        <div className="border border-border bg-card rounded-2xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-neutral-50 dark:bg-neutral-950 text-neutral-400 dark:text-neutral-500 font-semibold text-xs border-b border-neutral-200 dark:border-neutral-800 select-none">
-                  <th className="p-4">Название раздела</th>
-                  <th className="p-4">Пространство</th>
-                  <th className="p-4">Должность</th>
-                  <th className="p-4">Владелец процесса</th>
-                  <th className="p-4">Родительский раздел</th>
-                  <th className="p-4">Статус</th>
-                  <th className="p-4 text-right">Действия</th>
+                <tr className="bg-muted/40 text-muted-foreground font-bold text-[10px] uppercase tracking-wider border-b border-border select-none">
+                  <th className="py-2.5 px-4">Раздел</th>
+                  <th className="py-2.5 px-3">Пространство</th>
+                  <th className="py-2.5 px-3">Должность</th>
+                  <th className="py-2.5 px-3">Владелец процесса</th>
+                  <th className="py-2.5 px-3">Статус</th>
+                  <th className="py-2.5 px-4 text-right">Действия</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-200/50 dark:divide-neutral-800/80 text-xs">
+              <tbody className="divide-y divide-border text-xs">
                 {sections.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-neutral-400 dark:text-neutral-600 select-none">
+                    <td colSpan={6} className="p-8 text-center text-muted-foreground select-none">
                       Разделы отсутствуют.
                     </td>
                   </tr>
                 ) : (
-                  sections.map(s => {
-                    const space = spaces.find(x => x.id === s.space_id);
-                    const pos = positions.find(x => x.id === s.position_id);
-                    const parent = sections.find(x => x.id === s.parent_section_id);
-                    const owner = users.find(x => x.id === s.owner_id);
+                  sections.map((s) => {
+                    const space = spaces.find((x) => x.id === s.space_id);
+                    const pos = positions.find((x) => x.id === s.position_id);
+                    const owner = users.find((x) => x.id === s.owner_id);
                     return (
-                      <tr key={s.id} className="hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20 transition-colors">
-                        <td className="p-4 font-bold text-neutral-900 dark:text-neutral-100">{s.name}</td>
-                        <td className="p-4 text-neutral-600 dark:text-neutral-400">{space ? space.name : '-'}</td>
-                        <td className="p-4 text-neutral-600 dark:text-neutral-400">{pos ? pos.name : '-'}</td>
-                        <td className="p-4">
+                      <tr key={s.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="py-2.5 px-4 font-bold text-foreground">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Layers className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                            <span className="truncate">{s.name}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 text-muted-foreground truncate">{space ? space.name : '-'}</td>
+                        <td className="py-2.5 px-3 text-muted-foreground truncate">{pos ? pos.name : '-'}</td>
+                        <td className="py-2.5 px-3">
                           {owner ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-neutral-800 dark:text-neutral-200 font-medium">
-                              <UserCheck className="w-3.5 h-3.5 text-indigo-500" />
+                            <span className="inline-flex items-center gap-1 text-[11px] text-foreground font-medium">
+                              <UserCheck className="w-3 h-3 text-indigo-500 shrink-0" />
                               {owner.name}
                             </span>
                           ) : (
-                            <span className="text-neutral-400">-</span>
+                            <span className="text-muted-foreground text-[11px]">-</span>
                           )}
                         </td>
-                        <td className="p-4 text-neutral-600 dark:text-neutral-400">{parent ? parent.name : '-'}</td>
-                        <td className="p-4">
-                          <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded font-semibold border ${
-                            s.status === 'Active' 
-                              ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' 
-                              : 'bg-red-500/10 text-red-500 border-red-500/20'
+                        <td className="py-2.5 px-3">
+                          <span className={`inline-flex items-center text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                            s.status === 'Active'
+                              ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+                              : 'border-rose-500/25 bg-rose-500/10 text-rose-600 dark:text-rose-300'
                           }`}>
                             {s.status === 'Active' ? 'Активен' : 'В архиве'}
                           </span>
                         </td>
-                        <td className="p-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                        <td className="py-2.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
                             <button
+                              type="button"
                               onClick={() => handleOpenEdit('sections', s)}
-                              className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 hover:bg-muted transition-colors cursor-pointer"
+                              title="Редактировать"
                             >
-                              <Edit3 className="w-4 h-4" />
+                              <Edit3 className="w-3.5 h-3.5" />
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleDelete(s.id, s.name)}
-                              className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-rose-500 hover:bg-muted transition-colors cursor-pointer"
+                              title="Удалить"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </td>
@@ -379,9 +396,11 @@ export default function WikiManagement() {
                 )}
               </tbody>
             </table>
-          )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Edit/Create Dialog */}
 
       {/* Edit/Create Dialog */}
       {isModalOpen && (
