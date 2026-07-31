@@ -2125,7 +2125,7 @@ function highlightTextInDOM(container: HTMLElement, textToHighlight: string): bo
   const stemPattern = escapeRegExp(stem).replace(/\s+/g, '[\\s\\u00a0]+');
 
   const testRegex = new RegExp(stemPattern, 'i');
-  const matchRegex = new RegExp(`(${exactPattern}|${stemPattern}[a-яа-z0-9_-]*)`, 'gi');
+  const matchRegex = new RegExp(`(${exactPattern}|${stemPattern}[a-zA-Zа-яА-ЯёЁ0-9_-]*)`, 'gi');
 
   // 1. FIRST PASS: Instantly open any <details> / .wiki-collapsible-block whose textContent matches!
   const allDetails = container.querySelectorAll<HTMLDetailsElement>('details, .wiki-collapsible-block, [data-wiki-collapsible], [data-state]');
