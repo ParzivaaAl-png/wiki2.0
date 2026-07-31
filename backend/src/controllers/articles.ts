@@ -1166,6 +1166,152 @@ export const getArticles = async (req: Request, res: Response) => {
   }
 };
 
+export const getHomeData = async (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const role = authReq.user ? authReq.user.role : '';
+    const userId = authReq.user ? authReq.user.id : 0;
+    const employeeId = authReq.user ? authReq.user.employee_id : null;
+
+    const allowedSectionIds = await getUserAllowedSections(employeeId, role, userId);
+    const activeGuestGrants = userId ? await getActiveGuestAccessGrants(userId) : [];
+    const { capabilities } = await getUserCapabilities(userId || null, role);
+
+    const canManageCatalog =
+      !!authReq.user &&
+      (capabilities.can_manage_access || capabilities.can_manage_structure || capabilities.can_manage_users);
+    const canEditCatalog =
+      !!authReq.user &&
+      (canManageCatalog ||
+        capabilities.can_create ||
+        capabilities.can_edit ||
+        capabilities.can_publish ||
+        capabilities.can_approve);
+
+    let allowedStatuses = ['published', 'requires_verification'];
+    if (canManageCatalog) {
+      allowedStatuses = ['draft', 'on_approval', 'published', 'requires_verification', 'archived', 'expired'];
+    } else if (canEditCatalog) {
+      allowedStatuses = ['published', 'requires_verification', 'archived', 'expired'];
+    }
+
+    const selectCols = `a.id, a.title, a.slug, '' as content, a.summary, a.category_id, a.author_id, a.published, a.is_visible, a.status, a.views, a.position, a.created_at, a.updated_at, a.article_type, a.owner_id, a.approver_id, a.mandatory_ack_enabled, a.ip_restriction_enabled, u.name as author_name, COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags, COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids`;
+
+    // 1. All Articles Query
+    const allArticlesQuery = query(
+      `SELECT ${selectCols}
+       FROM articles a
+       LEFT JOIN users u ON a.author_id = u.id
+       LEFT JOIN article_tags t ON a.id = t.article_id
+       LEFT JOIN article_sections axs ON a.id = axs.article_id
+       WHERE a.is_visible = true 
+         AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
+         AND (axs.section_id = ANY($1::int[]) OR NOT EXISTS (SELECT 1 FROM article_sections WHERE article_id = a.id))
+       GROUP BY a.id, u.name
+       ORDER BY a.position ASC, a.created_at DESC`,
+      [allowedSectionIds, allowedStatuses, userId]
+    );
+
+    // 2. Trending Articles Query
+    const trendingArticlesQuery = query(
+      `SELECT ${selectCols}, COUNT(DISTINCT COALESCE(vl.user_id::text, vl.ip_address)) as trending_views
+       FROM articles a
+       LEFT JOIN users u ON a.author_id = u.id
+       LEFT JOIN article_tags t ON a.id = t.article_id
+       LEFT JOIN article_sections axs ON a.id = axs.article_id
+       LEFT JOIN article_views_log vl ON a.id = vl.article_id AND vl.viewed_at > NOW() - INTERVAL '7 days'
+       WHERE a.is_visible = true
+         AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
+         AND (axs.section_id = ANY($1::int[]) OR NOT EXISTS (SELECT 1 FROM article_sections WHERE article_id = a.id))
+       GROUP BY a.id, u.name
+       ORDER BY trending_views DESC, a.views DESC, a.created_at DESC
+       LIMIT 12`,
+      [allowedSectionIds, allowedStatuses, userId]
+    );
+
+    // 3. Recommended Articles Query
+    const recommendedArticlesQuery = query(
+      `SELECT ${selectCols}, COUNT(fa.user_id) as favorites_count
+       FROM articles a
+       LEFT JOIN users u ON a.author_id = u.id
+       LEFT JOIN article_tags t ON a.id = t.article_id
+       LEFT JOIN article_sections axs ON a.id = axs.article_id
+       LEFT JOIN user_favorite_articles fa ON a.id = fa.article_id
+       WHERE a.is_visible = true
+         AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
+         AND (axs.section_id = ANY($1::int[]) OR NOT EXISTS (SELECT 1 FROM article_sections WHERE article_id = a.id))
+       GROUP BY a.id, u.name
+       ORDER BY favorites_count DESC, a.views DESC, a.created_at DESC
+       LIMIT 12`,
+      [allowedSectionIds, allowedStatuses, userId]
+    );
+
+    // 4. User-specific Queries
+    const favsQuery = userId ? query(
+      `SELECT a.id, a.title, a.slug, '' as content, a.summary, a.category_id, a.author_id, a.published, a.is_visible, a.status, a.views, a.position, a.created_at, a.updated_at, a.article_type, u.name as author_name, COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags, COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
+       FROM user_favorite_articles ufa
+       JOIN articles a ON ufa.article_id = a.id
+       LEFT JOIN users u ON a.author_id = u.id
+       LEFT JOIN article_tags t ON a.id = t.article_id
+       LEFT JOIN article_sections axs ON a.id = axs.article_id
+       WHERE ufa.user_id = $1 AND a.is_visible = true
+       GROUP BY a.id, u.name, ufa.created_at
+       ORDER BY ufa.created_at DESC`,
+      [userId]
+    ) : Promise.resolve({ rows: [] });
+
+    const historyQuery = userId ? query(
+      `SELECT a.id, a.title, a.slug, '' as content, a.summary, a.category_id, a.author_id, a.published, a.is_visible, a.status, a.views, a.position, a.created_at, a.updated_at, a.article_type, u.name as author_name, COALESCE(array_agg(DISTINCT t.tag_name) FILTER (WHERE t.tag_name IS NOT NULL), '{}') as tags, COALESCE(array_agg(DISTINCT axs.section_id) FILTER (WHERE axs.section_id IS NOT NULL), '{}') as section_ids
+       FROM user_reading_history urh
+       JOIN articles a ON urh.article_id = a.id
+       LEFT JOIN users u ON a.author_id = u.id
+       LEFT JOIN article_tags t ON a.id = t.article_id
+       LEFT JOIN article_sections axs ON a.id = axs.article_id
+       WHERE urh.user_id = $1 AND a.is_visible = true
+       GROUP BY a.id, u.name, urh.read_at
+       ORDER BY urh.read_at DESC
+       LIMIT 20`,
+      [userId]
+    ) : Promise.resolve({ rows: [] });
+
+    const mandatoryQuery = userId ? query(
+      `SELECT m.*, a.title as article_title, a.slug as article_slug
+       FROM mandatory_acknowledgement_assignments m
+       JOIN articles a ON m.article_id = a.id
+       WHERE m.user_id = $1
+       ORDER BY m.assigned_at DESC`,
+      [userId]
+    ) : Promise.resolve({ rows: [] });
+
+    const [allRes, trendingRes, recommendedRes, favsRes, historyRes, mandatoryRes] = await Promise.all([
+      allArticlesQuery,
+      trendingArticlesQuery,
+      recommendedArticlesQuery,
+      favsQuery,
+      historyQuery,
+      mandatoryQuery
+    ]);
+
+    const attachGuestInfo = (arts: any[]) => arts.map(art => ({
+      ...art,
+      guest_access: getGuestAccessInfoForArticle(activeGuestGrants, art.id, art.section_ids || [])
+    }));
+
+    res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=120');
+    res.json({
+      allArticles: attachGuestInfo(allRes.rows),
+      trendingArticles: attachGuestInfo(trendingRes.rows),
+      recommendedArticles: attachGuestInfo(recommendedRes.rows),
+      favoriteArticles: favsRes.rows,
+      readingHistory: historyRes.rows,
+      mandatoryAcknowledgements: mandatoryRes.rows
+    });
+  } catch (error: any) {
+    console.error('Error fetching home data:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+};
+
 export const getArticle = async (req: Request, res: Response) => {
   try {
     const { slugOrId } = req.params;

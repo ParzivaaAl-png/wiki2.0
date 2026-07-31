@@ -11,6 +11,9 @@ import {
   fetchReadingHistory,
   clearReadingHistory,
   fetchMyMandatoryAcknowledgements,
+  fetchHomeData,
+  homeCache,
+  prefetchHomeData,
   MandatoryAcknowledgementAssignment,
   Article
 } from '../lib/api';
@@ -47,38 +50,38 @@ export default function Home() {
   const [isEditMode, setIsEditMode] = React.useState(false);
   const [draggedId, setDraggedId] = React.useState<number | null>(null);
 
-  const loadData = React.useCallback(async () => {
+  const loadData = React.useCallback(async (forceRevalidate = false) => {
+    // 1. Instantaneous render from memory cache
+    const cached = homeCache.get();
+    if (cached && !forceRevalidate) {
+      setAllArticles(cached.allArticles.filter(art => !art.slug.startsWith('auto-list-')));
+      setTrendingArticles(cached.trendingArticles.filter(art => !art.slug.startsWith('auto-list-')));
+      setRecommendedArticles(cached.recommendedArticles.filter(art => !art.slug.startsWith('auto-list-')));
+      setFavoriteArticles(cached.favoriteArticles || []);
+      setReadingHistory(cached.readingHistory || []);
+      setMandatoryAcknowledgements(cached.mandatoryAcknowledgements || []);
+      setIsLoading(false);
+
+      // Silent background revalidation (Stale-While-Revalidate)
+      fetchHomeData({ force: true }).then((data) => {
+        setAllArticles(data.allArticles.filter(art => !art.slug.startsWith('auto-list-')));
+        setTrendingArticles(data.trendingArticles.filter(art => !art.slug.startsWith('auto-list-')));
+        setRecommendedArticles(data.recommendedArticles.filter(art => !art.slug.startsWith('auto-list-')));
+        setFavoriteArticles(data.favoriteArticles || []);
+        setReadingHistory(data.readingHistory || []);
+        setMandatoryAcknowledgements(data.mandatoryAcknowledgements || []);
+      }).catch(() => undefined);
+      return;
+    }
+
     try {
-      // Execute ALL queries in a single parallel HTTP roundtrip
-      const [
-        artsResult,
-        trendingArtsResult,
-        recommendedArtsResult,
-        favsResult,
-        historyResult,
-        mandatoryResult
-      ] = await Promise.allSettled([
-        fetchArticles({ all: isStaff ? true : false }),
-        fetchArticles({ filter: 'trending' }),
-        fetchArticles({ filter: 'recommended' }),
-        user ? fetchFavoriteArticles() : Promise.resolve([]),
-        user ? fetchReadingHistory() : Promise.resolve([]),
-        user ? fetchMyMandatoryAcknowledgements() : Promise.resolve([])
-      ]);
-
-      const arts = artsResult.status === 'fulfilled' ? artsResult.value : [];
-      const trendingArts = trendingArtsResult.status === 'fulfilled' ? trendingArtsResult.value : [];
-      const recommendedArts = recommendedArtsResult.status === 'fulfilled' ? recommendedArtsResult.value : [];
-      const favs = favsResult.status === 'fulfilled' ? favsResult.value : [];
-      const history = historyResult.status === 'fulfilled' ? historyResult.value : [];
-      const mandatory = mandatoryResult.status === 'fulfilled' ? mandatoryResult.value : [];
-
-      setAllArticles(arts.filter(art => !art.slug.startsWith('auto-list-')));
-      setTrendingArticles(trendingArts.filter(art => !art.slug.startsWith('auto-list-')));
-      setRecommendedArticles(recommendedArts.filter(art => !art.slug.startsWith('auto-list-')));
-      setFavoriteArticles(favs);
-      setReadingHistory(history);
-      setMandatoryAcknowledgements(mandatory);
+      const data = await fetchHomeData({ force: forceRevalidate });
+      setAllArticles(data.allArticles.filter(art => !art.slug.startsWith('auto-list-')));
+      setTrendingArticles(data.trendingArticles.filter(art => !art.slug.startsWith('auto-list-')));
+      setRecommendedArticles(data.recommendedArticles.filter(art => !art.slug.startsWith('auto-list-')));
+      setFavoriteArticles(data.favoriteArticles || []);
+      setReadingHistory(data.readingHistory || []);
+      setMandatoryAcknowledgements(data.mandatoryAcknowledgements || []);
     } catch (error) {
       console.error('Home data load failed:', error);
     } finally {

@@ -84,6 +84,7 @@ router.get('/search/suggest', optionalAuth, articlesController.suggestArticles);
 router.get('/classifier/data', articlesController.getClassifierData);
 
 // Article routes (Read-only for public, writes protected)
+router.get('/home', optionalAuth, articlesController.getHomeData);
 router.get('/navigation', requireAuth, articlesController.getNavigationTree);
 router.get('/articles', optionalAuth, articlesController.getArticles);
 router.get('/articles/changes/recent', requireAuth, articlesController.getRecentChanges);

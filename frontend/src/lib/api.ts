@@ -210,6 +210,65 @@ export interface MandatoryAcknowledgementSettings {
   reminders_enabled: boolean;
 }
 
+export interface HomeDataResponse {
+  allArticles: Article[];
+  trendingArticles: Article[];
+  recommendedArticles: Article[];
+  favoriteArticles: Article[];
+  readingHistory: Article[];
+  mandatoryAcknowledgements: MandatoryAcknowledgementAssignment[];
+}
+
+let cachedHomeData: HomeDataResponse | null = null;
+let homeCacheTimestamp = 0;
+let homeInFlightPromise: Promise<HomeDataResponse> | null = null;
+
+export const homeCache = {
+  get: (): HomeDataResponse | null => {
+    if (cachedHomeData && Date.now() - homeCacheTimestamp < 180000) {
+      return cachedHomeData;
+    }
+    return null;
+  },
+  set: (data: HomeDataResponse) => {
+    cachedHomeData = data;
+    homeCacheTimestamp = Date.now();
+  },
+  invalidate: () => {
+    cachedHomeData = null;
+    homeCacheTimestamp = 0;
+  },
+};
+
+export async function fetchHomeData(options: { force?: boolean } = {}): Promise<HomeDataResponse> {
+  if (!options.force) {
+    const cached = homeCache.get();
+    if (cached) return cached;
+  }
+
+  if (homeInFlightPromise) {
+    return homeInFlightPromise;
+  }
+
+  homeInFlightPromise = (async () => {
+    try {
+      const data = await apiCall<HomeDataResponse>('/home');
+      homeCache.set(data);
+      return data;
+    } finally {
+      homeInFlightPromise = null;
+    }
+  })();
+
+  return homeInFlightPromise;
+}
+
+export function prefetchHomeData() {
+  if (!homeCache.get() && !homeInFlightPromise) {
+    fetchHomeData().catch(() => undefined);
+  }
+}
+
 export interface MandatoryAcknowledgementAssignment {
   id: number;
   article_id: number;
@@ -408,6 +467,7 @@ const CACHE_TTL = 15000;
 
 export function clearApiCache() {
   apiCache.clear();
+  homeCache.invalidate();
 }
 
 let isRefreshing = false;

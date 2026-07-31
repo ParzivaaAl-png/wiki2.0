@@ -47,6 +47,7 @@ import {
   markMandatoryAcknowledgementOpened,
   markMandatoryAcknowledgementReadComplete,
   confirmMandatoryAcknowledgement,
+  prefetchHomeData,
   ArticleMandatoryAcknowledgementState
 } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
@@ -104,6 +105,11 @@ export default function ArticlePage() {
   const [isConfirmingAck, setIsConfirmingAck] = React.useState(false);
   const [requiredCollapsibleCount, setRequiredCollapsibleCount] = React.useState(0);
   const [openedRequiredCollapsibles, setOpenedRequiredCollapsibles] = React.useState<Set<string>>(new Set());
+
+  // Prefetch Home page data in background while reading article for 0ms navigation
+  React.useEffect(() => {
+    prefetchHomeData();
+  }, []);
 
   // Fetch article links when article is loaded
   React.useEffect(() => {
