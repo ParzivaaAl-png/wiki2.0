@@ -253,8 +253,32 @@ export async function fetchHomeData(options: { force?: boolean } = {}): Promise<
   homeInFlightPromise = (async () => {
     try {
       const data = await apiCall<HomeDataResponse>('/home');
-      homeCache.set(data);
-      return data;
+      if (data && Array.isArray(data.allArticles) && data.allArticles.length > 0) {
+        homeCache.set(data);
+        return data;
+      }
+      throw new Error('Home endpoint returned empty or invalid data');
+    } catch (err) {
+      console.warn('Home endpoint failed or empty, using parallel fallback queries:', err);
+      const [allArts, trendingArts, recommendedArts, favs, history, mandatory] = await Promise.all([
+        fetchArticles({ all: true }).catch(() => []),
+        fetchArticles({ filter: 'trending' }).catch(() => []),
+        fetchArticles({ filter: 'recommended' }).catch(() => []),
+        fetchFavoriteArticles().catch(() => []),
+        fetchReadingHistory().catch(() => []),
+        fetchMyMandatoryAcknowledgements().catch(() => [])
+      ]);
+
+      const fallbackData: HomeDataResponse = {
+        allArticles: allArts,
+        trendingArticles: trendingArts.length > 0 ? trendingArts : allArts.slice(0, 12),
+        recommendedArticles: recommendedArts.length > 0 ? recommendedArts : allArts.slice(0, 12),
+        favoriteArticles: favs,
+        readingHistory: history,
+        mandatoryAcknowledgements: mandatory
+      };
+      homeCache.set(fallbackData);
+      return fallbackData;
     } finally {
       homeInFlightPromise = null;
     }
