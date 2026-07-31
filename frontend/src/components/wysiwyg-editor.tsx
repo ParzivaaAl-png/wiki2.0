@@ -211,8 +211,8 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Check if current block is the single compact block in its 2-column row
-  const isSingleInRow = React.useMemo(() => {
+  // Check if current block is the LAST unpaired compact block in its 2-column row
+  const isLastUnpairedCompact = React.useMemo(() => {
     if (currentSize === 'wide') return false;
     if (typeof getPos !== 'function' || !editor) return true;
     try {
@@ -221,17 +221,19 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
       const parent = $pos.parent;
       const index = $pos.index();
 
-      let prevCompactCount = 0;
+      let compactChainStartIndex = index;
       for (let i = index - 1; i >= 0; i--) {
         const child = parent.child(i);
         if (child.type.name === 'collapsibleBlock' && child.attrs.size === 'compact') {
-          prevCompactCount++;
+          compactChainStartIndex = i;
         } else {
           break;
         }
       }
 
-      if (prevCompactCount % 2 !== 0) {
+      const positionInChain = index - compactChainStartIndex;
+
+      if (positionInChain % 2 !== 0) {
         return false;
       }
 
@@ -253,8 +255,29 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
     try {
       const pos = getPos();
       const nodeSize = node.nodeSize;
-      const insertPos = pos + nodeSize;
-      editor.chain().focus(insertPos).insertCollapsibleBlock({ size: 'compact', title: '', icon: 'file-text' }).run();
+      const endPos = pos + nodeSize;
+
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(endPos, {
+          type: 'collapsibleBlock',
+          attrs: {
+            title: '',
+            icon: 'file-text',
+            size: 'compact',
+            defaultOpen: false,
+            allowMultiple: true,
+            requiredForAck: false,
+          },
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: 'Содержимое раскрывающегося блока...' }],
+            },
+          ],
+        })
+        .run();
     } catch (err) {
       console.error('Failed to insert block alongside:', err);
     }
@@ -263,13 +286,13 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
   return (
     <NodeViewWrapper 
       className={`wiki-collapsible-wrapper my-3 transition-all duration-200 ${
-        currentSize === 'wide' || isSingleInRow
+        currentSize === 'wide' || isLastUnpairedCompact
           ? 'w-full block'
           : 'w-full sm:w-[calc(50%-0.375rem)] inline-block align-top mr-2'
       }`}
     >
       <div className={`relative rounded-2xl border border-border bg-card p-3.5 shadow-sm transition-all duration-200 hover:border-indigo-500/30 ${
-        isSingleInRow ? 'w-full sm:w-[calc(50%-0.375rem)] inline-block align-top' : 'w-full'
+        isLastUnpairedCompact ? 'w-full sm:w-[calc(50%-0.375rem)] inline-block align-top' : 'w-full'
       }`}>
         {/* Delete Confirmation Overlay */}
         {isConfirmingDelete ? (
@@ -395,7 +418,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
       </div>
 
       {/* Placeholder Card: "+ Добавить блок рядом" */}
-      {isSingleInRow && (
+      {isLastUnpairedCompact && (
         <div 
           onClick={handleAddBlockAlongside}
           className="w-full sm:w-[calc(50%-0.375rem)] inline-block align-top sm:ml-3 mt-2 sm:mt-0 rounded-2xl border-2 border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/40 p-3.5 hover:border-indigo-500 hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-500/[0.08] transition-all cursor-pointer select-none text-center"
