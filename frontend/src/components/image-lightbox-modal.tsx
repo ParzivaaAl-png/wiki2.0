@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  X, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight, 
-  ExternalLink, Link as LinkIcon, Check 
+  X, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight 
 } from 'lucide-react';
 
 export interface LightboxImage {
@@ -18,6 +17,9 @@ interface ImageLightboxModalProps {
   initialIndex?: number;
 }
 
+const ZOOM_STEPS = [25, 50, 75, 100, 125, 150, 175, 200, 250, 300, 400];
+const DEFAULT_ZOOM_INDEX = 3; // 100%
+
 export function ImageLightboxModal({
   isOpen,
   onClose,
@@ -25,17 +27,19 @@ export function ImageLightboxModal({
   initialIndex = 0,
 }: ImageLightboxModalProps) {
   const [currentIndex, setCurrentIndex] = React.useState(initialIndex);
-  const [scale, setScale] = React.useState(1.0);
+  const [zoomIndex, setZoomIndex] = React.useState<number>(DEFAULT_ZOOM_INDEX);
   const [position, setPosition] = React.useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = React.useState(false);
   const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
-  const [copiedLink, setCopiedLink] = React.useState(false);
+
+  const currentZoomPercent = ZOOM_STEPS[zoomIndex];
+  const scale = currentZoomPercent / 100;
 
   // Sync initial index when modal opens
   React.useEffect(() => {
     if (isOpen) {
       setCurrentIndex(Math.min(Math.max(initialIndex, 0), Math.max(images.length - 1, 0)));
-      setScale(1.0);
+      setZoomIndex(DEFAULT_ZOOM_INDEX);
       setPosition({ x: 0, y: 0 });
       document.body.style.overflow = 'hidden';
     } else {
@@ -48,27 +52,29 @@ export function ImageLightboxModal({
 
   // Reset zoom & pan when image changes
   React.useEffect(() => {
-    setScale(1.0);
+    setZoomIndex(DEFAULT_ZOOM_INDEX);
     setPosition({ x: 0, y: 0 });
   }, [currentIndex]);
 
   const currentImage = images[currentIndex];
 
-  // Zoom handlers (clamped between 0.5 and 4.0)
+  // Zoom handlers
   const handleZoomIn = React.useCallback(() => {
-    setScale((prev) => Math.min(prev + 0.25, 4.0));
+    setZoomIndex((prev) => Math.min(prev + 1, ZOOM_STEPS.length - 1));
   }, []);
 
   const handleZoomOut = React.useCallback(() => {
-    setScale((prev) => {
-      const next = Math.max(prev - 0.25, 0.5);
-      if (next <= 1) setPosition({ x: 0, y: 0 });
+    setZoomIndex((prev) => {
+      const next = Math.max(prev - 1, 0);
+      if (ZOOM_STEPS[next] <= 100) {
+        setPosition({ x: 0, y: 0 });
+      }
       return next;
     });
   }, []);
 
   const handleResetZoom = React.useCallback(() => {
-    setScale(1.0);
+    setZoomIndex(DEFAULT_ZOOM_INDEX);
     setPosition({ x: 0, y: 0 });
   }, []);
 
@@ -82,19 +88,6 @@ export function ImageLightboxModal({
     if (images.length <= 1) return;
     setCurrentIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0));
   }, [images.length]);
-
-  // Copy link
-  const handleCopyLink = React.useCallback(async () => {
-    if (!currentImage?.src) return;
-    try {
-      const fullUrl = new URL(currentImage.src, window.location.href).href;
-      await navigator.clipboard.writeText(fullUrl);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
-    } catch {
-      // Fallback
-    }
-  }, [currentImage?.src]);
 
   // Keyboard navigation & hotkeys
   React.useEffect(() => {
@@ -120,8 +113,9 @@ export function ImageLightboxModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose, handlePrev, handleNext, handleZoomIn, handleZoomOut, handleResetZoom]);
 
-  // Mouse wheel zoom
+  // Mouse wheel zoom (Require Ctrl or Cmd key)
   const handleWheel = (e: React.WheelEvent) => {
+    if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
     if (e.deltaY < 0) {
       handleZoomIn();
@@ -170,73 +164,46 @@ export function ImageLightboxModal({
             <span>{currentIndex + 1} из {images.length}</span>
           </div>
 
-          {/* Action Tools */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Zoom Out */}
+          {/* Action Tools: [-] 100% [+] and Close */}
+          <div className="flex items-center gap-1 sm:gap-2">
+            {/* Zoom Out (-) */}
             <button
               type="button"
               onClick={handleZoomOut}
-              disabled={scale <= 0.5}
-              className="p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 disabled:opacity-40 rounded-xl transition-all cursor-pointer"
+              disabled={zoomIndex === 0}
+              className="p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-xl transition-all cursor-pointer disabled:cursor-not-allowed"
               title="Уменьшить (-)"
             >
               <ZoomOut className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
 
-            {/* Reset Zoom Badge */}
+            {/* Reset / Current Percent Badge */}
             <button
               type="button"
               onClick={handleResetZoom}
-              className="px-2.5 py-1.5 text-xs font-bold text-white/90 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition-all cursor-pointer flex items-center gap-1"
-              title="Сбросить масштаб (0)"
+              className="px-3 py-1.5 text-xs font-extrabold text-white bg-white/15 hover:bg-white/25 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border border-white/10"
+              title="По размеру экрана / Сбросить масштаб (0)"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>{Math.round(scale * 100)}%</span>
+              <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{currentZoomPercent}%</span>
             </button>
 
-            {/* Zoom In */}
+            {/* Zoom In (+) */}
             <button
               type="button"
               onClick={handleZoomIn}
-              disabled={scale >= 4.0}
-              className="p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 disabled:opacity-40 rounded-xl transition-all cursor-pointer"
+              disabled={zoomIndex === ZOOM_STEPS.length - 1}
+              className="p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-xl transition-all cursor-pointer disabled:cursor-not-allowed"
               title="Увеличить (+)"
             >
               <ZoomIn className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
 
-            <div className="w-px h-5 bg-white/20 mx-1" />
-
-            {/* Copy Link */}
-            <button
-              type="button"
-              onClick={handleCopyLink}
-              className="p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition-all cursor-pointer flex items-center gap-1"
-              title="Скопировать ссылку на изображение"
-            >
-              {copiedLink ? (
-                <Check className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
-              ) : (
-                <LinkIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-              )}
-            </button>
-
-            {/* Open in New Tab */}
-            <a
-              href={currentImage.src}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition-all cursor-pointer"
-              title="Открыть оригинал в новой вкладке"
-            >
-              <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5" />
-            </a>
-
             {/* Close */}
             <button
               type="button"
               onClick={onClose}
-              className="p-2 text-white/80 hover:text-white bg-red-500/20 hover:bg-red-500/40 text-red-300 rounded-xl transition-all cursor-pointer ml-1"
+              className="p-2 text-white/90 hover:text-white bg-red-500/20 hover:bg-red-500/40 text-red-300 rounded-xl transition-all cursor-pointer ml-2"
               title="Закрыть (Esc)"
             >
               <X className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -292,9 +259,9 @@ export function ImageLightboxModal({
             transition={{ duration: 0.2 }}
             style={{
               transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-              cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
+              cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
             }}
-            className="max-w-[90vw] max-h-[80vh] object-contain rounded-xl shadow-2xl transition-transform duration-75 select-none pointer-events-auto"
+            className="max-w-[90vw] max-h-[80vh] object-contain rounded-xl shadow-2xl transition-transform duration-100 select-none pointer-events-auto"
             draggable={false}
           />
         </div>
