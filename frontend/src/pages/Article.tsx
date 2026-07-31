@@ -506,14 +506,16 @@ export default function ArticlePage() {
 
     // Try immediately, then at 150ms, 400ms, and 800ms to handle async DOM rendering
     runHighlight();
-    const t1 = setTimeout(runHighlight, 150);
-    const t2 = setTimeout(runHighlight, 400);
-    const t3 = setTimeout(runHighlight, 800);
+    const t1 = setTimeout(runHighlight, 100);
+    const t2 = setTimeout(runHighlight, 300);
+    const t3 = setTimeout(runHighlight, 600);
+    const t4 = setTimeout(runHighlight, 1200);
 
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
+      clearTimeout(t4);
     };
   }, [article, isLoading, location.search, location.hash]);
 
