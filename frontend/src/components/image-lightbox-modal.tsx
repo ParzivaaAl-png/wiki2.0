@@ -17,9 +17,6 @@ interface ImageLightboxModalProps {
   initialIndex?: number;
 }
 
-const ZOOM_STEPS = [25, 50, 75, 100, 125, 150, 175, 200, 250, 300, 400];
-const DEFAULT_ZOOM_INDEX = 3; // 100%
-
 export function ImageLightboxModal({
   isOpen,
   onClose,
@@ -27,19 +24,18 @@ export function ImageLightboxModal({
   initialIndex = 0,
 }: ImageLightboxModalProps) {
   const [currentIndex, setCurrentIndex] = React.useState(initialIndex);
-  const [zoomIndex, setZoomIndex] = React.useState<number>(DEFAULT_ZOOM_INDEX);
+  const [naturalSize, setNaturalSize] = React.useState<{ width: number; height: number } | null>(null);
+  const [initialFitPercent, setInitialFitPercent] = React.useState<number>(100);
+  const [zoomPercent, setZoomPercent] = React.useState<number>(100);
   const [position, setPosition] = React.useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = React.useState(false);
   const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
-
-  const currentZoomPercent = ZOOM_STEPS[zoomIndex];
-  const scale = currentZoomPercent / 100;
 
   // Sync initial index when modal opens
   React.useEffect(() => {
     if (isOpen) {
       setCurrentIndex(Math.min(Math.max(initialIndex, 0), Math.max(images.length - 1, 0)));
-      setZoomIndex(DEFAULT_ZOOM_INDEX);
+      setNaturalSize(null);
       setPosition({ x: 0, y: 0 });
       document.body.style.overflow = 'hidden';
     } else {
@@ -52,31 +48,36 @@ export function ImageLightboxModal({
 
   // Reset zoom & pan when image changes
   React.useEffect(() => {
-    setZoomIndex(DEFAULT_ZOOM_INDEX);
+    setNaturalSize(null);
     setPosition({ x: 0, y: 0 });
   }, [currentIndex]);
 
   const currentImage = images[currentIndex];
 
-  // Zoom handlers
+  // Calculate actual display dimensions
+  const scale = zoomPercent / 100;
+  const displayWidth = naturalSize ? Math.round(naturalSize.width * scale) : undefined;
+  const displayHeight = naturalSize ? Math.round(naturalSize.height * scale) : undefined;
+
+  // Zoom handlers (25% to 400% with 25% steps)
   const handleZoomIn = React.useCallback(() => {
-    setZoomIndex((prev) => Math.min(prev + 1, ZOOM_STEPS.length - 1));
+    setZoomPercent((prev) => Math.min(prev + 25, 400));
   }, []);
 
   const handleZoomOut = React.useCallback(() => {
-    setZoomIndex((prev) => {
-      const next = Math.max(prev - 1, 0);
-      if (ZOOM_STEPS[next] <= 100) {
+    setZoomPercent((prev) => {
+      const next = Math.max(prev - 25, 25);
+      if (next <= initialFitPercent) {
         setPosition({ x: 0, y: 0 });
       }
       return next;
     });
-  }, []);
+  }, [initialFitPercent]);
 
   const handleResetZoom = React.useCallback(() => {
-    setZoomIndex(DEFAULT_ZOOM_INDEX);
+    setZoomPercent(initialFitPercent);
     setPosition({ x: 0, y: 0 });
-  }, []);
+  }, [initialFitPercent]);
 
   // Navigation handlers
   const handlePrev = React.useCallback(() => {
@@ -126,13 +127,13 @@ export function ImageLightboxModal({
 
   // Dragging / Pan when zoomed in
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (scale <= 1) return;
+    if (zoomPercent <= initialFitPercent) return;
     setIsDragging(true);
     setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || scale <= 1) return;
+    if (!isDragging || zoomPercent <= initialFitPercent) return;
     setPosition({
       x: e.clientX - dragStart.x,
       y: e.clientY - dragStart.y,
@@ -151,7 +152,7 @@ export function ImageLightboxModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md select-none"
+        className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md select-none overflow-hidden"
         onClick={onClose}
       >
         {/* Top Action Bar */}
@@ -170,7 +171,7 @@ export function ImageLightboxModal({
             <button
               type="button"
               onClick={handleZoomOut}
-              disabled={zoomIndex === 0}
+              disabled={zoomPercent <= 25}
               className="p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-xl transition-all cursor-pointer disabled:cursor-not-allowed"
               title="Уменьшить (-)"
             >
@@ -182,17 +183,17 @@ export function ImageLightboxModal({
               type="button"
               onClick={handleResetZoom}
               className="px-3 py-1.5 text-xs font-extrabold text-white bg-white/15 hover:bg-white/25 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border border-white/10"
-              title="По размеру экрана / Сбросить масштаб (0)"
+              title="Сбросить масштаб (По размеру экрана)"
             >
               <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{currentZoomPercent}%</span>
+              <span>{zoomPercent}%</span>
             </button>
 
             {/* Zoom In (+) */}
             <button
               type="button"
               onClick={handleZoomIn}
-              disabled={zoomIndex === ZOOM_STEPS.length - 1}
+              disabled={zoomPercent >= 400}
               className="p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-xl transition-all cursor-pointer disabled:cursor-not-allowed"
               title="Увеличить (+)"
             >
@@ -240,30 +241,53 @@ export function ImageLightboxModal({
           </>
         )}
 
-        {/* Main Image Stage */}
+        {/* Scrollable Viewport Area */}
         <div
-          className="relative max-w-full max-h-full flex items-center justify-center p-4 sm:p-12 overflow-hidden"
+          className="absolute inset-0 top-16 bottom-12 overflow-auto flex items-center justify-center p-4 sm:p-8"
           onWheel={handleWheel}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onClick={(e) => e.stopPropagation()}
         >
-          <motion.img
-            key={currentImage.src}
-            src={currentImage.src}
-            alt={currentImage.alt || 'Изображение статьи'}
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            style={{
-              transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-              cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
-            }}
-            className="max-w-[90vw] max-h-[80vh] object-contain rounded-xl shadow-2xl transition-transform duration-100 select-none pointer-events-auto"
-            draggable={false}
-          />
+          <div className="flex min-w-full min-h-full items-center justify-center">
+            <div
+              className="relative shrink-0 transition-all duration-100 ease-out"
+              style={{
+                width: displayWidth ? `${displayWidth}px` : 'auto',
+                height: displayHeight ? `${displayHeight}px` : 'auto',
+                transform: `translate(${position.x}px, ${position.y}px)`,
+                cursor: zoomPercent > initialFitPercent ? (isDragging ? 'grabbing' : 'grab') : 'default',
+              }}
+            >
+              <img
+                src={currentImage.src}
+                alt={currentImage.alt || 'Изображение статьи'}
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  const nw = img.naturalWidth || 800;
+                  const nh = img.naturalHeight || 600;
+                  setNaturalSize({ width: nw, height: nh });
+
+                  const availableW = window.innerWidth * 0.85;
+                  const availableH = window.innerHeight * 0.75;
+                  const ratio = Math.min(availableW / nw, availableH / nh, 1);
+                  const fit = Math.max(15, Math.round(ratio * 100));
+                  setInitialFitPercent(fit);
+                  setZoomPercent(fit);
+                }}
+                draggable={false}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  maxWidth: 'none',
+                  maxHeight: 'none',
+                  objectFit: 'initial',
+                }}
+                className="rounded-xl shadow-2xl select-none block"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Caption Bar */}
