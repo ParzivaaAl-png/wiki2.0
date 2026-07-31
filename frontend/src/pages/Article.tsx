@@ -716,7 +716,7 @@ export default function ArticlePage() {
 
       html = html.replace(/<details\b([^>]*)>([\s\S]*?)<\/details>/gi, (match, attrs, innerContent) => {
         if (hlRegex.test(innerContent) || hlRegex.test(attrs)) {
-          if (!/\bopen\b/i.test(attrs)) {
+          if (!/(^|\s)open(\s|=|>|$)/i.test(attrs)) {
             return `<details open="" ${attrs}>${innerContent}</details>`;
           }
         }

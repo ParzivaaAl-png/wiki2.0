@@ -134,6 +134,10 @@ export const getArticleById = async (id: number): Promise<Article | null> => {
 };
 
 export const getArticleBySlug = async (slug: string): Promise<Article | null> => {
+  const decoded = decodeURIComponent(slug);
+  const normalizedLatinToCyr = decoded.replace(/o/gi, 'о').replace(/a/gi, 'а').replace(/e/gi, 'е').replace(/c/gi, 'с').replace(/p/gi, 'р');
+  const normalizedCyrToLatin = decoded.replace(/о/gi, 'o').replace(/а/gi, 'a').replace(/е/gi, 'e').replace(/с/gi, 'c').replace(/р/gi, 'p');
+
   const sql = `
     SELECT a.*, u.name as author_name,
            uo.name as owner_name,
@@ -146,10 +150,10 @@ export const getArticleBySlug = async (slug: string): Promise<Article | null> =>
     LEFT JOIN users ua ON a.approver_id = ua.id
     LEFT JOIN article_tags t ON a.id = t.article_id
     LEFT JOIN article_sections axs ON a.id = axs.article_id
-    WHERE a.slug = $1
+    WHERE a.slug = $1 OR a.slug = $2 OR a.slug = $3 OR a.slug = $4 OR LOWER(a.slug) = LOWER($1)
     GROUP BY a.id, u.name, uo.name, ua.name
   `;
-  const res = await query(sql, [slug]);
+  const res = await query(sql, [slug, decoded, normalizedLatinToCyr, normalizedCyrToLatin]);
   return res.rows.length ? res.rows[0] : null;
 };
 
