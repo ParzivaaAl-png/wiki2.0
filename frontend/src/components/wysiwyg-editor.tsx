@@ -17,6 +17,7 @@ import Link from '@tiptap/extension-link';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Youtube from '@tiptap/extension-youtube';
+import Heading from '@tiptap/extension-heading';
 
 import { 
   Bold, Italic, Underline as UnderlineIcon, 
@@ -28,10 +29,31 @@ import {
 } from 'lucide-react';
 import { uploadImage, suggestArticles, Suggestion } from '../lib/api';
 
+export const CustomHeading = Heading.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      'data-toc-title': {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute('data-toc-title'),
+        renderHTML: (attributes: Record<string, any>) => {
+          if (!attributes['data-toc-title']) {
+            return {};
+          }
+          return {
+            'data-toc-title': attributes['data-toc-title'],
+          };
+        },
+      },
+    };
+  },
+});
+
 interface WYSIWYGEditorProps {
   content: string;
   onChange: (html: string) => void;
   articleId?: string | number;
+  onEditorReady?: (editor: any) => void;
 }
 
 const FONT_FAMILIES = [
@@ -275,7 +297,7 @@ const CollapsibleBlock = Node.create({
   },
 });
 
-export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGEditorProps) {
+export default function WYSIWYGEditor({ content, onChange, articleId, onEditorReady }: WYSIWYGEditorProps) {
   const [isPreview, setIsPreview] = React.useState(false);
   const [showEmoji, setShowEmoji] = React.useState(false);
   const [lastAutosaved, setLastAutosaved] = React.useState<string | null>(null);
@@ -309,9 +331,10 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: {
-          levels: [1, 2, 3, 4, 5, 6],
-        },
+        heading: false,
+      }),
+      CustomHeading.configure({
+        levels: [1, 2, 3, 4, 5, 6],
       }),
       CollapsibleBlock,
       Underline,
@@ -392,6 +415,10 @@ export default function WYSIWYGEditor({ content, onChange, articleId }: WYSIWYGE
 
   React.useEffect(() => {
     if (!editor) return;
+
+    if (onEditorReady) {
+      onEditorReady(editor);
+    }
 
     const syncFontSize = () => {
       setActiveFontSize(editor.getAttributes('textStyle').fontSize || '');

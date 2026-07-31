@@ -681,14 +681,18 @@ export default function ArticlePage() {
       }
       return list;
     } else {
-      const headingRegex = /<h([1-4])[^>]*>([\s\S]*?)<\/h\1>/gi;
+      const headingRegex = /<h([1-4])\b([^>]*)>([\s\S]*?)<\/h\1>/gi;
       const list: { level: number; text: string; id: string }[] = [];
       let match;
       
       while ((match = headingRegex.exec(article.content)) !== null) {
         const level = parseInt(match[1], 10);
-        const text = match[2].replace(/<[^>]*>/g, '').trim();
-        const id = text
+        const attrs = match[2] || '';
+        const rawText = match[3].replace(/<[^>]*>/g, '').trim();
+        const tocMatch = /data-toc-title=["']([^"']+)["']/i.exec(attrs);
+        const text = (tocMatch ? tocMatch[1].trim() : rawText) || rawText;
+
+        const id = rawText
           .toLowerCase()
           .replace(/[^a-z0-9а-яё\s-]+/g, '')
           .replace(/\s+/g, '-')

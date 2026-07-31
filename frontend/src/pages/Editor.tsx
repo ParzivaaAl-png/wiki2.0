@@ -25,6 +25,7 @@ import {
 } from '../lib/api';
 import { ModalPortal } from '../components/modal-portal';
 import WYSIWYGEditor from '../components/wysiwyg-editor';
+import ArticleEditorNavigation from '../components/article-editor-navigation';
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +33,7 @@ export default function Editor() {
   const navigate = useNavigate();
 
   const [isLoading, setIsLoading] = React.useState(true);
+  const [editorInstance, setEditorInstance] = React.useState<any>(null);
 
   // Form states
   const [title, setTitle] = React.useState('');
@@ -329,8 +331,12 @@ export default function Editor() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Sidebar Settings Form */}
+        {/* Sidebar Settings & Live Article Navigation */}
         <div className="lg:order-2 space-y-6">
+          <div className="sticky top-20 z-10">
+            <ArticleEditorNavigation editor={editorInstance} content={content} />
+          </div>
+
           <div className="p-5 border border-border bg-card text-card-foreground rounded-xl shadow-premium dark:shadow-premium-dark space-y-4">
             <h3 className="font-outfit text-sm font-bold text-foreground flex items-center gap-2">
               <Sparkles className="w-4.5 h-4.5 text-indigo-500" />
@@ -673,6 +679,7 @@ export default function Editor() {
               content={content}
               onChange={setContent}
               articleId={id || 'new'}
+              onEditorReady={setEditorInstance}
             />
           </div>
         </div>

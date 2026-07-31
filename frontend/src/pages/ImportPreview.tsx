@@ -14,6 +14,7 @@ import {
   Building2,
 } from 'lucide-react';
 import WYSIWYGEditor from '../components/wysiwyg-editor';
+import ArticleEditorNavigation from '../components/article-editor-navigation';
 import {
   cancelImportSession,
   DocumentImportSession,
@@ -119,6 +120,7 @@ export default function ImportPreview() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [editorKey, setEditorKey] = React.useState(0);
+  const [editorInstance, setEditorInstance] = React.useState<any>(null);
 
   const loadSession = React.useCallback(async () => {
     if (!id) return;
@@ -379,11 +381,12 @@ export default function ImportPreview() {
                 </p>
               </div>
             </div>
-            <WYSIWYGEditor key={editorKey} content={content} onChange={setContent} />
+            <WYSIWYGEditor key={editorKey} content={content} onChange={setContent} onEditorReady={setEditorInstance} />
           </div>
         </div>
 
         <aside className="space-y-4">
+          <ArticleEditorNavigation editor={editorInstance} content={content} />
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h2 className="text-sm font-bold text-foreground">Настройки статьи</h2>
             <div className="mt-4 space-y-4">
