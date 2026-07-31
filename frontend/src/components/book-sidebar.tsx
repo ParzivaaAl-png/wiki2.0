@@ -131,15 +131,9 @@ export function BookSidebar({ isOpen, onToggle, onClose, isPinned, onTogglePin, 
     setExpandedKeys(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Helper to count published & accessible articles for a section
+  // Helper to count published & accessible primary articles attached to a section
   const getSectionArticleCount = (sec: Section): number => {
-    let count = sec.articles ? sec.articles.filter(a => a.status !== 'archived').length : 0;
-    if (sec.subsections) {
-      sec.subsections.forEach(sub => {
-        count += getSectionArticleCount(sub);
-      });
-    }
-    return count;
+    return sec.articles ? sec.articles.filter(a => a.status !== 'archived').length : 0;
   };
 
   // Helper to flatten nested position hierarchies into a single 1-level list per space
@@ -161,47 +155,45 @@ export function BookSidebar({ isOpen, onToggle, onClose, isPinned, onTogglePin, 
   const filteredSpaces = React.useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
-    const processSections = (secs: Section[]): Section[] => {
-      return secs
-        .map(sec => {
-          const validArticles = (sec.articles || []).filter(art => {
-            if (art.status === 'archived') return false;
-            if (query) return art.title.toLowerCase().includes(query);
-            return true;
-          });
-
-          const validSubsections = processSections(sec.subsections || []);
-          const articleCount = validArticles.length + validSubsections.reduce((acc, sub) => acc + getSectionArticleCount(sub), 0);
-          const isNameMatching = query ? sec.name.toLowerCase().includes(query) : false;
-
-          // Скрывать должности с 0 статей (если не идёт локальный поиск)
-          if (articleCount === 0 && !isNameMatching) {
-            return null;
-          }
-
-          return {
-            ...sec,
-            articles: validArticles,
-            subsections: validSubsections
-          };
-        })
-        .filter((sec): sec is Section => sec !== null);
-    };
-
     return spaces
       .map(space => {
-        const processedSecs = processSections(space.sections || []);
-        const flatSecs = flattenSections(processedSecs);
+        // 1. Сплющиваем иерархию подчинённости в 1 уровень по отделам
+        const flatSecs = flattenSections(space.sections || []);
+
+        // 2. Оставляем только те должности, у которых есть собственные статьи
+        const validSecs = flatSecs
+          .map(sec => {
+            const validArticles = (sec.articles || []).filter(art => {
+              if (art.status === 'archived') return false;
+              if (query) return art.title.toLowerCase().includes(query);
+              return true;
+            });
+
+            const articleCount = validArticles.length;
+            const isNameMatching = query ? sec.name.toLowerCase().includes(query) : false;
+
+            // Скрывать должности с 0 статей (если не идёт локальный поиск)
+            if (articleCount === 0 && !isNameMatching) {
+              return null;
+            }
+
+            return {
+              ...sec,
+              articles: validArticles
+            };
+          })
+          .filter((sec): sec is Section => sec !== null);
+
         const isSpaceMatching = query ? space.name.toLowerCase().includes(query) : false;
 
         // Скрывать отделы без доступных должностей/статей
-        if (flatSecs.length === 0 && !isSpaceMatching) {
+        if (validSecs.length === 0 && !isSpaceMatching) {
           return null;
         }
 
         return {
           ...space,
-          sections: flatSecs
+          sections: validSecs
         };
       })
       .filter((space): space is Space => space !== null);

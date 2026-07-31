@@ -105,7 +105,10 @@ export default function Home() {
 
     if (activeSectionId) {
       const secIdNum = Number(activeSectionId);
-      return visibleArticles.filter(a => a.section_ids?.includes(secIdNum));
+      return visibleArticles.filter(a => {
+        const primaryId = a.primary_section_id || (a.section_ids && a.section_ids.length > 0 ? a.section_ids[0] : null);
+        return primaryId === secIdNum;
+      });
     }
 
     // If Admin/Editor global editing mode is on, display visible articles (no hidden/archived ones) so they can reorder them
