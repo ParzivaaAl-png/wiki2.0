@@ -429,7 +429,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                     
                     <p 
                       className="text-[11px] text-muted-foreground border-l-2 border-border pl-2 mt-1 italic font-light leading-relaxed line-clamp-2"
-                      dangerouslySetInnerHTML={{ __html: `... ${match.snippet} ...` }}
+                      dangerouslySetInnerHTML={{ __html: `... ${(match.snippet || '').replace(/<(?!\/?mark\b)[^>]*>/gi, '')} ...` }}
                     />
                   </li>
                 );
@@ -726,7 +726,7 @@ export function SearchModal({ variant = 'header' }: SearchBarProps) {
                                   </div>
                                   <p 
                                     className="text-xs text-muted-foreground border-l-2 border-border pl-2 mt-1.5 italic font-light leading-relaxed"
-                                    dangerouslySetInnerHTML={{ __html: `... ${match.snippet} ...` }}
+                                    dangerouslySetInnerHTML={{ __html: `... ${(match.snippet || '').replace(/<(?!\/?mark\b)[^>]*>/gi, '')} ...` }}
                                   />
                                 </li>
                               ))}

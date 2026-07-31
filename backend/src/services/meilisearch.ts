@@ -243,6 +243,7 @@ export const prepareArticleDocument = (article: ArticleDocument): ArticleDocumen
 
   return {
     ...article,
+    content: plainContent,
     title_latin,
     content_latin,
     tags_latin,
