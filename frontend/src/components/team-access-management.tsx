@@ -19,6 +19,10 @@ import {
   UserCog,
   Users,
   X,
+  PhoneCall,
+  Headphones,
+  Calculator,
+  Monitor,
 } from 'lucide-react';
 import {
   AccessOverview,
@@ -810,61 +814,97 @@ export default function TeamAccessManagement() {
     );
   };
 
+  const getDepartmentIcon = (title: string) => {
+    const t = title.toLowerCase();
+    if (t.includes('диспетчер')) return PhoneCall;
+    if (t.includes('поддержка') || t.includes('водитель')) return Headphones;
+    if (t.includes('бухгалтер') || t.includes('финанс')) return Calculator;
+    if (t.includes('hr') || t.includes('кадр') || t.includes('персонал')) return Users;
+    if (t.includes('it') || t.includes('айти') || t.includes('разработ') || t.includes('техн')) return Monitor;
+    if (t.includes('безопасн') || t.includes('служба')) return ShieldCheck;
+    if (t.includes('коммерч') || t.includes('продаж')) return Briefcase;
+    return Building2;
+  };
+
   const renderDepartmentCard = (department: Department) => {
     const departmentPositions = positions.filter((position) => position.department_id === department.id);
     const departmentEmployees = employees.filter((employee) => employee.department_id === department.id);
     const isExpanded = expandedDepartmentIds.has(department.id);
     const parentDepartment = department.parent_department_id ? departmentsById.get(department.parent_department_id) : null;
+    const DeptIcon = getDepartmentIcon(department.name);
 
     return (
-      <div key={department.id} className="rounded-lg border border-border bg-card text-card-foreground overflow-hidden">
-        <div className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div
+        key={department.id}
+        className={`group flex flex-col justify-between rounded-2xl border transition-all duration-200 cursor-pointer ${
+          isExpanded
+            ? 'border-indigo-500/60 bg-card shadow-md ring-2 ring-indigo-500/20 col-span-1 md:col-span-2 lg:col-span-3'
+            : 'border-border bg-card hover:border-indigo-500/40 hover:shadow-md'
+        }`}
+      >
+        <div className="p-5 flex items-start justify-between gap-4">
           <button
+            type="button"
             onClick={() => toggleDepartment(department.id)}
-            className="flex items-start gap-3 text-left min-w-0"
+            className="flex items-start gap-3.5 text-left min-w-0 w-full"
           >
-            <span className="mt-0.5 text-muted-foreground">
-              {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            <span className="mt-0.5 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-500 shrink-0 group-hover:scale-105 transition-transform">
+              <DeptIcon className="w-5.5 h-5.5" />
             </span>
-            <span>
-              <span className="flex flex-wrap items-center gap-2">
-                <span className="font-extrabold text-foreground">{department.name}</span>
-                <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-outfit text-base font-bold text-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                  {department.name}
+                </span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${
                   department.status === 'Active'
                     ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
                     : 'border-neutral-500/25 bg-neutral-500/10 text-neutral-500'
                 }`}>
                   {department.status === 'Active' ? 'Активен' : 'Неактивен'}
                 </span>
-              </span>
-              <span className="block text-[11px] text-muted-foreground mt-1">
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
                 {department.description || 'Описание не указано'}
-              </span>
+              </p>
               {parentDepartment && (
                 <span className="block text-[10px] text-muted-foreground mt-1">В составе: {parentDepartment.name}</span>
               )}
-            </span>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                  {departmentPositions.length} должностей
+                </span>
+                <span className="inline-flex items-center rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                  {departmentEmployees.length} сотрудников
+                </span>
+              </div>
+            </div>
           </button>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <span className="text-[10px] px-2 py-1 rounded border border-border bg-muted text-muted-foreground font-bold">
-              {departmentPositions.length} должностей
-            </span>
-            <span className="text-[10px] px-2 py-1 rounded border border-border bg-muted text-muted-foreground font-bold">
-              {departmentEmployees.length} сотрудников
-            </span>
+          <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => openDepartmentModal(department)}
-              className="p-2 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 hover:bg-muted transition-colors"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openDepartmentModal(department);
+              }}
+              className="p-2 rounded-lg border border-border text-muted-foreground hover:text-indigo-500 hover:bg-muted transition-colors cursor-pointer"
               title="Редактировать отдел"
             >
               <Edit3 className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleDepartment(department.id)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground group-hover:bg-indigo-500 group-hover:text-white transition-colors cursor-pointer"
+            >
+              {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
           </div>
         </div>
 
         {isExpanded && (
-          <div className="border-t border-border p-4 space-y-4 bg-muted/10">
+          <div className="border-t border-border p-5 space-y-5 bg-muted/15 rounded-b-2xl">
             <div>
               <div className="flex items-center justify-between gap-3 mb-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Должности отдела</h3>
@@ -876,7 +916,7 @@ export default function TeamAccessManagement() {
                   departmentPositions.map((position) => (
                     <span
                       key={position.id}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-border bg-card text-xs text-foreground"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-xs font-medium text-foreground shadow-sm"
                     >
                       <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
                       {position.name}
@@ -1269,8 +1309,15 @@ export default function TeamAccessManagement() {
               <div className="text-xs text-muted-foreground mt-2">Загружаем оргструктуру...</div>
             </div>
           ) : (
-            <div className="space-y-3">
-              {visibleDepartments.map(renderDepartmentCard)}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Отделы — <span className="text-foreground">{visibleDepartments.length} разделов</span>
+                </h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {visibleDepartments.map(renderDepartmentCard)}
+              </div>
               {renderUnassignedEmployees()}
               {visibleDepartments.length === 0 && unassignedEmployees.length === 0 && (
                 <div className="p-8 text-center border border-border bg-card text-card-foreground rounded-lg text-xs text-muted-foreground">

@@ -30,6 +30,11 @@ import {
   Building2,
   Briefcase,
   FileText,
+  PhoneCall,
+  Headphones,
+  Calculator,
+  Monitor,
+  ShieldCheck,
 } from 'lucide-react';
 import { 
   fetchArticles, 
@@ -731,6 +736,18 @@ export default function Admin() {
     );
   };
 
+  const getDepartmentIcon = (title: string) => {
+    const t = title.toLowerCase();
+    if (t.includes('диспетчер')) return PhoneCall;
+    if (t.includes('поддержка') || t.includes('водитель')) return Headphones;
+    if (t.includes('бухгалтер') || t.includes('финанс')) return Calculator;
+    if (t.includes('hr') || t.includes('кадр') || t.includes('персонал')) return Users;
+    if (t.includes('it') || t.includes('айти') || t.includes('разработ') || t.includes('техн')) return Monitor;
+    if (t.includes('безопасн') || t.includes('служба')) return ShieldCheck;
+    if (t.includes('коммерч') || t.includes('продаж')) return Briefcase;
+    return Building2;
+  };
+
   const renderArticleTree = (tree: ArticleSpaceGroup[], mode: 'active' | 'archive') => {
     const emptyText = mode === 'archive'
       ? 'В архиве нет статей, подходящих под выбранные фильтры.'
@@ -749,43 +766,61 @@ export default function Admin() {
     const stickyActionsHeaderClass = 'sticky right-0 z-20 bg-muted/95 pl-3 text-right shadow-[-16px_0_20px_-20px_rgba(15,23,42,0.65)] dark:bg-neutral-900/95';
 
     return (
-      <div className="max-w-full overflow-hidden bg-muted/20 p-3 sm:p-4">
-        <div className="space-y-4">
+      <div className="max-w-full overflow-hidden bg-muted/20 p-4 sm:p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Отделы — <span className="text-foreground">{tree.length} разделов</span>
+          </h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {tree.map((spaceGroup) => {
           const spaceOpen = forceTreeExpanded || !collapsedSpaceIds.has(spaceGroup.id);
+          const DeptIcon = getDepartmentIcon(spaceGroup.title);
+
           return (
-            <div key={spaceGroup.id} className="max-w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-              <button
-                type="button"
+            <div
+              key={spaceGroup.id}
+              className={`group flex flex-col justify-between rounded-2xl border transition-all duration-200 cursor-pointer ${
+                spaceOpen
+                  ? 'border-indigo-500/60 bg-card shadow-md ring-2 ring-indigo-500/20 col-span-1 md:col-span-2 lg:col-span-3'
+                  : 'border-border bg-card hover:border-indigo-500/40 hover:shadow-md'
+              }`}
+            >
+              <div
                 onClick={() => toggleSpaceCollapsed(spaceGroup.id)}
-                className="w-full flex items-center justify-between gap-4 px-4 py-4 text-left hover:bg-muted/35 transition-colors"
+                className="p-5 flex items-start justify-between gap-4"
               >
-                <div className="flex items-start gap-3 min-w-0">
-                  <span className="mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-500 shrink-0">
-                    <Building2 className="w-4.5 h-4.5" />
+                <div className="flex items-start gap-3.5 min-w-0">
+                  <span className="mt-0.5 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-500 shrink-0 group-hover:scale-105 transition-transform">
+                    <DeptIcon className="w-5.5 h-5.5" />
                   </span>
                   <div className="min-w-0">
-                    <h3 className="font-outfit text-base font-bold text-foreground truncate">{spaceGroup.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    <h3 className="font-outfit text-base font-bold text-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                      {spaceGroup.title}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
                       {spaceGroup.description || 'Раздел Wiki без описания.'}
                     </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
-                        {spaceGroup.sections.length} разделов
-                      </span>
-                      <span className="inline-flex items-center whitespace-nowrap rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-0.5 text-[10px] font-bold text-muted-foreground">
                         {spaceGroup.articleCount} статей
                       </span>
+                      {spaceGroup.sections.length > 0 && (
+                        <span className="inline-flex items-center rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                          {spaceGroup.sections.length} подразделения
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground shrink-0">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground shrink-0 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
                   {spaceOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 </span>
-              </button>
+              </div>
 
               {spaceOpen && (
-                <div className="border-t border-border bg-muted/15 px-3 py-3 sm:px-4 sm:py-4">
+                <div className="border-t border-border bg-muted/15 p-4 sm:p-5 rounded-b-2xl">
                   {spaceGroup.sections.map((sectionGroup) => {
                     const sectionOpen = forceTreeExpanded || !collapsedSectionIds.has(sectionGroup.id);
                     return (
