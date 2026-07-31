@@ -45,6 +45,18 @@ export const CustomHeading = Heading.extend({
           };
         },
       },
+      'data-toc-hidden': {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute('data-toc-hidden'),
+        renderHTML: (attributes: Record<string, any>) => {
+          if (!attributes['data-toc-hidden']) {
+            return {};
+          }
+          return {
+            'data-toc-hidden': attributes['data-toc-hidden'],
+          };
+        },
+      },
     };
   },
 });

@@ -688,6 +688,9 @@ export default function ArticlePage() {
       while ((match = headingRegex.exec(article.content)) !== null) {
         const level = parseInt(match[1], 10);
         const attrs = match[2] || '';
+        if (/data-toc-hidden=["']true["']/i.test(attrs)) {
+          continue;
+        }
         const rawText = match[3].replace(/<[^>]*>/g, '').trim();
         const tocMatch = /data-toc-title=["']([^"']+)["']/i.exec(attrs);
         const text = (tocMatch ? tocMatch[1].trim() : rawText) || rawText;
