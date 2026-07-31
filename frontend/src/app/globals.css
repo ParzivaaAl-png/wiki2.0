@@ -329,6 +329,53 @@
   }
 }
 
+/* Document Import & Rich Table Formatting */
+.prose table.imported-table,
+table.imported-table {
+  width: 100% !important;
+  display: table !important;
+  border-collapse: collapse !important;
+  margin: 1.25rem 0 !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.prose table td,
+.prose table th,
+table.imported-table td,
+table.imported-table th {
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  padding: 10px 14px !important;
+}
+
+.prose td[style*="background-color"],
+.prose th[style*="background-color"],
+td[style*="background-color"],
+th[style*="background-color"] {
+  background-color: var(--tw-bg-opacity, initial) !important;
+}
+
+.prose td[style*="color"],
+.prose th[style*="color"],
+.prose span[style*="color"],
+.prose p[style*="color"],
+td[style*="color"],
+th[style*="color"],
+span[style*="color"],
+p[style*="color"] {
+  color: var(--tw-text-opacity, initial) !important;
+}
+
+.prose td[style*="text-align"],
+.prose th[style*="text-align"],
+.prose p[style*="text-align"],
+td[style*="text-align"],
+th[style*="text-align"],
+p[style*="text-align"] {
+  text-align: inherit;
+}
+
 /* Safe area for phones with notch */
 @supports (padding: env(safe-area-inset-bottom)) {
   body {

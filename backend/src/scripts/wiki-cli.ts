@@ -4,6 +4,7 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
+import { enrichDocxHtml } from '../services/parser';
 
 // pdf-parse fallback import
 const pdfParse = require('pdf-parse');
@@ -86,9 +87,8 @@ export class CodexWikiCLI {
     let autoTitle = fileNameWithoutExt.replace(/[-_]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
 
     if (ext === '.docx' || ext === '.doc') {
-      const buffer = fs.readFileSync(filePath);
-      const result = await mammoth.convertToHtml({ buffer });
-      rawHtml = result.value;
+      const result = await mammoth.convertToHtml({ path: filePath });
+      rawHtml = await enrichDocxHtml(filePath, result.value);
     } else if (ext === '.pdf') {
       const buffer = fs.readFileSync(filePath);
       const pdfData = await pdfParse(buffer);
