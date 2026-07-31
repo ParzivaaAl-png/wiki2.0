@@ -3076,7 +3076,7 @@ export const getNavigationTree = async (req: Request, res: Response) => {
     );
     const spaces = spacesRes.rows;
 
-    // 3. Получаем все статьи (articles), привязанные к разрешенным разделам и удовлетворяющие статусу
+    // 3. Получаем все статьи (articles), привязанные СТРОГО к своему основному разделу (Primary Section)
     let allowedStatuses = ['published', 'requires_verification'];
     if (role === 'Admin') {
       allowedStatuses = ['draft', 'on_approval', 'published', 'requires_verification', 'archived', 'expired'];
@@ -3085,10 +3085,18 @@ export const getNavigationTree = async (req: Request, res: Response) => {
     }
 
     const articlesRes = await query(
-      `SELECT a.id, a.title, a.slug, a.status, a.position, a.article_type, axs.section_id
+      `SELECT a.id, a.title, a.slug, a.status, a.position, a.article_type, ps.section_id
        FROM articles a
-       JOIN article_sections axs ON a.id = axs.article_id
-       WHERE (axs.section_id = ANY($1::int[]) OR a.id = ANY($4::int[]))
+       JOIN (
+         SELECT DISTINCT ON (article_id) article_id, section_id
+         FROM article_sections
+         ORDER BY article_id, id ASC
+       ) ps ON a.id = ps.article_id
+       WHERE EXISTS (
+           SELECT 1 FROM article_sections axs_check
+           WHERE axs_check.article_id = a.id
+             AND (axs_check.section_id = ANY($1::int[]) OR a.id = ANY($4::int[]))
+         )
          AND a.is_visible = true
          AND (a.status = ANY($2::varchar[]) OR a.author_id = $3)
        ORDER BY (CASE WHEN a.article_type = 'job_description' THEN 0 ELSE 1 END) ASC, a.position ASC, a.created_at DESC`,
@@ -3096,24 +3104,38 @@ export const getNavigationTree = async (req: Request, res: Response) => {
     );
     const articles = articlesRes.rows;
 
-    // 4. Группируем статьи по разделам
+    // 4. Группируем статьи строго по их первичному основному разделу
     const articlesBySection: Record<number, any[]> = {};
     articles.forEach(art => {
-      if (!articlesBySection[art.section_id]) {
-        articlesBySection[art.section_id] = [];
+      const secId = Number(art.section_id);
+      if (!articlesBySection[secId]) {
+        articlesBySection[secId] = [];
       }
-      articlesBySection[art.section_id].push({
-        id: art.id,
-        title: art.title,
-        slug: art.slug,
-        status: art.status,
-        position: art.position,
-        article_type: art.article_type,
-        guest_access: getGuestAccessInfoForArticle(activeGuestGrants, art.id, [Number(art.section_id)])
-      });
+      if (!articlesBySection[secId].some(a => a.id === art.id)) {
+        articlesBySection[secId].push({
+          id: art.id,
+          title: art.title,
+          slug: art.slug,
+          status: art.status,
+          position: art.position,
+          article_type: art.article_type,
+          guest_access: getGuestAccessInfoForArticle(activeGuestGrants, art.id, [secId])
+        });
+      }
     });
 
-    // 5. Группируем разделы по пространствам и строим дерево вложенности
+    // Хелпер для подсчета собственных статей в разделе (включая подразделы)
+    const countSectionArticles = (sectionNode: any): number => {
+      let count = sectionNode.articles ? sectionNode.articles.length : 0;
+      if (sectionNode.subsections) {
+        sectionNode.subsections.forEach((sub: any) => {
+          count += countSectionArticles(sub);
+        });
+      }
+      return count;
+    };
+
+    // 5. Группируем разделы по пространствам и исключаем должности без собственных статей
     const buildSectionTree = (
       allSections: any[],
       parentId: number | null,
@@ -3133,38 +3155,43 @@ export const getNavigationTree = async (req: Request, res: Response) => {
             articles: articlesBySection[s.id] || [],
             subsections: children
           };
-        });
+        })
+        .filter(node => countSectionArticles(node) > 0);
     };
 
-    const result = spaces.map(sp => {
-      const spaceSections = sections.filter(s => s.space_id === sp.id);
-      
-      const rootSections = spaceSections.filter(s => 
-        s.parent_section_id === null || !allowedSectionIds.includes(s.parent_section_id)
-      );
+    const result = spaces
+      .map(sp => {
+        const spaceSections = sections.filter(s => s.space_id === sp.id);
+        
+        const rootSections = spaceSections.filter(s => 
+          s.parent_section_id === null || !allowedSectionIds.includes(s.parent_section_id)
+        );
 
-      const sectionTree = rootSections.map(s => {
-        const children = buildSectionTree(spaceSections, s.id, sp.id);
-        const sectionGuestAccess = getGuestAccessInfoForSection(activeGuestGrants, s.id);
+        const sectionTree = rootSections
+          .map(s => {
+            const children = buildSectionTree(spaceSections, s.id, sp.id);
+            const sectionGuestAccess = getGuestAccessInfoForSection(activeGuestGrants, s.id);
+            return {
+              id: s.id,
+              name: s.name,
+              description: s.description,
+              position_id: s.position_id,
+              guest_access: sectionGuestAccess,
+              articles: articlesBySection[s.id] || [],
+              subsections: children
+            };
+          })
+          .filter(node => countSectionArticles(node) > 0);
+
         return {
-          id: s.id,
-          name: s.name,
-          description: s.description,
-          position_id: s.position_id,
-          guest_access: sectionGuestAccess,
-          articles: articlesBySection[s.id] || [],
-          subsections: children
+          id: sp.id,
+          name: sp.name,
+          description: sp.description,
+          department_id: sp.department_id,
+          sections: sectionTree
         };
-      });
-
-      return {
-        id: sp.id,
-        name: sp.name,
-        description: sp.description,
-        department_id: sp.department_id,
-        sections: sectionTree
-      };
-    });
+      })
+      .filter(sp => sp.sections && sp.sections.length > 0);
 
     res.json(result);
   } catch (error: any) {
