@@ -26,7 +26,7 @@ import {
   Link as LinkIcon, Quote, Code, Heading1, Heading2, Heading3, Heading4,
   Undo, Redo, Table as TableIcon, Smile, Eye, EyeOff, Save,
   Youtube as YoutubeIcon, Paperclip, BookOpen, AlertTriangle, ChevronDown, Type,
-  Palette, Highlighter, Ban, FileText, Car, User, PhoneCall, Building2, Banknote, Wrench, ShieldAlert, Maximize2, Minimize2, X
+  Palette, Highlighter, Ban, FileText, Car, User, PhoneCall, Building2, Banknote, Wrench, ShieldAlert, Maximize2, Minimize2, X, Plus
 } from 'lucide-react';
 import { uploadImage, suggestArticles, Suggestion } from '../lib/api';
 
@@ -188,7 +188,7 @@ const ICON_OPTIONS = [
   { key: 'shield-alert', name: 'Безопасность', icon: ShieldAlert },
 ];
 
-const CollapsibleBlockView = ({ node, updateAttributes, deleteNode }: any) => {
+const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, editor }: any) => {
   const attrs = node.attrs || {};
   const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
   const [isIconPickerOpen, setIsIconPickerOpen] = React.useState(false);
@@ -210,6 +210,54 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode }: any) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Check if current block is the single compact block in its 2-column row
+  const isSingleInRow = React.useMemo(() => {
+    if (currentSize === 'wide' || typeof getPos !== 'function' || !editor) return false;
+    try {
+      const pos = getPos();
+      const $pos = editor.doc.resolve(pos);
+      const parent = $pos.parent;
+      const index = $pos.index();
+
+      let prevCompactCount = 0;
+      for (let i = index - 1; i >= 0; i--) {
+        const child = parent.child(i);
+        if (child.type.name === 'collapsibleBlock' && child.attrs.size === 'compact') {
+          prevCompactCount++;
+        } else {
+          break;
+        }
+      }
+
+      if (prevCompactCount % 2 !== 0) {
+        return false;
+      }
+
+      if (index + 1 < parent.childCount) {
+        const nextChild = parent.child(index + 1);
+        if (nextChild.type.name === 'collapsibleBlock' && nextChild.attrs.size === 'compact') {
+          return false;
+        }
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }, [editor?.doc, getPos, currentSize]);
+
+  const handleAddBlockAlongside = React.useCallback(() => {
+    if (typeof getPos !== 'function' || !editor) return;
+    try {
+      const pos = getPos();
+      const nodeSize = node.nodeSize;
+      const insertPos = pos + nodeSize;
+      editor.chain().focus(insertPos).insertCollapsibleBlock({ size: 'compact', title: '', icon: 'file-text' }).run();
+    } catch (err) {
+      console.error('Failed to insert block alongside:', err);
+    }
+  }, [editor, getPos, node.nodeSize]);
 
   return (
     <NodeViewWrapper 
@@ -340,6 +388,22 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode }: any) => {
           </>
         )}
       </div>
+
+      {/* Placeholder Card: "+ Добавить блок рядом" */}
+      {isSingleInRow && (
+        <div 
+          onClick={handleAddBlockAlongside}
+          className="w-full sm:w-[calc(50%-0.375rem)] inline-block align-top ml-2 my-3 rounded-2xl border-2 border-dashed border-neutral-300 dark:border-neutral-700/80 bg-neutral-50/50 dark:bg-neutral-900/30 p-3.5 hover:border-indigo-500 hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-500/[0.08] transition-all cursor-pointer select-none text-center"
+          title="Добавить второй компактный блок в эту же строку"
+        >
+          <div className="flex items-center justify-center gap-2 text-xs font-bold text-neutral-500 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 py-0.5">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500">
+              <Plus className="w-3.5 h-3.5" />
+            </span>
+            <span>+ Добавить блок рядом</span>
+          </div>
+        </div>
+      )}
     </NodeViewWrapper>
   );
 };
