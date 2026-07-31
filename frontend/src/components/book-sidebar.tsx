@@ -99,49 +99,9 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
     setExpandedKeys(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Рекурсивный фильтр дерева навигации при локальном поиске
-  const filteredSpaces = React.useMemo(() => {
-    if (!searchQuery.trim()) return spaces;
-    const query = searchQuery.toLowerCase();
-
-    // Функция для фильтрации разделов
-    const filterSections = (secs: Section[]): Section[] => {
-      return secs
-        .map(sec => {
-          const matchingArticles = sec.articles.filter(art => 
-            art.title.toLowerCase().includes(query)
-          );
-          const filteredSubs = filterSections(sec.subsections || []);
-
-          if (matchingArticles.length > 0 || filteredSubs.length > 0 || sec.name.toLowerCase().includes(query)) {
-            return {
-              ...sec,
-              articles: matchingArticles,
-              subsections: filteredSubs
-            };
-          }
-          return null;
-        })
-        .filter((sec): sec is Section => sec !== null);
-    };
-
-    return spaces
-      .map(space => {
-        const filteredSecs = filterSections(space.sections || []);
-        if (filteredSecs.length > 0 || space.name.toLowerCase().includes(query)) {
-          return {
-            ...space,
-            sections: filteredSecs
-          };
-        }
-        return null;
-      })
-      .filter((space): space is Space => space !== null);
-  }, [spaces, searchQuery]);
-
-  // Helper to count articles for a position/section
+  // Helper to count published & accessible articles for a section
   const getSectionArticleCount = (sec: Section): number => {
-    let count = sec.articles ? sec.articles.length : 0;
+    let count = sec.articles ? sec.articles.filter(a => a.status !== 'archived').length : 0;
     if (sec.subsections) {
       sec.subsections.forEach(sub => {
         count += getSectionArticleCount(sub);
@@ -150,26 +110,81 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
     return count;
   };
 
-  // Рекурсивный рендер узла должности (Section) — максимум 2 уровня
+  // Рекурсивный фильтр дерева навигации: скрываем пустые должности и пустые отделы
+  const filteredSpaces = React.useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    const processSections = (secs: Section[]): Section[] => {
+      return secs
+        .map(sec => {
+          const validArticles = (sec.articles || []).filter(art => {
+            if (art.status === 'archived') return false;
+            if (query) return art.title.toLowerCase().includes(query);
+            return true;
+          });
+
+          const validSubsections = processSections(sec.subsections || []);
+          const articleCount = validArticles.length + validSubsections.reduce((acc, sub) => acc + getSectionArticleCount(sub), 0);
+          const isNameMatching = query ? sec.name.toLowerCase().includes(query) : false;
+
+          // Скрывать должности с 0 статей (если не идёт локальный поиск)
+          if (articleCount === 0 && !isNameMatching) {
+            return null;
+          }
+
+          return {
+            ...sec,
+            articles: validArticles,
+            subsections: validSubsections
+          };
+        })
+        .filter((sec): sec is Section => sec !== null);
+    };
+
+    return spaces
+      .map(space => {
+        const validSecs = processSections(space.sections || []);
+        const isSpaceMatching = query ? space.name.toLowerCase().includes(query) : false;
+
+        // Скрывать отделы без доступных должностей/статей
+        if (validSecs.length === 0 && !isSpaceMatching) {
+          return null;
+        }
+
+        return {
+          ...space,
+          sections: validSecs
+        };
+      })
+      .filter((space): space is Space => space !== null);
+  }, [spaces, searchQuery]);
+
+  // Древовидный рендер должности (Section) с раскрывающимся списком статей
   const renderSectionNode = (section: Section, depth = 0) => {
     const expandKey = `section_${section.id}`;
     const isExpanded = !!expandedKeys[expandKey];
     const hasSubsections = section.subsections && section.subsections.length > 0;
+    const hasArticles = section.articles && section.articles.length > 0;
+    const hasExpandableContent = hasSubsections || hasArticles;
     const articleCount = getSectionArticleCount(section);
 
     return (
       <div key={section.id} className="select-none">
         {/* Кнопка Должности/Раздела */}
         <div
-          onClick={() => {
-            onClose();
-            navigate(`/?sectionId=${section.id}&sectionName=${encodeURIComponent(section.name)}`);
+          onClick={(e) => {
+            if (hasExpandableContent) {
+              toggleExpand(expandKey, e);
+            } else {
+              onClose();
+              navigate(`/?sectionId=${section.id}&sectionName=${encodeURIComponent(section.name)}`);
+            }
           }}
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
-          className="group flex items-center justify-between py-1.5 pr-2 rounded-lg text-xs font-semibold transition-all cursor-pointer text-neutral-700 dark:text-neutral-300 hover:bg-indigo-500/10 hover:text-indigo-600 dark:hover:text-indigo-300"
+          className="group flex items-center justify-between py-1.5 pr-2 rounded-lg text-xs font-semibold transition-all cursor-pointer text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/40"
         >
           <div className="flex items-center gap-2 min-w-0">
-            {hasSubsections ? (
+            {hasExpandableContent ? (
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
@@ -181,6 +196,12 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
                   className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-90 text-indigo-500' : 'text-neutral-400'}`} 
                 />
               </button>
+            ) : (
+              <Folder className="w-3.5 h-3.5 text-indigo-500/70 shrink-0" />
+            )}
+
+            {isExpanded ? (
+              <FolderOpen className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />
             ) : (
               <Folder className="w-3.5 h-3.5 text-indigo-500/70 shrink-0" />
             )}
@@ -220,10 +241,51 @@ export function BookSidebar({ isOpen, onToggle, onClose }: BookSidebarProps) {
           )}
         </div>
 
-        {/* Подразделы если есть */}
-        {hasSubsections && isExpanded && (
+        {/* Раскрывающийся список статей и подразделов */}
+        {hasExpandableContent && isExpanded && (
           <div className="mt-0.5 space-y-0.5">
-            {section.subsections!.map(sub => renderSectionNode(sub, depth + 1))}
+            {/* Подразделы */}
+            {section.subsections && section.subsections.map(sub => renderSectionNode(sub, depth + 1))}
+
+            {/* Статьи этой должности */}
+            {section.articles && section.articles.map(art => {
+              const isActive = activeArticleSlug === art.slug;
+              const isJobDescription = art.article_type === 'job_description';
+
+              return (
+                <div key={art.id} style={{ paddingLeft: `${(depth + 1) * 12 + 12}px` }}>
+                  <Link
+                    to={`/articles/${art.slug}`}
+                    onClick={onClose}
+                    className={`group flex items-center justify-between py-1 px-2 rounded-lg text-xs transition-all border ${
+                      isActive
+                        ? 'bg-indigo-500/10 dark:bg-indigo-500/10 border-indigo-500/20 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-semibold shadow-sm'
+                        : isJobDescription
+                          ? 'text-indigo-650 dark:text-indigo-400 bg-indigo-500/5 dark:bg-indigo-500/5 hover:bg-indigo-500/10 dark:hover:bg-indigo-500/10 border-indigo-550/10 hover:translate-x-0.5 font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]'
+                          : 'text-neutral-600 dark:text-neutral-400 hover:bg-white/60 dark:hover:bg-card/30 hover:text-neutral-900 dark:hover:text-neutral-200 border-transparent hover:translate-x-0.5'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {isJobDescription ? (
+                        <ClipboardList className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-600' : 'text-indigo-500'}`} />
+                      ) : (
+                        <FileText className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-500' : 'text-neutral-400'}`} />
+                      )}
+                      <span className="truncate">{art.title}</span>
+                    </div>
+
+                    {art.guest_access && (
+                      <GuestAccessTimer
+                        expiresAt={art.guest_access.expires_at}
+                        scope={art.guest_access.type}
+                        compact
+                        className="shrink-0 ml-1.5"
+                      />
+                    )}
+                  </Link>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
