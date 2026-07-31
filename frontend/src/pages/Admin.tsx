@@ -406,32 +406,24 @@ export default function Admin() {
   }, [sectionFilter, sectionMeta.byId, spaceFilter]);
 
   const getArticlePrimarySectionId = React.useCallback((article: Article) => {
+    if (article.primary_section_id) {
+      return article.primary_section_id;
+    }
     const ids = article.section_ids || [];
-
-    if (sectionFilter !== 'all') {
-      const selectedId = Number(sectionFilter);
-      return ids.includes(selectedId) ? selectedId : null;
-    }
-
-    if (spaceFilter !== 'all') {
-      const selectedSpaceId = Number(spaceFilter);
-      const spaceSection = ids.find((id) => sectionMeta.byId.get(id)?.space.id === selectedSpaceId);
-      return spaceSection || null;
-    }
-
-    return ids.find((id) => sectionMeta.byId.has(id)) || null;
-  }, [sectionFilter, sectionMeta.byId, spaceFilter]);
+    return ids.length > 0 ? ids[0] : null;
+  }, []);
 
   const articleMatchesHierarchyFilters = React.useCallback((article: Article) => {
-    const ids = article.section_ids || [];
+    const primarySectionId = getArticlePrimarySectionId(article);
     if (sectionFilter !== 'all') {
-      return ids.includes(Number(sectionFilter));
+      return primarySectionId === Number(sectionFilter);
     }
     if (spaceFilter !== 'all') {
-      return ids.some((id) => sectionMeta.byId.get(id)?.space.id === Number(spaceFilter));
+      const meta = primarySectionId ? sectionMeta.byId.get(primarySectionId) : null;
+      return meta?.space.id === Number(spaceFilter);
     }
     return true;
-  }, [sectionFilter, sectionMeta.byId, spaceFilter]);
+  }, [sectionFilter, spaceFilter, getArticlePrimarySectionId, sectionMeta.byId]);
 
   const getArticleStatusKey = React.useCallback((article: Article): Exclude<ArticleStatusFilter, 'all'> => {
     const rawStatus = article.status || (article.published ? 'published' : 'draft');
@@ -522,14 +514,17 @@ export default function Admin() {
     return Array.from(spaceGroups.values())
       .map((spaceGroup) => ({
         ...spaceGroup,
-        sections: spaceGroup.sections.sort((a, b) => {
-          if (!a.section) return 1;
-          if (!b.section) return -1;
-          const aMeta = sectionMeta.byId.get(a.section.id);
-          const bMeta = sectionMeta.byId.get(b.section.id);
-          return (aMeta?.sortKey || a.title).localeCompare(bMeta?.sortKey || b.title, 'ru');
-        }),
+        sections: spaceGroup.sections
+          .filter((secGroup) => secGroup.articles.length > 0)
+          .sort((a, b) => {
+            if (!a.section) return 1;
+            if (!b.section) return -1;
+            const aMeta = sectionMeta.byId.get(a.section.id);
+            const bMeta = sectionMeta.byId.get(b.section.id);
+            return (aMeta?.sortKey || a.title).localeCompare(bMeta?.sortKey || b.title, 'ru');
+          }),
       }))
+      .filter((spaceGroup) => spaceGroup.sections.length > 0)
       .sort((a, b) => {
         if (!a.space) return 1;
         if (!b.space) return -1;

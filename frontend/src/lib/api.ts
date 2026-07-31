@@ -156,6 +156,8 @@ export interface Article {
   updated_at: string;
   tags: string[];
   section_ids?: number[];
+  primary_section_id?: number | null;
+  allowed_section_ids?: number[];
   article_type?: string;
   owner_id?: number | null;
   owner_name?: string;
