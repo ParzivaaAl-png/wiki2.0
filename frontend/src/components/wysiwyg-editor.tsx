@@ -336,56 +336,109 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
     [attrs.id]
   );
 
-  const handleDeleteBlock = React.useCallback((e?: React.MouseEvent) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    
-    setIsConfirmingDelete(false);
+  const handleDeleteBlock = React.useCallback(
+    (e?: React.MouseEvent) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
 
-    if (typeof getPos !== 'function' || !editor) {
+      setIsConfirmingDelete(false);
+
+      if (!editor) return;
+
       try {
-        deleteNode();
+        // Layer 1: Dynamic position via getPos()
+        if (typeof getPos === 'function') {
+          const pos = getPos();
+          if (typeof pos === 'number') {
+            const $pos = editor.state.doc.resolve(pos);
+
+            let groupPos = -1;
+            let groupSize = 0;
+
+            for (let d = $pos.depth; d > 0; d--) {
+              const ancestor = $pos.node(d);
+              if (ancestor && ancestor.type.name === 'collapsibleGroup') {
+                if (ancestor.childCount <= 1) {
+                  groupPos = $pos.before(d);
+                  groupSize = ancestor.nodeSize;
+                }
+                break;
+              }
+            }
+
+            if (groupPos !== -1 && groupSize > 0) {
+              const tr = editor.state.tr.delete(groupPos, groupPos + groupSize);
+              editor.view.dispatch(tr);
+              try { editor.commands.focus(); } catch {}
+              return;
+            }
+
+            const tr = editor.state.tr.delete(pos, pos + node.nodeSize);
+            editor.view.dispatch(tr);
+            try { editor.commands.focus(); } catch {}
+            return;
+          }
+        }
+
+        // Layer 2: Built-in deleteNode helper
+        if (typeof deleteNode === 'function') {
+          deleteNode();
+          try { editor.commands.focus(); } catch {}
+          return;
+        }
       } catch (err) {
-        console.error('deleteNode fallback failed:', err);
-      }
-      return;
-    }
-
-    try {
-      const pos = getPos();
-      if (typeof pos !== 'number') {
-        deleteNode();
-        return;
+        console.error('Layer 1/2 deletion failed:', err);
       }
 
-      const $pos = editor.doc.resolve(pos);
-      const parent = $pos.parent;
-
-      if (parent && parent.type.name === 'collapsibleGroup' && parent.childCount <= 1 && $pos.depth > 0) {
-        const parentPos = $pos.before($pos.depth);
-        const parentSize = parent.nodeSize;
-
-        const tr = editor.state.tr.delete(parentPos, parentPos + parentSize);
-        editor.view.dispatch(tr);
-      } else {
-        const tr = editor.state.tr.delete(pos, pos + node.nodeSize);
-        editor.view.dispatch(tr);
-      }
-
+      // Layer 3: Search document by block ID
       try {
-        editor.commands.focus();
-      } catch {}
-    } catch (err) {
-      console.error('Error deleting collapsible block:', err);
-      try {
-        deleteNode();
-      } catch (err2) {
-        console.error('deleteNode fallback failed:', err2);
+        const blockId = node.attrs.id;
+        if (blockId) {
+          let foundPos = -1;
+          let targetNode: any = null;
+
+          editor.state.doc.descendants((docNode: any, docPos: number) => {
+            if (docNode.type.name === 'collapsibleBlock' && docNode.attrs.id === blockId) {
+              foundPos = docPos;
+              targetNode = docNode;
+              return false;
+            }
+            return true;
+          });
+
+          if (foundPos !== -1 && targetNode) {
+            const $docPos = editor.state.doc.resolve(foundPos);
+            let groupPos = -1;
+            let groupSize = 0;
+
+            for (let d = $docPos.depth; d > 0; d--) {
+              const parentNode = $docPos.node(d);
+              if (parentNode && parentNode.type.name === 'collapsibleGroup' && parentNode.childCount <= 1) {
+                groupPos = $docPos.before(d);
+                groupSize = parentNode.nodeSize;
+                break;
+              }
+            }
+
+            if (groupPos !== -1 && groupSize > 0) {
+              const tr = editor.state.tr.delete(groupPos, groupPos + groupSize);
+              editor.view.dispatch(tr);
+            } else {
+              const tr = editor.state.tr.delete(foundPos, foundPos + targetNode.nodeSize);
+              editor.view.dispatch(tr);
+            }
+            try { editor.commands.focus(); } catch {}
+          }
+        }
+      } catch (fallbackErr) {
+        console.error('Layer 3 deletion failed:', fallbackErr);
+        try { deleteNode(); } catch {}
       }
-    }
-  }, [editor, getPos, node.nodeSize, deleteNode]);
+    },
+    [editor, getPos, node.nodeSize, node.attrs.id, deleteNode]
+  );
 
   const handleAddBlockAlongside = React.useCallback((e?: React.MouseEvent) => {
     if (e) {
