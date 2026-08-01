@@ -293,7 +293,7 @@ const CollapsibleRowView = ({ node, editor, getPos }: any) => {
 
   return (
     <NodeViewWrapper className="wiki-collapsible-row-wrapper w-full my-3">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full items-start">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 w-full items-start">
         <NodeViewContent className="contents" />
 
         {isSingleCompact && (
@@ -334,7 +334,7 @@ const CollapsibleRow = Node.create({
       'div',
       mergeAttributes(HTMLAttributes, {
         'data-wiki-collapsible-row': 'true',
-        class: 'wiki-collapsible-row grid grid-cols-1 sm:grid-cols-2 gap-3 my-3 w-full',
+        class: 'wiki-collapsible-row grid grid-cols-1 sm:grid-cols-2 gap-5 my-3 w-full',
       }),
       0,
     ];
@@ -345,7 +345,7 @@ const CollapsibleRow = Node.create({
   },
 });
 
-const CollapsibleBlockView = ({ node, updateAttributes, deleteNode }: any) => {
+const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, editor }: any) => {
   const attrs = node.attrs || {};
   const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
   const [isIconPickerOpen, setIsIconPickerOpen] = React.useState(false);
@@ -367,6 +367,27 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode }: any) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleDeleteBlock = React.useCallback(() => {
+    if (typeof getPos !== 'function' || !editor) {
+      deleteNode();
+      return;
+    }
+    try {
+      const pos = getPos();
+      const $pos = editor.doc.resolve(pos);
+      const parent = $pos.parent;
+
+      if (parent && parent.type.name === 'collapsibleRow' && parent.childCount === 1) {
+        const parentPos = $pos.before();
+        editor.chain().focus().deleteRange({ from: parentPos, to: parentPos + parent.nodeSize }).run();
+      } else {
+        deleteNode();
+      }
+    } catch {
+      deleteNode();
+    }
+  }, [editor, getPos, deleteNode]);
 
   return (
     <NodeViewWrapper 
@@ -391,7 +412,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode }: any) => {
               </button>
               <button
                 type="button"
-                onClick={() => deleteNode()}
+                onClick={handleDeleteBlock}
                 className="px-3 py-1 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors cursor-pointer shadow-sm"
               >
                 Удалить
