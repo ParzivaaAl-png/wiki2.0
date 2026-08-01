@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useEditor, EditorContent, NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { Extension, Node, mergeAttributes } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import { TextStyle } from '@tiptap/extension-text-style';
@@ -179,21 +180,55 @@ const FontSize = Extension.create({
 });
 
 export function wrapCollapsibleBlocksInRows(html: string): string {
-  if (!html || !html.includes('data-wiki-collapsible-row')) return html;
+  if (!html || (!html.includes('data-wiki-collapsible') && !html.includes('<details') && !html.includes('data-wiki-collapsible-row'))) return html;
   
   if (typeof window === 'undefined') return html;
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
-    const rowElements = Array.from(doc.querySelectorAll('div[data-wiki-collapsible-row="true"], div.wiki-collapsible-row'));
-    rowElements.forEach((row) => {
+    const oldRows = Array.from(doc.querySelectorAll('div[data-wiki-collapsible-row="true"], div.wiki-collapsible-row, div.wiki-collapsible-grid'));
+    oldRows.forEach((row) => {
       while (row.firstChild) {
         row.parentElement?.insertBefore(row.firstChild, row);
       }
       row.remove();
     });
 
+    const detailsElements = Array.from(doc.querySelectorAll('details, .wiki-collapsible-block'));
+    if (detailsElements.length === 0) return doc.body.innerHTML;
+
+    let currentGroup: Element[] = [];
+
+    const flushGroup = () => {
+      if (currentGroup.length === 0) return;
+      const firstEl = currentGroup[0];
+      const parent = firstEl.parentElement;
+      if (parent) {
+        const groupDiv = doc.createElement('div');
+        groupDiv.setAttribute('data-wiki-collapsible-group', 'true');
+        groupDiv.className = 'wiki-collapsible-group grid grid-cols-1 sm:grid-cols-2 gap-5 my-4 w-full items-start';
+        parent.insertBefore(groupDiv, firstEl);
+        currentGroup.forEach((el) => groupDiv.appendChild(el));
+      }
+      currentGroup = [];
+    };
+
+    detailsElements.forEach((el) => {
+      if (el.parentElement?.getAttribute('data-wiki-collapsible-group') === 'true' || el.parentElement?.classList.contains('wiki-collapsible-group')) {
+        flushGroup();
+        return;
+      }
+      if (currentGroup.length > 0) {
+        const lastEl = currentGroup[currentGroup.length - 1];
+        if (el.previousElementSibling !== lastEl) {
+          flushGroup();
+        }
+      }
+      currentGroup.push(el);
+    });
+
+    flushGroup();
     return doc.body.innerHTML;
   } catch {
     return html;
@@ -234,6 +269,19 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  React.useEffect(() => {
+    const handleCancelOthers = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.blockId !== attrs.id) {
+        setIsConfirmingDelete(false);
+      }
+    };
+    window.addEventListener('wiki-cancel-all-delete-confirmations', handleCancelOthers);
+    return () => {
+      window.removeEventListener('wiki-cancel-all-delete-confirmations', handleCancelOthers);
+    };
+  }, [attrs.id]);
+
   const isLastUnpairedCompact = React.useMemo(() => {
     if (currentLayout === 'wide' || typeof getPos !== 'function' || !editor) return false;
     try {
@@ -272,29 +320,54 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
     }
   }, [editor?.doc, getPos, currentLayout]);
 
-  const handleDeleteBlock = React.useCallback(() => {
-    setIsConfirmingDelete(false);
+  const openDeleteConfirmation = React.useCallback((e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    window.dispatchEvent(
+      new CustomEvent('wiki-cancel-all-delete-confirmations', {
+        detail: { blockId: attrs.id },
+      })
+    );
+    setIsConfirmingDelete(true);
+  }, [attrs.id]);
+
+  const handleDeleteBlock = React.useCallback((e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
     if (typeof getPos !== 'function' || !editor) {
-      deleteNode();
+      try {
+        deleteNode();
+      } catch {}
+      setIsConfirmingDelete(false);
       return;
     }
+
     try {
       const pos = getPos();
       if (typeof pos !== 'number') {
         deleteNode();
+        setIsConfirmingDelete(false);
         return;
       }
+
       const $pos = editor.doc.resolve(pos);
       const parent = $pos.parent;
 
-      if (parent && parent.type.name === 'collapsibleGroup' && parent.childCount === 1) {
-        const parentPos = $pos.before();
+      if (parent && parent.type.name === 'collapsibleGroup' && parent.childCount <= 1 && $pos.depth > 0) {
+        const parentPos = $pos.before($pos.depth);
+        const parentSize = parent.nodeSize;
+
         editor
           .chain()
           .focus()
           .deleteRange({
             from: parentPos,
-            to: parentPos + parent.nodeSize,
+            to: parentPos + parentSize,
           })
           .run();
       } else {
@@ -307,12 +380,21 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
           })
           .run();
       }
-    } catch {
-      deleteNode();
+    } catch (err) {
+      console.error('Error deleting collapsible block:', err);
+      try {
+        deleteNode();
+      } catch {}
     }
+
+    setIsConfirmingDelete(false);
   }, [editor, getPos, node.nodeSize, deleteNode]);
 
-  const handleAddBlockAlongside = React.useCallback(() => {
+  const handleAddBlockAlongside = React.useCallback((e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (typeof getPos !== 'function' || !editor) return;
     try {
       const pos = getPos();
@@ -352,157 +434,202 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
     updateAttributes({ layout: nextLayout, size: nextLayout });
   }, [currentLayout, updateAttributes]);
 
+  const showAddButton = Boolean(
+    editor?.isEditable && currentLayout === 'compact' && isLastUnpairedCompact && !isConfirmingDelete
+  );
+
   return (
-    <>
-      <NodeViewWrapper 
-        data-layout={currentLayout}
-        data-size={currentLayout}
-        className={`accordion-item node-collapsibleBlock wiki-collapsible-item min-w-0 w-full transition-all duration-200 ${
-          currentLayout === 'wide' ? 'wiki-collapsible-wide col-span-full' : 'wiki-collapsible-compact col-span-1'
-        }`}
-      >
-        <div className="accordion-card relative rounded-2xl border border-border bg-card p-4 shadow-sm transition-all duration-200 hover:border-indigo-500/30 hover:shadow-md w-full min-w-0 box-border">
-          {/* Card Header Row */}
-          {isConfirmingDelete ? (
-            <div className="flex items-center justify-between gap-2 p-1.5 bg-red-500/10 border border-red-500/20 rounded-xl text-xs font-semibold animate-fadeIn w-full select-none min-h-[38px]">
-              <span className="text-red-600 dark:text-red-400 font-bold truncate pl-1">
-                Удалить этот блок?
-              </span>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsConfirmingDelete(false)}
-                  className="px-2.5 py-1 rounded-lg bg-muted hover:bg-neutral-200 dark:hover:bg-neutral-800 text-foreground text-[11px] font-semibold transition-colors cursor-pointer"
-                >
-                  Отмена
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteBlock}
-                  className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold transition-colors cursor-pointer shadow-xs"
-                >
-                  Удалить
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between gap-3 min-w-0">
-              {/* Left: Icon Selector Button */}
-              <div ref={iconPickerRef} className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsIconPickerOpen((prev) => !prev)}
-                  className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all cursor-pointer flex items-center justify-center border border-indigo-500/15 shadow-xs"
-                  title="Выбрать иконку блока"
-                >
-                  <CurrentIconComponent className="w-4.5 h-4.5" />
-                </button>
-
-                {/* Icon Palette Popover */}
-                {isIconPickerOpen && (
-                  <div className="absolute top-full left-0 mt-2 p-2 bg-card border border-border rounded-2xl shadow-2xl z-50 min-w-[200px] grid grid-cols-4 gap-2 animate-scaleUp">
-                    {ICON_OPTIONS.map((opt) => {
-                      const IconComp = opt.icon;
-                      return (
-                        <button
-                          key={opt.key}
-                          type="button"
-                          onClick={() => {
-                            updateAttributes({ icon: opt.key });
-                            setIsIconPickerOpen(false);
-                          }}
-                          className={`p-2.5 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
-                            currentIconKey === opt.key
-                              ? 'bg-indigo-600 text-white shadow-sm scale-105'
-                              : 'bg-muted/60 hover:bg-muted text-foreground hover:scale-105'
-                          }`}
-                          title={opt.name}
-                        >
-                          <IconComp className="w-4 h-4" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Center: Title Input */}
-              <input
-                type="text"
-                value={attrs.title || ''}
-                onChange={(e) => updateAttributes({ title: e.target.value })}
-                className="w-full text-sm font-bold text-foreground bg-transparent border-none outline-none focus:ring-0 placeholder:text-muted-foreground/60 px-1 min-w-0 truncate"
-                placeholder="Введите название блока..."
-              />
-
-              {/* Right: Actions */}
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={toggleSize}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                  title={currentLayout === 'wide' ? 'Сделать компактным' : 'Развернуть на всю ширину'}
-                >
-                  {currentLayout === 'wide' ? (
-                    <Minimize2 className="w-4 h-4" />
-                  ) : (
-                    <Maximize2 className="w-4 h-4" />
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsOpen((prev) => !prev)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                  title={isOpen ? 'Свернуть' : 'Раскрыть'}
-                >
-                  <ChevronDown 
-                    className={`accordion-toggle-icon w-4 h-4 transition-transform duration-300 ease-in-out ${
-                      isOpen ? 'rotate-180' : 'rotate-0'
-                    }`} 
-                  />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsConfirmingDelete(true)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                  title="Удалить блок"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Editable Content Area with Smooth Grid Animation */}
-          <div
-            className="accordion-content transition-all duration-300 ease-in-out"
-            data-open={isOpen ? 'true' : 'false'}
-            style={{
-              display: 'grid',
-              gridTemplateRows: isOpen ? '1fr' : '0fr',
-              opacity: isOpen ? 1 : 0,
-              transition: 'grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1), opacity 200ms ease',
-            }}
+    <NodeViewWrapper 
+      data-layout={currentLayout}
+      data-size={currentLayout}
+      className={`accordion-item node-collapsibleBlock wiki-collapsible-item min-w-0 w-full transition-all duration-200 ${
+        currentLayout === 'wide'
+          ? 'wiki-collapsible-wide col-span-full my-2'
+          : showAddButton
+          ? 'col-span-full grid grid-cols-1 sm:grid-cols-2 gap-5 my-2 items-start'
+          : 'wiki-collapsible-compact col-span-1 my-2'
+      }`}
+    >
+      <div className="accordion-card col-span-1 relative rounded-2xl border border-border bg-card p-4 shadow-sm transition-all duration-200 hover:border-indigo-500/30 hover:shadow-md w-full min-w-0 box-border">
+        {/* Card Header Row */}
+        {isConfirmingDelete ? (
+          <div 
+            contentEditable={false}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="flex items-center justify-between gap-2 p-1.5 bg-red-500/10 border border-red-500/20 rounded-xl text-xs font-semibold animate-fadeIn w-full select-none min-h-[38px]"
           >
-            <div className="accordion-content-inner overflow-hidden min-h-0">
-              <div className="mt-3 pt-3 border-t border-border/60">
-                <NodeViewContent className="wiki-collapsible-editor-content min-h-12 text-foreground focus:outline-none" />
-              </div>
+            <span className="text-red-600 dark:text-red-400 font-bold truncate pl-1">
+              Удалить блок вместе с содержимым?
+            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsConfirmingDelete(false);
+                }}
+                className="px-2.5 py-1 rounded-lg bg-muted hover:bg-neutral-200 dark:hover:bg-neutral-800 text-foreground text-[11px] font-semibold transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={handleDeleteBlock}
+                className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold transition-colors cursor-pointer shadow-xs"
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div 
+            contentEditable={false}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="flex items-center justify-between gap-3 min-w-0 select-none"
+          >
+            {/* Left: Icon Selector Button */}
+            <div ref={iconPickerRef} className="relative shrink-0">
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsIconPickerOpen((prev) => !prev);
+                }}
+                className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all cursor-pointer flex items-center justify-center border border-indigo-500/15 shadow-xs"
+                title="Выбрать иконку блока"
+              >
+                <CurrentIconComponent className="w-4.5 h-4.5" />
+              </button>
+
+              {/* Icon Palette Popover */}
+              {isIconPickerOpen && (
+                <div 
+                  contentEditable={false}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="absolute top-full left-0 mt-2 p-2 bg-card border border-border rounded-2xl shadow-2xl z-50 min-w-[200px] grid grid-cols-4 gap-2 animate-scaleUp"
+                >
+                  {ICON_OPTIONS.map((opt) => {
+                    const IconComp = opt.icon;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          updateAttributes({ icon: opt.key });
+                          setIsIconPickerOpen(false);
+                        }}
+                        className={`p-2.5 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                          currentIconKey === opt.key
+                            ? 'bg-indigo-600 text-white shadow-sm scale-105'
+                            : 'bg-muted/60 hover:bg-muted text-foreground hover:scale-105'
+                        }`}
+                        title={opt.name}
+                      >
+                        <IconComp className="w-4 h-4" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Center: Title Input */}
+            <input
+              type="text"
+              value={attrs.title || ''}
+              onMouseDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              onChange={(e) => updateAttributes({ title: e.target.value })}
+              className="w-full text-sm font-bold text-foreground bg-transparent border-none outline-none focus:ring-0 placeholder:text-muted-foreground/60 px-1 min-w-0 truncate cursor-text"
+              placeholder="Введите название блока..."
+            />
+
+            {/* Right: Actions */}
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toggleSize();
+                }}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                title={currentLayout === 'wide' ? 'Сделать компактным' : 'Развернуть на всю ширину'}
+              >
+                {currentLayout === 'wide' ? (
+                  <Minimize2 className="w-4 h-4" />
+                ) : (
+                  <Maximize2 className="w-4 h-4" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsOpen((prev) => !prev);
+                }}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                title={isOpen ? 'Свернуть' : 'Раскрыть'}
+              >
+                <ChevronDown 
+                  className={`accordion-toggle-icon w-4 h-4 transition-transform duration-300 ease-in-out ${
+                    isOpen ? 'rotate-180' : 'rotate-0'
+                  }`} 
+                />
+              </button>
+
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={openDeleteConfirmation}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                title="Удалить блок"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Editable Content Area */}
+        <div
+          className="accordion-content transition-all duration-300 ease-in-out"
+          data-open={isOpen ? 'true' : 'false'}
+          style={{
+            display: 'grid',
+            gridTemplateRows: isOpen ? '1fr' : '0fr',
+            opacity: isOpen ? 1 : 0,
+            transition: 'grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1), opacity 200ms ease',
+          }}
+        >
+          <div className="accordion-content-inner overflow-hidden min-h-0">
+            <div className="mt-3 pt-3 border-t border-border/60">
+              <NodeViewContent className="wiki-collapsible-editor-content min-h-12 text-foreground focus:outline-none" />
             </div>
           </div>
         </div>
-      </NodeViewWrapper>
+      </div>
 
-
-
-      {/* Placeholder Card: "+ Добавить блок рядом" */}
-      {isLastUnpairedCompact && (
+      {/* Placeholder Card: "+ Добавить блок рядом" (Embedded in NodeViewWrapper) */}
+      {showAddButton && (
         <button
           type="button" 
+          contentEditable={false}
+          onMouseDown={(e) => e.stopPropagation()}
           onClick={handleAddBlockAlongside}
-          className="accordion-add-slot col-span-1 w-full min-w-0 rounded-2xl border-2 border-dashed border-indigo-400/40 dark:border-indigo-500/40 bg-indigo-500/[0.03] dark:bg-indigo-500/[0.06] p-4 hover:border-indigo-600 dark:hover:border-indigo-400 hover:bg-indigo-500/[0.08] dark:hover:bg-indigo-500/[0.12] transition-all cursor-pointer select-none text-center flex items-center justify-center min-h-[90px]"
+          className="accordion-add-slot col-span-1 w-full min-w-0 rounded-2xl border-2 border-dashed border-indigo-400/40 dark:border-indigo-500/40 bg-indigo-500/[0.03] dark:bg-indigo-500/[0.06] p-4 hover:border-indigo-600 dark:hover:border-indigo-400 hover:bg-indigo-500/[0.08] dark:hover:bg-indigo-500/[0.12] transition-all cursor-pointer select-none text-center flex items-center justify-center min-h-[90px] h-full"
           title="Добавить второй компактный блок рядом"
         >
           <div className="flex items-center justify-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 py-0.5">
@@ -513,7 +640,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
           </div>
         </button>
       )}
-    </>
+    </NodeViewWrapper>
   );
 };
 
@@ -528,6 +655,7 @@ const CollapsibleGroup = Node.create({
     return [
       { tag: 'div[data-wiki-collapsible-group="true"]' },
       { tag: 'div.wiki-collapsible-group' },
+      { tag: 'div.wiki-collapsible-grid' },
     ];
   },
 
@@ -539,6 +667,27 @@ const CollapsibleGroup = Node.create({
         class: 'wiki-collapsible-group grid grid-cols-1 sm:grid-cols-2 gap-5 my-4 w-full items-start',
       }),
       0,
+    ];
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('removeEmptyCollapsibleGroups'),
+        appendTransaction: (transactions, oldState, newState) => {
+          let tr = newState.tr;
+          let modified = false;
+
+          newState.doc.descendants((node, pos) => {
+            if (node.type.name === 'collapsibleGroup' && node.childCount === 0) {
+              tr.delete(pos, pos + node.nodeSize);
+              modified = true;
+            }
+          });
+
+          return modified ? tr : null;
+        },
+      }),
     ];
   },
 });
@@ -673,50 +822,51 @@ const CollapsibleBlock = Node.create({
     return {
       insertCollapsibleBlock:
         (attrs = {}) =>
-        ({ editor, chain }) => {
+        ({ editor, chain, state }) => {
           const { layout = 'compact', size = 'compact', title = 'Новый раскрывающийся блок', icon = 'file-text' } = attrs;
           const targetLayout = layout || size || 'compact';
 
-          let targetGroupPos = -1;
-          let targetGroupSize = 0;
+          const { $from } = state.selection;
+          let currentGroupPos = -1;
+          let currentGroupNode: any = null;
 
-          editor.state.doc.descendants((node, pos) => {
-            if (node.type.name === 'collapsibleGroup') {
-              if (node.childCount === 1) {
-                const child = node.child(0);
-                const childLayout = child.attrs.layout || child.attrs.size || 'compact';
-                if (childLayout === 'compact' && targetLayout === 'compact') {
-                  targetGroupPos = pos;
-                  targetGroupSize = node.nodeSize;
-                }
-              }
+          for (let d = $from.depth; d > 0; d--) {
+            const ancestor = $from.node(d);
+            if (ancestor.type.name === 'collapsibleGroup') {
+              currentGroupPos = $from.before(d);
+              currentGroupNode = ancestor;
+              break;
             }
-          });
+          }
 
-          if (targetGroupPos !== -1) {
-            const insertPos = targetGroupPos + targetGroupSize - 1;
-            return chain()
-              .focus(insertPos)
-              .insertContentAt(insertPos, {
-                type: 'collapsibleBlock',
-                attrs: {
-                  id: crypto.randomUUID(),
-                  title,
-                  icon,
-                  layout: 'compact',
-                  size: 'compact',
-                  defaultOpen: false,
-                  allowMultiple: true,
-                  requiredForAck: false,
-                },
-                content: [
-                  {
-                    type: 'paragraph',
-                    content: [{ type: 'text', text: 'Содержимое раскрывающегося блока...' }],
+          if (currentGroupNode && currentGroupNode.childCount === 1) {
+            const firstChild = currentGroupNode.child(0);
+            const childLayout = firstChild.attrs.layout || firstChild.attrs.size || 'compact';
+            if (childLayout === 'compact' && targetLayout === 'compact') {
+              const insertPos = currentGroupPos + currentGroupNode.nodeSize - 1;
+              return chain()
+                .focus()
+                .insertContentAt(insertPos, {
+                  type: 'collapsibleBlock',
+                  attrs: {
+                    id: crypto.randomUUID(),
+                    title,
+                    icon,
+                    layout: 'compact',
+                    size: 'compact',
+                    defaultOpen: false,
+                    allowMultiple: true,
+                    requiredForAck: false,
                   },
-                ],
-              })
-              .run();
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'Содержимое раскрывающегося блока...' }],
+                    },
+                  ],
+                })
+                .run();
+            }
           }
 
           return chain()

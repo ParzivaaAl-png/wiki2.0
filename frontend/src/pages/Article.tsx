@@ -77,7 +77,7 @@ export function wrapCollapsibleGrids(html: string): string {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
-    const oldGrids = Array.from(doc.querySelectorAll('.wiki-collapsible-grid, .wiki-collapsible-row'));
+    const oldGrids = Array.from(doc.querySelectorAll('.wiki-collapsible-grid, .wiki-collapsible-row, div[data-wiki-collapsible-group="true"]'));
     oldGrids.forEach((grid) => {
       while (grid.firstChild) {
         grid.parentElement?.insertBefore(grid.firstChild, grid);
@@ -96,7 +96,8 @@ export function wrapCollapsibleGrids(html: string): string {
       const parent = firstEl.parentElement;
       if (parent) {
         const grid = doc.createElement('div');
-        grid.className = 'wiki-collapsible-grid';
+        grid.setAttribute('data-wiki-collapsible-group', 'true');
+        grid.className = 'wiki-collapsible-group wiki-collapsible-grid';
         parent.insertBefore(grid, firstEl);
         currentGroup.forEach((el) => grid.appendChild(el));
       }
@@ -1341,7 +1342,8 @@ export default function ArticlePage() {
               margin: 0;
               min-height: 0;
             }
-            .wiki-collapsible-grid {
+            .wiki-collapsible-grid,
+            .wiki-collapsible-group {
               display: grid;
               grid-template-columns: repeat(2, minmax(0, 1fr));
               gap: 20px;
@@ -1349,21 +1351,25 @@ export default function ArticlePage() {
               width: 100%;
               align-items: start;
             }
-            .wiki-collapsible-grid > .wiki-collapsible-block {
+            .wiki-collapsible-grid > .wiki-collapsible-block,
+            .wiki-collapsible-group > .wiki-collapsible-block {
               grid-column: span 1;
               width: 100%;
               min-width: 0;
               margin: 0 !important;
             }
-            .wiki-collapsible-grid > .wiki-collapsible-block.wiki-collapsible-wide {
+            .wiki-collapsible-grid > .wiki-collapsible-block.wiki-collapsible-wide,
+            .wiki-collapsible-group > .wiki-collapsible-block.wiki-collapsible-wide {
               grid-column: 1 / -1;
               width: 100%;
             }
             @media (max-width: 768px) {
-              .wiki-collapsible-grid {
+              .wiki-collapsible-grid,
+              .wiki-collapsible-group {
                 grid-template-columns: 1fr;
               }
-              .wiki-collapsible-grid > .wiki-collapsible-block {
+              .wiki-collapsible-grid > .wiki-collapsible-block,
+              .wiki-collapsible-group > .wiki-collapsible-block {
                 grid-column: 1 / -1;
               }
             }
