@@ -126,6 +126,7 @@ declare module '@tiptap/core' {
         title?: string;
         icon?: string;
         size?: string;
+        layout?: string;
         defaultOpen?: boolean;
         allowMultiple?: boolean;
         requiredForAck?: boolean;
@@ -218,7 +219,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
   const iconPickerRef = React.useRef<HTMLDivElement>(null);
 
   const currentIconKey = attrs.icon || 'file-text';
-  const currentSize = attrs.size || 'compact';
+  const currentSize = attrs.size || attrs.layout || 'compact';
 
   const CurrentIconComponent = ICON_OPTIONS.find((i) => i.key === currentIconKey)?.icon || FileText;
 
@@ -246,7 +247,8 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
       let prevCompactCount = 0;
       for (let i = index - 1; i >= 0; i--) {
         const child = parent.child(i);
-        if (child.type.name === 'collapsibleBlock' && child.attrs.size === 'compact') {
+        const childSize = child.attrs.size || child.attrs.layout || 'compact';
+        if (child.type.name === 'collapsibleBlock' && childSize === 'compact') {
           prevCompactCount++;
         } else {
           break;
@@ -259,7 +261,8 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
 
       if (index + 1 < parent.childCount) {
         const nextChild = parent.child(index + 1);
-        if (nextChild.type.name === 'collapsibleBlock' && nextChild.attrs.size === 'compact') {
+        const nextSize = nextChild.attrs.size || nextChild.attrs.layout || 'compact';
+        if (nextChild.type.name === 'collapsibleBlock' && nextSize === 'compact') {
           return false;
         }
       }
@@ -313,6 +316,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
             title: '',
             icon: 'file-text',
             size: 'compact',
+            layout: 'compact',
             defaultOpen: false,
             allowMultiple: true,
             requiredForAck: false,
@@ -330,11 +334,18 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
     }
   }, [editor, getPos, node.nodeSize]);
 
+  const toggleSize = React.useCallback(() => {
+    const nextSize = currentSize === 'wide' ? 'compact' : 'wide';
+    updateAttributes({ size: nextSize, layout: nextSize });
+  }, [currentSize, updateAttributes]);
+
   return (
     <>
       <NodeViewWrapper 
+        data-size={currentSize}
+        data-layout={currentSize}
         className={`wiki-collapsible-item transition-all duration-200 ${
-          currentSize === 'wide' ? 'col-span-full w-full' : 'col-span-1 w-full'
+          currentSize === 'wide' ? 'wiki-collapsible-wide col-span-full w-full' : 'wiki-collapsible-compact col-span-1 w-full'
         }`}
       >
         <div className="relative rounded-2xl border border-border bg-card p-3.5 shadow-sm transition-all duration-200 hover:border-indigo-500/30 w-full">
@@ -418,9 +429,9 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
                   {/* Size Toggle */}
                   <button
                     type="button"
-                    onClick={() => updateAttributes({ size: currentSize === 'wide' ? 'compact' : 'wide' })}
+                    onClick={toggleSize}
                     className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                    title={currentSize === 'wide' ? 'Вернуть компактный размер' : 'Растянуть на всю ширину'}
+                    title={currentSize === 'wide' ? 'Сделать компактным' : 'Развернуть на всю ширину'}
                   >
                     {currentSize === 'wide' ? (
                       <Minimize2 className="w-3.5 h-3.5" />
@@ -510,8 +521,19 @@ const CollapsibleBlock = Node.create({
       },
       size: {
         default: 'compact',
-        parseHTML: (element) => element.getAttribute('data-size') || 'compact',
-        renderHTML: (attributes) => ({ 'data-size': attributes.size || 'compact' }),
+        parseHTML: (element) => element.getAttribute('data-size') || element.getAttribute('data-layout') || 'compact',
+        renderHTML: (attributes) => ({
+          'data-size': attributes.size || attributes.layout || 'compact',
+          'data-layout': attributes.size || attributes.layout || 'compact',
+        }),
+      },
+      layout: {
+        default: 'compact',
+        parseHTML: (element) => element.getAttribute('data-layout') || element.getAttribute('data-size') || 'compact',
+        renderHTML: (attributes) => ({
+          'data-layout': attributes.layout || attributes.size || 'compact',
+          'data-size': attributes.layout || attributes.size || 'compact',
+        }),
       },
       defaultOpen: {
         default: false,
@@ -540,11 +562,13 @@ const CollapsibleBlock = Node.create({
         tag: 'details[data-wiki-collapsible="true"]',
         getAttrs: (element) => {
           const el = element as HTMLElement;
+          const sz = el.getAttribute('data-size') || el.getAttribute('data-layout') || (el.classList.contains('wiki-collapsible-wide') ? 'wide' : 'compact');
           return {
             id: el.getAttribute('data-id') || el.getAttribute('id') || crypto.randomUUID(),
             title: el.getAttribute('data-title') || el.querySelector('summary')?.textContent || 'Раскрывающийся блок',
             icon: el.getAttribute('data-icon') || 'file-text',
-            size: el.getAttribute('data-size') || 'compact',
+            size: sz,
+            layout: sz,
             defaultOpen: el.hasAttribute('open') || el.getAttribute('data-default-open') === 'true',
             allowMultiple: el.getAttribute('data-allow-multiple') !== 'false',
             requiredForAck: el.getAttribute('data-required-for-ack') === 'true',
@@ -555,11 +579,13 @@ const CollapsibleBlock = Node.create({
         tag: 'details',
         getAttrs: (element) => {
           const el = element as HTMLElement;
+          const sz = el.classList.contains('wiki-collapsible-wide') ? 'wide' : 'compact';
           return {
             id: crypto.randomUUID(),
             title: el.querySelector('summary')?.textContent || 'Раскрывающийся блок',
             icon: 'file-text',
-            size: 'wide',
+            size: sz,
+            layout: sz,
             defaultOpen: el.hasAttribute('open'),
           };
         },
@@ -569,7 +595,7 @@ const CollapsibleBlock = Node.create({
 
   renderHTML({ node, HTMLAttributes }) {
     const icon = node.attrs.icon || 'file-text';
-    const size = node.attrs.size || 'compact';
+    const size = node.attrs.size || node.attrs.layout || 'compact';
     const blockId = node.attrs.id || crypto.randomUUID();
     return [
       'details',
@@ -579,6 +605,7 @@ const CollapsibleBlock = Node.create({
         id: blockId,
         'data-icon': icon,
         'data-size': size,
+        'data-layout': size,
         'data-title': node.attrs.title || 'Раскрывающийся блок',
         class: `wiki-collapsible-block ${size === 'wide' ? 'wiki-collapsible-wide' : 'wiki-collapsible-compact'}`,
       }),
@@ -596,7 +623,7 @@ const CollapsibleBlock = Node.create({
       insertCollapsibleBlock:
         (attrs = {}) =>
         ({ editor, chain }) => {
-          const { size = 'compact', title = 'Раскрывающийся блок', icon = 'file-text' } = attrs;
+          const { size = 'compact', layout = 'compact', title = 'Раскрывающийся блок', icon = 'file-text' } = attrs;
           return chain()
             .focus()
             .insertContent({
@@ -606,6 +633,7 @@ const CollapsibleBlock = Node.create({
                 title,
                 icon,
                 size,
+                layout,
                 defaultOpen: false,
                 allowMultiple: true,
                 requiredForAck: false,
