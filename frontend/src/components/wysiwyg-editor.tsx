@@ -524,6 +524,32 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
   );
 };
 
+const CollapsibleGroup = Node.create({
+  name: 'collapsibleGroup',
+  group: 'block',
+  content: 'collapsibleBlock+',
+  defining: true,
+  isolating: true,
+
+  parseHTML() {
+    return [
+      { tag: 'div[data-wiki-collapsible-group="true"]' },
+      { tag: 'div.wiki-collapsible-group' },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      'div',
+      mergeAttributes(HTMLAttributes, {
+        'data-wiki-collapsible-group': 'true',
+        class: 'wiki-collapsible-group grid grid-cols-1 sm:grid-cols-2 gap-5 my-4 w-full items-start',
+      }),
+      0,
+    ];
+  },
+});
+
 const CollapsibleBlock = Node.create({
   name: 'collapsibleBlock',
   group: 'block',
@@ -542,8 +568,8 @@ const CollapsibleBlock = Node.create({
         }),
       },
       title: {
-        default: 'Раскрывающийся блок',
-        parseHTML: (element) => element.getAttribute('data-title') || element.querySelector('summary')?.textContent || 'Раскрывающийся блок',
+        default: 'Новый раскрывающийся блок',
+        parseHTML: (element) => element.getAttribute('data-title') || element.querySelector('summary')?.textContent || 'Новый раскрывающийся блок',
         renderHTML: (attributes) => ({ 'data-title': attributes.title }),
       },
       icon: {
@@ -594,10 +620,10 @@ const CollapsibleBlock = Node.create({
         tag: 'details[data-wiki-collapsible="true"]',
         getAttrs: (element) => {
           const el = element as HTMLElement;
-          const sz = el.getAttribute('data-size') || el.getAttribute('data-layout') || (el.classList.contains('wiki-collapsible-wide') ? 'wide' : 'compact');
+          const sz = el.getAttribute('data-layout') || el.getAttribute('data-size') || (el.classList.contains('wiki-collapsible-wide') ? 'wide' : 'compact');
           return {
             id: el.getAttribute('data-id') || el.getAttribute('id') || crypto.randomUUID(),
-            title: el.getAttribute('data-title') || el.querySelector('summary')?.textContent || 'Раскрывающийся блок',
+            title: el.getAttribute('data-title') || el.querySelector('summary')?.textContent || 'Новый раскрывающийся блок',
             icon: el.getAttribute('data-icon') || 'file-text',
             size: sz,
             layout: sz,
@@ -614,7 +640,7 @@ const CollapsibleBlock = Node.create({
           const sz = el.classList.contains('wiki-collapsible-wide') ? 'wide' : 'compact';
           return {
             id: crypto.randomUUID(),
-            title: el.querySelector('summary')?.textContent || 'Раскрывающийся блок',
+            title: el.querySelector('summary')?.textContent || 'Новый раскрывающийся блок',
             icon: 'file-text',
             size: sz,
             layout: sz,
@@ -627,7 +653,7 @@ const CollapsibleBlock = Node.create({
 
   renderHTML({ node, HTMLAttributes }) {
     const icon = node.attrs.icon || 'file-text';
-    const size = node.attrs.size || node.attrs.layout || 'compact';
+    const size = node.attrs.layout || node.attrs.size || 'compact';
     const blockId = node.attrs.id || crypto.randomUUID();
     return [
       'details',
@@ -638,10 +664,10 @@ const CollapsibleBlock = Node.create({
         'data-icon': icon,
         'data-size': size,
         'data-layout': size,
-        'data-title': node.attrs.title || 'Раскрывающийся блок',
+        'data-title': node.attrs.title || 'Новый раскрывающийся блок',
         class: `wiki-collapsible-block ${size === 'wide' ? 'wiki-collapsible-wide' : 'wiki-collapsible-compact'}`,
       }),
-      ['summary', { class: 'wiki-collapsible-summary' }, node.attrs.title || 'Раскрывающийся блок'],
+      ['summary', { class: 'wiki-collapsible-summary' }, node.attrs.title || 'Новый раскрывающийся блок'],
       ['div', { class: 'wiki-collapsible-content' }, 0],
     ];
   },
@@ -655,25 +681,74 @@ const CollapsibleBlock = Node.create({
       insertCollapsibleBlock:
         (attrs = {}) =>
         ({ editor, chain }) => {
-          const { size = 'compact', layout = 'compact', title = 'Раскрывающийся блок', icon = 'file-text' } = attrs;
+          const { layout = 'compact', size = 'compact', title = 'Новый раскрывающийся блок', icon = 'file-text' } = attrs;
+          const targetLayout = layout || size || 'compact';
+
+          let targetGroupPos = -1;
+          let targetGroupSize = 0;
+
+          editor.state.doc.descendants((node, pos) => {
+            if (node.type.name === 'collapsibleGroup') {
+              if (node.childCount === 1) {
+                const child = node.child(0);
+                const childLayout = child.attrs.layout || child.attrs.size || 'compact';
+                if (childLayout === 'compact' && targetLayout === 'compact') {
+                  targetGroupPos = pos;
+                  targetGroupSize = node.nodeSize;
+                }
+              }
+            }
+          });
+
+          if (targetGroupPos !== -1) {
+            const insertPos = targetGroupPos + targetGroupSize - 1;
+            return chain()
+              .focus(insertPos)
+              .insertContentAt(insertPos, {
+                type: 'collapsibleBlock',
+                attrs: {
+                  id: crypto.randomUUID(),
+                  title,
+                  icon,
+                  layout: 'compact',
+                  size: 'compact',
+                  defaultOpen: false,
+                  allowMultiple: true,
+                  requiredForAck: false,
+                },
+                content: [
+                  {
+                    type: 'paragraph',
+                    content: [{ type: 'text', text: 'Содержимое раскрывающегося блока...' }],
+                  },
+                ],
+              })
+              .run();
+          }
+
           return chain()
             .focus()
             .insertContent({
-              type: this.name,
-              attrs: {
-                id: crypto.randomUUID(),
-                title,
-                icon,
-                size,
-                layout,
-                defaultOpen: false,
-                allowMultiple: true,
-                requiredForAck: false,
-              },
+              type: 'collapsibleGroup',
               content: [
                 {
-                  type: 'paragraph',
-                  content: [{ type: 'text', text: 'Содержимое раскрывающегося блока...' }],
+                  type: 'collapsibleBlock',
+                  attrs: {
+                    id: crypto.randomUUID(),
+                    title,
+                    icon,
+                    layout: 'compact',
+                    size: 'compact',
+                    defaultOpen: false,
+                    allowMultiple: true,
+                    requiredForAck: false,
+                  },
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'Содержимое раскрывающегося блока...' }],
+                    },
+                  ],
                 },
               ],
             })
@@ -763,6 +838,7 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
       CustomHeading.configure({
         levels: [1, 2, 3, 4, 5, 6],
       }),
+      CollapsibleGroup,
       CollapsibleBlock,
       Underline,
       TextStyle,
