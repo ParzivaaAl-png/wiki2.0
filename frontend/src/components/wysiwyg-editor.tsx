@@ -363,93 +363,117 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
       >
         <div className="accordion-card relative rounded-2xl border border-border bg-card p-4 shadow-sm transition-all duration-200 hover:border-indigo-500/30 hover:shadow-md w-full min-w-0 box-border">
           {/* Card Header Row */}
-          <div className="flex items-center justify-between gap-3 min-w-0">
-            {/* Left: Icon Selector Button */}
-            <div ref={iconPickerRef} className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsIconPickerOpen((prev) => !prev)}
-                className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all cursor-pointer flex items-center justify-center border border-indigo-500/15 shadow-xs"
-                title="Выбрать иконку блока"
-              >
-                <CurrentIconComponent className="w-4.5 h-4.5" />
-              </button>
-
-              {/* Icon Palette Popover */}
-              {isIconPickerOpen && (
-                <div className="absolute top-full left-0 mt-2 p-2 bg-card border border-border rounded-2xl shadow-2xl z-50 min-w-[200px] grid grid-cols-4 gap-2 animate-scaleUp">
-                  {ICON_OPTIONS.map((opt) => {
-                    const IconComp = opt.icon;
-                    return (
-                      <button
-                        key={opt.key}
-                        type="button"
-                        onClick={() => {
-                          updateAttributes({ icon: opt.key });
-                          setIsIconPickerOpen(false);
-                        }}
-                        className={`p-2.5 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
-                          currentIconKey === opt.key
-                            ? 'bg-indigo-600 text-white shadow-sm scale-105'
-                            : 'bg-muted/60 hover:bg-muted text-foreground hover:scale-105'
-                        }`}
-                        title={opt.name}
-                      >
-                        <IconComp className="w-4 h-4" />
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+          {isConfirmingDelete ? (
+            <div className="flex items-center justify-between gap-2 p-1.5 bg-red-500/10 border border-red-500/20 rounded-xl text-xs font-semibold animate-fadeIn w-full select-none min-h-[38px]">
+              <span className="text-red-600 dark:text-red-400 font-bold truncate pl-1">
+                Удалить этот блок?
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingDelete(false)}
+                  className="px-2.5 py-1 rounded-lg bg-muted hover:bg-neutral-200 dark:hover:bg-neutral-800 text-foreground text-[11px] font-semibold transition-colors cursor-pointer"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteBlock}
+                  className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold transition-colors cursor-pointer shadow-xs"
+                >
+                  Удалить
+                </button>
+              </div>
             </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3 min-w-0">
+              {/* Left: Icon Selector Button */}
+              <div ref={iconPickerRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsIconPickerOpen((prev) => !prev)}
+                  className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all cursor-pointer flex items-center justify-center border border-indigo-500/15 shadow-xs"
+                  title="Выбрать иконку блока"
+                >
+                  <CurrentIconComponent className="w-4.5 h-4.5" />
+                </button>
 
-            {/* Center: Title Input */}
-            <input
-              type="text"
-              value={attrs.title || ''}
-              onChange={(e) => updateAttributes({ title: e.target.value })}
-              className="w-full text-sm font-bold text-foreground bg-transparent border-none outline-none focus:ring-0 placeholder:text-muted-foreground/60 px-1 min-w-0 truncate"
-              placeholder="Введите название блока..."
-            />
-
-            {/* Right: Actions */}
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={toggleSize}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                title={currentLayout === 'wide' ? 'Сделать компактным' : 'Развернуть на всю ширину'}
-              >
-                {currentLayout === 'wide' ? (
-                  <Minimize2 className="w-4 h-4" />
-                ) : (
-                  <Maximize2 className="w-4 h-4" />
+                {/* Icon Palette Popover */}
+                {isIconPickerOpen && (
+                  <div className="absolute top-full left-0 mt-2 p-2 bg-card border border-border rounded-2xl shadow-2xl z-50 min-w-[200px] grid grid-cols-4 gap-2 animate-scaleUp">
+                    {ICON_OPTIONS.map((opt) => {
+                      const IconComp = opt.icon;
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => {
+                            updateAttributes({ icon: opt.key });
+                            setIsIconPickerOpen(false);
+                          }}
+                          className={`p-2.5 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                            currentIconKey === opt.key
+                              ? 'bg-indigo-600 text-white shadow-sm scale-105'
+                              : 'bg-muted/60 hover:bg-muted text-foreground hover:scale-105'
+                          }`}
+                          title={opt.name}
+                        >
+                          <IconComp className="w-4 h-4" />
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
-              </button>
+              </div>
 
-              <button
-                type="button"
-                onClick={() => setIsOpen((prev) => !prev)}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                title={isOpen ? 'Свернуть' : 'Раскрыть'}
-              >
-                <ChevronDown 
-                  className={`accordion-toggle-icon w-4 h-4 transition-transform duration-300 ease-in-out ${
-                    isOpen ? 'rotate-180' : 'rotate-0'
-                  }`} 
-                />
-              </button>
+              {/* Center: Title Input */}
+              <input
+                type="text"
+                value={attrs.title || ''}
+                onChange={(e) => updateAttributes({ title: e.target.value })}
+                className="w-full text-sm font-bold text-foreground bg-transparent border-none outline-none focus:ring-0 placeholder:text-muted-foreground/60 px-1 min-w-0 truncate"
+                placeholder="Введите название блока..."
+              />
 
-              <button
-                type="button"
-                onClick={() => setIsConfirmingDelete(true)}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                title="Удалить блок"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              {/* Right: Actions */}
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={toggleSize}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                  title={currentLayout === 'wide' ? 'Сделать компактным' : 'Развернуть на всю ширину'}
+                >
+                  {currentLayout === 'wide' ? (
+                    <Minimize2 className="w-4 h-4" />
+                  ) : (
+                    <Maximize2 className="w-4 h-4" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsOpen((prev) => !prev)}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                  title={isOpen ? 'Свернуть' : 'Раскрыть'}
+                >
+                  <ChevronDown 
+                    className={`accordion-toggle-icon w-4 h-4 transition-transform duration-300 ease-in-out ${
+                      isOpen ? 'rotate-180' : 'rotate-0'
+                    }`} 
+                  />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingDelete(true)}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                  title="Удалить блок"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Editable Content Area with Smooth Grid Animation */}
           <div
@@ -471,40 +495,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
         </div>
       </NodeViewWrapper>
 
-      {/* Floating Delete Confirmation Modal */}
-      {isConfirmingDelete && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fadeIn select-none">
-          <div className="bg-card border border-border rounded-2xl p-5 shadow-2xl max-w-sm w-full animate-scaleUp text-center space-y-4">
-            <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto border border-red-500/20">
-              <X className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-foreground">
-                Удалить раскрывающийся блок?
-              </h4>
-              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                Блок и всё его содержимое будут удалены без возможности восстановления.
-              </p>
-            </div>
-            <div className="flex items-center justify-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsConfirmingDelete(false)}
-                className="px-4 py-2 text-xs font-semibold bg-muted hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-xl text-foreground transition-colors cursor-pointer"
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteBlock}
-                className="px-4 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-sm transition-colors cursor-pointer"
-              >
-                Удалить блок
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Placeholder Card: "+ Добавить блок рядом" */}
       {isLastUnpairedCompact && (
