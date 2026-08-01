@@ -252,11 +252,24 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
   const [isIconPickerOpen, setIsIconPickerOpen] = React.useState(false);
   const [isOpen, setIsOpen] = React.useState(true);
   const iconPickerRef = React.useRef<HTMLDivElement>(null);
+  const titleInputRef = React.useRef<HTMLInputElement>(null);
 
   const currentIconKey = attrs.icon || 'file-text';
   const currentLayout = attrs.layout || attrs.size || 'compact';
 
   const CurrentIconComponent = ICON_OPTIONS.find((i) => i.key === currentIconKey)?.icon || FileText;
+
+  React.useEffect(() => {
+    if (attrs.title === 'Новый раскрывающийся блок' && !attrs.autoFocused) {
+      updateAttributes({ autoFocused: true });
+      setTimeout(() => {
+        if (titleInputRef.current) {
+          titleInputRef.current.focus();
+          titleInputRef.current.select();
+        }
+      }, 50);
+    }
+  }, []);
 
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -614,6 +627,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
 
             {/* Center: Title Input */}
             <input
+              ref={titleInputRef}
               type="text"
               value={attrs.title || ''}
               onMouseDown={(e) => e.stopPropagation()}
