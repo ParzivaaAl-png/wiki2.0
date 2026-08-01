@@ -1312,9 +1312,13 @@ export default function ArticlePage() {
               border: 1px solid var(--border);
               border-radius: 1rem;
               background: var(--card);
-              box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+              box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
               transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
               overflow: hidden;
+            }
+            .wiki-collapsible-block:hover {
+              box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07);
+              border-color: rgba(99, 102, 241, 0.35);
             }
             .wiki-collapsible-summary {
               display: flex;
