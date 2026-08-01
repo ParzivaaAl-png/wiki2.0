@@ -339,11 +339,14 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
       e.stopPropagation();
     }
     
+    setIsConfirmingDelete(false);
+
     if (typeof getPos !== 'function' || !editor) {
       try {
         deleteNode();
-      } catch {}
-      setIsConfirmingDelete(false);
+      } catch (err) {
+        console.error('deleteNode fallback failed:', err);
+      }
       return;
     }
 
@@ -351,7 +354,6 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
       const pos = getPos();
       if (typeof pos !== 'number') {
         deleteNode();
-        setIsConfirmingDelete(false);
         return;
       }
 
@@ -364,30 +366,30 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
 
         editor
           .chain()
-          .focus()
           .deleteRange({
             from: parentPos,
             to: parentPos + parentSize,
           })
+          .focus()
           .run();
       } else {
         editor
           .chain()
-          .focus()
           .deleteRange({
             from: pos,
             to: pos + node.nodeSize,
           })
+          .focus()
           .run();
       }
     } catch (err) {
       console.error('Error deleting collapsible block:', err);
       try {
         deleteNode();
-      } catch {}
+      } catch (err2) {
+        console.error('deleteNode fallback failed:', err2);
+      }
     }
-
-    setIsConfirmingDelete(false);
   }, [editor, getPos, node.nodeSize, deleteNode]);
 
   const handleAddBlockAlongside = React.useCallback((e?: React.MouseEvent) => {
@@ -403,7 +405,6 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
 
       editor
         .chain()
-        .focus()
         .insertContentAt(endPos, {
           type: 'collapsibleBlock',
           attrs: {
@@ -423,6 +424,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
             },
           ],
         })
+        .focus()
         .run();
     } catch (err) {
       console.error('Failed to insert block alongside:', err);
@@ -455,7 +457,10 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
         {isConfirmingDelete ? (
           <div 
             contentEditable={false}
-            onMouseDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
             className="flex items-center justify-between gap-2 p-1.5 bg-red-500/10 border border-red-500/20 rounded-xl text-xs font-semibold animate-fadeIn w-full select-none min-h-[38px]"
           >
             <span className="text-red-600 dark:text-red-400 font-bold truncate pl-1">
@@ -464,7 +469,10 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
-                onMouseDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -476,7 +484,10 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
               </button>
               <button
                 type="button"
-                onMouseDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={handleDeleteBlock}
                 className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold transition-colors cursor-pointer shadow-xs"
               >
@@ -487,14 +498,20 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
         ) : (
           <div 
             contentEditable={false}
-            onMouseDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
             className="flex items-center justify-between gap-3 min-w-0 select-none"
           >
             {/* Left: Icon Selector Button */}
             <div ref={iconPickerRef} className="relative shrink-0">
               <button
                 type="button"
-                onMouseDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -510,7 +527,10 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
               {isIconPickerOpen && (
                 <div 
                   contentEditable={false}
-                  onMouseDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
                   className="absolute top-full left-0 mt-2 p-2 bg-card border border-border rounded-2xl shadow-2xl z-50 min-w-[200px] grid grid-cols-4 gap-2 animate-scaleUp"
                 >
                   {ICON_OPTIONS.map((opt) => {
@@ -519,7 +539,10 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
                       <button
                         key={opt.key}
                         type="button"
-                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -556,7 +579,10 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
             <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
-                onMouseDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -574,7 +600,10 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
 
               <button
                 type="button"
-                onMouseDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -592,7 +621,10 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
 
               <button
                 type="button"
-                onMouseDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={openDeleteConfirmation}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
                 title="Удалить блок"
@@ -627,7 +659,10 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
         <button
           type="button" 
           contentEditable={false}
-          onMouseDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
           onClick={handleAddBlockAlongside}
           className="accordion-add-slot col-span-1 w-full min-w-0 rounded-2xl border-2 border-dashed border-indigo-400/40 dark:border-indigo-500/40 bg-indigo-500/[0.03] dark:bg-indigo-500/[0.06] p-4 hover:border-indigo-600 dark:hover:border-indigo-400 hover:bg-indigo-500/[0.08] dark:hover:bg-indigo-500/[0.12] transition-all cursor-pointer select-none text-center flex items-center justify-center min-h-[90px] h-full"
           title="Добавить второй компактный блок рядом"
