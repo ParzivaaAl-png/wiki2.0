@@ -1358,6 +1358,10 @@ export default function ArticlePage() {
               min-width: 0;
               margin: 0 !important;
             }
+            .wiki-collapsible-grid > .wiki-collapsible-block[open],
+            .wiki-collapsible-group > .wiki-collapsible-block[open],
+            .wiki-collapsible-grid > .wiki-collapsible-block[data-open="true"],
+            .wiki-collapsible-group > .wiki-collapsible-block[data-open="true"],
             .wiki-collapsible-grid > .wiki-collapsible-block.wiki-collapsible-wide,
             .wiki-collapsible-group > .wiki-collapsible-block.wiki-collapsible-wide {
               grid-column: 1 / -1;

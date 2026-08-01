@@ -250,7 +250,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
   const attrs = node.attrs || {};
   const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
   const [isIconPickerOpen, setIsIconPickerOpen] = React.useState(false);
-  const [isOpen, setIsOpen] = React.useState(true);
+  const [isOpen, setIsOpen] = React.useState(Boolean(attrs.defaultOpen));
   const iconPickerRef = React.useRef<HTMLDivElement>(null);
   const titleInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -364,7 +364,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
         // Layer 1: Dynamic position via getPos()
         if (typeof getPos === 'function') {
           const pos = getPos();
-          if (typeof pos === 'number') {
+          if (typeof pos !== 'number') {
             const $pos = editor.state.doc.resolve(pos);
 
             let groupPos = -1;
@@ -497,23 +497,28 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
     updateAttributes({ layout: nextLayout, size: nextLayout });
   }, [currentLayout, updateAttributes]);
 
+  const isExpanded = currentLayout === 'wide' || isOpen;
+
   const showAddButton = Boolean(
-    editor?.isEditable && currentLayout === 'compact' && isLastUnpairedCompact && !isConfirmingDelete
+    editor?.isEditable && currentLayout === 'compact' && isLastUnpairedCompact && !isConfirmingDelete && !isOpen
   );
 
   return (
     <NodeViewWrapper 
       data-layout={currentLayout}
       data-size={currentLayout}
-      className={`accordion-item node-collapsibleBlock wiki-collapsible-item min-w-0 w-full transition-all duration-200 ${
-        currentLayout === 'wide'
+      data-open={isOpen ? 'true' : 'false'}
+      className={`accordion-item node-collapsibleBlock wiki-collapsible-item min-w-0 w-full transition-all duration-300 ease-in-out ${
+        isExpanded
           ? 'wiki-collapsible-wide col-span-full my-2'
           : showAddButton
           ? 'col-span-full grid grid-cols-1 sm:grid-cols-2 gap-5 my-2 items-start'
           : 'wiki-collapsible-compact col-span-1 my-2'
       }`}
     >
-      <div className="accordion-card col-span-1 relative rounded-2xl border border-border bg-card p-4 shadow-sm transition-all duration-200 hover:border-indigo-500/30 hover:shadow-md w-full min-w-0 box-border">
+      <div className={`accordion-card relative rounded-2xl border border-border bg-card p-4 shadow-sm transition-all duration-300 ease-in-out hover:border-indigo-500/30 hover:shadow-md w-full min-w-0 box-border ${
+        isExpanded ? 'col-span-full' : 'col-span-1'
+      }`}>
         {/* Card Header Row */}
         {isConfirmingDelete ? (
           <div 
