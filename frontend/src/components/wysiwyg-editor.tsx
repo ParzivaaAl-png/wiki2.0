@@ -431,9 +431,13 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
                 type="button"
                 onClick={() => setIsOpen((prev) => !prev)}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                title={isOpen ? 'Свернуть содержимое' : 'Раскрыть содержимое'}
+                title={isOpen ? 'Свернуть' : 'Раскрыть'}
               >
-                <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown 
+                  className={`accordion-toggle-icon w-4 h-4 transition-transform duration-300 ease-in-out ${
+                    isOpen ? 'rotate-180' : 'rotate-0'
+                  }`} 
+                />
               </button>
 
               <button
@@ -447,12 +451,23 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
             </div>
           </div>
 
-          {/* Editable Content Area */}
-          {isOpen && (
-            <div className="mt-3 pt-3 border-t border-border/60">
-              <NodeViewContent className="wiki-collapsible-editor-content min-h-12 text-foreground focus:outline-none" />
+          {/* Editable Content Area with Smooth Grid Animation */}
+          <div
+            className="accordion-content transition-all duration-300 ease-in-out"
+            data-open={isOpen ? 'true' : 'false'}
+            style={{
+              display: 'grid',
+              gridTemplateRows: isOpen ? '1fr' : '0fr',
+              opacity: isOpen ? 1 : 0,
+              transition: 'grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1), opacity 200ms ease',
+            }}
+          >
+            <div className="accordion-content-inner overflow-hidden min-h-0">
+              <div className="mt-3 pt-3 border-t border-border/60">
+                <NodeViewContent className="wiki-collapsible-editor-content min-h-12 text-foreground focus:outline-none" />
+              </div>
             </div>
-          )}
+          </div>
         </div>
       </NodeViewWrapper>
 
@@ -493,18 +508,19 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
 
       {/* Placeholder Card: "+ Добавить блок рядом" */}
       {isLastUnpairedCompact && (
-        <div 
+        <button
+          type="button" 
           onClick={handleAddBlockAlongside}
-          className="accordion-add-slot col-span-1 w-full min-w-0 rounded-2xl border-2 border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/40 p-4 hover:border-indigo-500 hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-500/[0.08] transition-all cursor-pointer select-none text-center flex items-center justify-center min-h-[64px]"
+          className="accordion-add-slot col-span-1 w-full min-w-0 rounded-2xl border-2 border-dashed border-indigo-400/40 dark:border-indigo-500/40 bg-indigo-500/[0.03] dark:bg-indigo-500/[0.06] p-4 hover:border-indigo-600 dark:hover:border-indigo-400 hover:bg-indigo-500/[0.08] dark:hover:bg-indigo-500/[0.12] transition-all cursor-pointer select-none text-center flex items-center justify-center min-h-[90px]"
           title="Добавить второй компактный блок рядом"
         >
-          <div className="flex items-center justify-center gap-2 text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:text-indigo-600 dark:hover:text-indigo-400 py-0.5">
-            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500">
-              <Plus className="w-3.5 h-3.5" />
+          <div className="flex items-center justify-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 py-0.5">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+              <Plus className="w-4 h-4" />
             </span>
-            <span>+ Добавить блок рядом</span>
+            <span>Добавить блок рядом</span>
           </div>
-        </div>
+        </button>
       )}
     </>
   );
