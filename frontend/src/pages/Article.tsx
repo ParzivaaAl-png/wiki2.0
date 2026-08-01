@@ -70,6 +70,56 @@ const getTariffKeyFromSlug = (slug: string): string | null => {
   }
 };
 
+export function wrapCollapsibleGrids(html: string): string {
+  if (!html || (!html.includes('data-wiki-collapsible') && !html.includes('<details'))) return html;
+  if (typeof window === 'undefined') return html;
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const oldGrids = Array.from(doc.querySelectorAll('.wiki-collapsible-grid, .wiki-collapsible-row'));
+    oldGrids.forEach((grid) => {
+      while (grid.firstChild) {
+        grid.parentElement?.insertBefore(grid.firstChild, grid);
+      }
+      grid.remove();
+    });
+
+    const detailsElements = Array.from(doc.querySelectorAll('details, .wiki-collapsible-block'));
+    if (detailsElements.length === 0) return doc.body.innerHTML;
+
+    let currentGroup: Element[] = [];
+
+    const flushGroup = () => {
+      if (currentGroup.length === 0) return;
+      const firstEl = currentGroup[0];
+      const parent = firstEl.parentElement;
+      if (parent) {
+        const grid = doc.createElement('div');
+        grid.className = 'wiki-collapsible-grid';
+        parent.insertBefore(grid, firstEl);
+        currentGroup.forEach((el) => grid.appendChild(el));
+      }
+      currentGroup = [];
+    };
+
+    detailsElements.forEach((el) => {
+      if (currentGroup.length > 0) {
+        const lastEl = currentGroup[currentGroup.length - 1];
+        if (el.previousElementSibling !== lastEl) {
+          flushGroup();
+        }
+      }
+      currentGroup.push(el);
+    });
+
+    flushGroup();
+    return doc.body.innerHTML;
+  } catch {
+    return html;
+  }
+}
+
 export default function ArticlePage() {
   const { slug } = useParams<{ slug: string }>();
   const location = useLocation();
@@ -836,7 +886,7 @@ export default function ArticlePage() {
       });
     }
 
-    return html;
+    return wrapCollapsibleGrids(html);
   }, [article, location.search]);
 
   const getStatusBadge = (status: string) => {
@@ -1280,31 +1330,40 @@ export default function ArticlePage() {
           {/* Article content renderer */}
           <style>{`
             .wiki-article-body {
+              display: block;
+              width: 100%;
+            }
+            .wiki-article-body p {
+              margin-bottom: 0.75rem;
+            }
+            .wiki-article-body p:empty,
+            .wiki-article-body p:has(> br:only-child) {
+              margin: 0;
+              min-height: 0;
+            }
+            .wiki-collapsible-grid {
               display: grid;
               grid-template-columns: repeat(2, minmax(0, 1fr));
               gap: 20px;
+              margin: 1.25rem 0;
               width: 100%;
               align-items: start;
             }
-            .wiki-article-body > *:not(.wiki-collapsible-block) {
-              grid-column: 1 / -1;
-              width: 100%;
-            }
-            .wiki-article-body > .wiki-collapsible-block {
+            .wiki-collapsible-grid > .wiki-collapsible-block {
               grid-column: span 1;
               width: 100%;
               min-width: 0;
-              margin: 0;
+              margin: 0 !important;
             }
-            .wiki-article-body > .wiki-collapsible-block.wiki-collapsible-wide {
+            .wiki-collapsible-grid > .wiki-collapsible-block.wiki-collapsible-wide {
               grid-column: 1 / -1;
               width: 100%;
             }
             @media (max-width: 768px) {
-              .wiki-article-body {
+              .wiki-collapsible-grid {
                 grid-template-columns: 1fr;
               }
-              .wiki-article-body > .wiki-collapsible-block {
+              .wiki-collapsible-grid > .wiki-collapsible-block {
                 grid-column: 1 / -1;
               }
             }

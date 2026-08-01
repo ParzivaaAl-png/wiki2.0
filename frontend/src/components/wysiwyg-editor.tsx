@@ -339,13 +339,45 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
     updateAttributes({ size: nextSize, layout: nextSize });
   }, [currentSize, updateAttributes]);
 
+  const compactIndexInPair = React.useMemo(() => {
+    if (currentSize === 'wide' || typeof getPos !== 'function' || !editor) return 0;
+    try {
+      const pos = getPos();
+      if (typeof pos !== 'number') return 0;
+      const $pos = editor.doc.resolve(pos);
+      const parent = $pos.parent;
+      const index = $pos.index();
+
+      let prevCompactCount = 0;
+      for (let i = index - 1; i >= 0; i--) {
+        const child = parent.child(i);
+        const childSize = child.attrs.size || child.attrs.layout || 'compact';
+        if (child.type.name === 'collapsibleBlock' && childSize === 'compact') {
+          prevCompactCount++;
+        } else {
+          break;
+        }
+      }
+
+      return prevCompactCount % 2;
+    } catch {
+      return 0;
+    }
+  }, [editor?.doc, getPos, currentSize]);
+
+  const isLeftInPair = compactIndexInPair === 0;
+
   return (
     <>
       <NodeViewWrapper 
         data-size={currentSize}
         data-layout={currentSize}
+        style={{
+          width: currentSize === 'wide' ? '100%' : 'calc(50% - 10px)',
+          marginRight: currentSize === 'wide' || !isLeftInPair ? '0px' : '20px',
+        }}
         className={`wiki-collapsible-item transition-all duration-200 ${
-          currentSize === 'wide' ? 'wiki-collapsible-wide col-span-full w-full' : 'wiki-collapsible-compact col-span-1 w-full'
+          currentSize === 'wide' ? 'wiki-collapsible-wide col-span-full w-full' : 'wiki-collapsible-compact'
         }`}
       >
         <div className="relative rounded-2xl border border-border bg-card p-3.5 shadow-sm transition-all duration-200 hover:border-indigo-500/30 w-full">
@@ -1117,36 +1149,56 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
           color: #94a3b8;
         }
         .ProseMirror {
-          display: grid !important;
-          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-          gap: 20px !important;
-          width: 100% !important;
-          align-items: start !important;
+          display: block !important;
         }
-        .ProseMirror > *:not(.wiki-collapsible-item):not(.wiki-collapsible-add-card) {
-          grid-column: 1 / -1 !important;
+        .ProseMirror p {
+          margin-bottom: 0.75rem !important;
+        }
+        .ProseMirror p:empty,
+        .ProseMirror p:has(> br:only-child) {
+          margin-bottom: 0 !important;
+          min-height: 0 !important;
+        }
+        .ProseMirror > .node-collapsibleBlock {
+          display: inline-block !important;
+          vertical-align: top !important;
+          box-sizing: border-box !important;
+          margin-bottom: 20px !important;
+        }
+        .ProseMirror > .node-collapsibleBlock:has([data-size="wide"]),
+        .ProseMirror > .node-collapsibleBlock:has([data-layout="wide"]),
+        .ProseMirror > .node-collapsibleBlock:has(.wiki-collapsible-wide) {
+          display: block !important;
           width: 100% !important;
+          margin-right: 0 !important;
         }
         .ProseMirror > .wiki-collapsible-item {
-          grid-column: span 1 !important;
-          width: 100% !important;
-          min-width: 0 !important;
+          display: inline-block !important;
+          vertical-align: top !important;
+          box-sizing: border-box !important;
+          margin-bottom: 20px !important;
         }
-        .ProseMirror > .wiki-collapsible-item.wiki-collapsible-wide {
-          grid-column: 1 / -1 !important;
+        .ProseMirror > .wiki-collapsible-item.wiki-collapsible-wide,
+        .ProseMirror > .wiki-collapsible-item[data-size="wide"],
+        .ProseMirror > .wiki-collapsible-item[data-layout="wide"] {
+          display: block !important;
           width: 100% !important;
+          margin-right: 0 !important;
         }
         .ProseMirror > .wiki-collapsible-add-card {
-          grid-column: span 1 !important;
-          width: 100% !important;
+          display: inline-block !important;
+          vertical-align: top !important;
+          box-sizing: border-box !important;
+          margin-bottom: 20px !important;
+          width: calc(50% - 10px) !important;
         }
         @media (max-width: 768px) {
-          .ProseMirror {
-            grid-template-columns: 1fr !important;
-          }
+          .ProseMirror > .node-collapsibleBlock,
           .ProseMirror > .wiki-collapsible-item,
           .ProseMirror > .wiki-collapsible-add-card {
-            grid-column: 1 / -1 !important;
+            display: block !important;
+            width: 100% !important;
+            margin-right: 0 !important;
           }
         }
         .ProseMirror .wiki-collapsible-editor-content > *:first-child {
