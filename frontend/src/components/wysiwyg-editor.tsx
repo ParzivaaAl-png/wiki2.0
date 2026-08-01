@@ -219,7 +219,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
   const iconPickerRef = React.useRef<HTMLDivElement>(null);
 
   const currentIconKey = attrs.icon || 'file-text';
-  const currentSize = attrs.size || attrs.layout || 'compact';
+  const currentLayout = attrs.layout || attrs.size || 'compact';
 
   const CurrentIconComponent = ICON_OPTIONS.find((i) => i.key === currentIconKey)?.icon || FileText;
 
@@ -234,9 +234,8 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Compute if current node is the LAST unpaired compact block in the document
   const isLastUnpairedCompact = React.useMemo(() => {
-    if (currentSize === 'wide' || typeof getPos !== 'function' || !editor) return false;
+    if (currentLayout === 'wide' || typeof getPos !== 'function' || !editor) return false;
     try {
       const pos = getPos();
       if (typeof pos !== 'number') return false;
@@ -247,7 +246,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
       let prevCompactCount = 0;
       for (let i = index - 1; i >= 0; i--) {
         const child = parent.child(i);
-        const childSize = child.attrs.size || child.attrs.layout || 'compact';
+        const childSize = child.attrs.layout || child.attrs.size || 'compact';
         if (child.type.name === 'collapsibleBlock' && childSize === 'compact') {
           prevCompactCount++;
         } else {
@@ -261,7 +260,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
 
       if (index + 1 < parent.childCount) {
         const nextChild = parent.child(index + 1);
-        const nextSize = nextChild.attrs.size || nextChild.attrs.layout || 'compact';
+        const nextSize = nextChild.attrs.layout || nextChild.attrs.size || 'compact';
         if (nextChild.type.name === 'collapsibleBlock' && nextSize === 'compact') {
           return false;
         }
@@ -271,10 +270,10 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
     } catch {
       return false;
     }
-  }, [editor?.doc, getPos, currentSize]);
+  }, [editor?.doc, getPos, currentLayout]);
 
-  // Real-time pos resolution deletion handler
   const handleDeleteBlock = React.useCallback(() => {
+    setIsConfirmingDelete(false);
     if (typeof getPos !== 'function' || !editor) {
       deleteNode();
       return;
@@ -285,20 +284,34 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
         deleteNode();
         return;
       }
-      editor
-        .chain()
-        .focus()
-        .deleteRange({
-          from: pos,
-          to: pos + node.nodeSize,
-        })
-        .run();
+      const $pos = editor.doc.resolve(pos);
+      const parent = $pos.parent;
+
+      if (parent && parent.type.name === 'collapsibleGroup' && parent.childCount === 1) {
+        const parentPos = $pos.before();
+        editor
+          .chain()
+          .focus()
+          .deleteRange({
+            from: parentPos,
+            to: parentPos + parent.nodeSize,
+          })
+          .run();
+      } else {
+        editor
+          .chain()
+          .focus()
+          .deleteRange({
+            from: pos,
+            to: pos + node.nodeSize,
+          })
+          .run();
+      }
     } catch {
       deleteNode();
     }
   }, [editor, getPos, node.nodeSize, deleteNode]);
 
-  // Real-time pos resolution insert handler
   const handleAddBlockAlongside = React.useCallback(() => {
     if (typeof getPos !== 'function' || !editor) return;
     try {
@@ -313,10 +326,10 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
           type: 'collapsibleBlock',
           attrs: {
             id: crypto.randomUUID(),
-            title: '',
+            title: 'Новый раскрывающийся блок',
             icon: 'file-text',
-            size: 'compact',
             layout: 'compact',
+            size: 'compact',
             defaultOpen: false,
             allowMultiple: true,
             requiredForAck: false,
@@ -335,182 +348,155 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
   }, [editor, getPos, node.nodeSize]);
 
   const toggleSize = React.useCallback(() => {
-    const nextSize = currentSize === 'wide' ? 'compact' : 'wide';
-    updateAttributes({ size: nextSize, layout: nextSize });
-  }, [currentSize, updateAttributes]);
-
-  const compactIndexInPair = React.useMemo(() => {
-    if (currentSize === 'wide' || typeof getPos !== 'function' || !editor) return 0;
-    try {
-      const pos = getPos();
-      if (typeof pos !== 'number') return 0;
-      const $pos = editor.doc.resolve(pos);
-      const parent = $pos.parent;
-      const index = $pos.index();
-
-      let prevCompactCount = 0;
-      for (let i = index - 1; i >= 0; i--) {
-        const child = parent.child(i);
-        const childSize = child.attrs.size || child.attrs.layout || 'compact';
-        if (child.type.name === 'collapsibleBlock' && childSize === 'compact') {
-          prevCompactCount++;
-        } else {
-          break;
-        }
-      }
-
-      return prevCompactCount % 2;
-    } catch {
-      return 0;
-    }
-  }, [editor?.doc, getPos, currentSize]);
-
-  const isLeftInPair = compactIndexInPair === 0;
+    const nextLayout = currentLayout === 'wide' ? 'compact' : 'wide';
+    updateAttributes({ layout: nextLayout, size: nextLayout });
+  }, [currentLayout, updateAttributes]);
 
   return (
     <>
       <NodeViewWrapper 
-        data-size={currentSize}
-        data-layout={currentSize}
-        style={{
-          width: currentSize === 'wide' ? '100%' : 'calc(50% - 10px)',
-          marginRight: currentSize === 'wide' || !isLeftInPair ? '0px' : '20px',
-        }}
-        className={`wiki-collapsible-item transition-all duration-200 ${
-          currentSize === 'wide' ? 'wiki-collapsible-wide col-span-full w-full' : 'wiki-collapsible-compact'
+        data-layout={currentLayout}
+        data-size={currentLayout}
+        className={`accordion-item node-collapsibleBlock wiki-collapsible-item min-w-0 w-full transition-all duration-200 ${
+          currentLayout === 'wide' ? 'wiki-collapsible-wide col-span-full' : 'wiki-collapsible-compact col-span-1'
         }`}
       >
-        <div className="relative rounded-2xl border border-border bg-card p-3.5 shadow-sm transition-all duration-200 hover:border-indigo-500/30 w-full">
-          {/* Delete Confirmation Overlay */}
-          {isConfirmingDelete ? (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-center animate-scaleUp select-none">
-              <p className="text-xs font-bold text-red-600 dark:text-red-400 mb-2.5">
-                Удалить раскрывающийся блок вместе с его содержимым?
-              </p>
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsConfirmingDelete(false)}
-                  className="px-3 py-1 text-xs font-semibold bg-muted hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-lg text-foreground transition-colors cursor-pointer"
-                >
-                  Отмена
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteBlock}
-                  className="px-3 py-1 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors cursor-pointer shadow-sm"
-                >
-                  Удалить
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Card Header Row */}
-              <div className="flex items-center justify-between gap-2">
-                {/* Left: Icon Selector Button */}
-                <div ref={iconPickerRef} className="relative shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setIsIconPickerOpen((prev) => !prev)}
-                    className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 transition-all cursor-pointer flex items-center justify-center border border-indigo-500/15"
-                    title="Выбрать иконку блока"
-                  >
-                    <CurrentIconComponent className="w-4 h-4" />
-                  </button>
+        <div className="accordion-card relative rounded-2xl border border-border bg-card p-4 shadow-sm transition-all duration-200 hover:border-indigo-500/30 hover:shadow-md w-full min-w-0 box-border">
+          {/* Card Header Row */}
+          <div className="flex items-center justify-between gap-3 min-w-0">
+            {/* Left: Icon Selector Button */}
+            <div ref={iconPickerRef} className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsIconPickerOpen((prev) => !prev)}
+                className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all cursor-pointer flex items-center justify-center border border-indigo-500/15 shadow-xs"
+                title="Выбрать иконку блока"
+              >
+                <CurrentIconComponent className="w-4.5 h-4.5" />
+              </button>
 
-                  {/* Icon Palette Popover */}
-                  {isIconPickerOpen && (
-                    <div className="absolute top-full left-0 mt-2 p-2 bg-card border border-border rounded-2xl shadow-xl z-50 min-w-[180px] grid grid-cols-4 gap-1.5 animate-scaleUp">
-                      {ICON_OPTIONS.map((opt) => {
-                        const IconComp = opt.icon;
-                        return (
-                          <button
-                            key={opt.key}
-                            type="button"
-                            onClick={() => {
-                              updateAttributes({ icon: opt.key });
-                              setIsIconPickerOpen(false);
-                            }}
-                            className={`p-2.5 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
-                              currentIconKey === opt.key
-                                ? 'bg-indigo-600 text-white shadow-sm scale-105'
-                                : 'bg-muted/60 hover:bg-muted text-foreground hover:scale-105'
-                            }`}
-                            title={opt.name}
-                          >
-                            <IconComp className="w-4 h-4" />
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Center: Title Input (Inline Editing) */}
-                <input
-                  type="text"
-                  value={attrs.title || ''}
-                  onChange={(e) => updateAttributes({ title: e.target.value })}
-                  className="w-full text-sm font-bold text-foreground bg-transparent border-none outline-none focus:ring-0 placeholder:text-muted-foreground/60 px-1"
-                  placeholder="Введите название блока..."
-                />
-
-                {/* Right: Actions (Size Toggle, Expand Toggle, Delete) */}
-                <div className="flex items-center gap-1 shrink-0">
-                  {/* Size Toggle */}
-                  <button
-                    type="button"
-                    onClick={toggleSize}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                    title={currentSize === 'wide' ? 'Сделать компактным' : 'Развернуть на всю ширину'}
-                  >
-                    {currentSize === 'wide' ? (
-                      <Minimize2 className="w-3.5 h-3.5" />
-                    ) : (
-                      <Maximize2 className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-
-                  {/* Expand / Collapse Content Toggle */}
-                  <button
-                    type="button"
-                    onClick={() => setIsOpen((prev) => !prev)}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                    title={isOpen ? 'Свернуть содержимое' : 'Раскрыть содержимое'}
-                  >
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {/* Delete Button */}
-                  <button
-                    type="button"
-                    onClick={() => setIsConfirmingDelete(true)}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                    title="Удалить блок"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Editable Content Area */}
-              {isOpen && (
-                <div className="mt-3 pt-3 border-t border-border/60">
-                  <NodeViewContent className="wiki-collapsible-editor-content min-h-12 text-foreground focus:outline-none" />
+              {/* Icon Palette Popover */}
+              {isIconPickerOpen && (
+                <div className="absolute top-full left-0 mt-2 p-2 bg-card border border-border rounded-2xl shadow-2xl z-50 min-w-[200px] grid grid-cols-4 gap-2 animate-scaleUp">
+                  {ICON_OPTIONS.map((opt) => {
+                    const IconComp = opt.icon;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => {
+                          updateAttributes({ icon: opt.key });
+                          setIsIconPickerOpen(false);
+                        }}
+                        className={`p-2.5 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                          currentIconKey === opt.key
+                            ? 'bg-indigo-600 text-white shadow-sm scale-105'
+                            : 'bg-muted/60 hover:bg-muted text-foreground hover:scale-105'
+                        }`}
+                        title={opt.name}
+                      >
+                        <IconComp className="w-4 h-4" />
+                      </button>
+                    );
+                  })}
                 </div>
               )}
-            </>
+            </div>
+
+            {/* Center: Title Input */}
+            <input
+              type="text"
+              value={attrs.title || ''}
+              onChange={(e) => updateAttributes({ title: e.target.value })}
+              className="w-full text-sm font-bold text-foreground bg-transparent border-none outline-none focus:ring-0 placeholder:text-muted-foreground/60 px-1 min-w-0 truncate"
+              placeholder="Введите название блока..."
+            />
+
+            {/* Right: Actions */}
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={toggleSize}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                title={currentLayout === 'wide' ? 'Сделать компактным' : 'Развернуть на всю ширину'}
+              >
+                {currentLayout === 'wide' ? (
+                  <Minimize2 className="w-4 h-4" />
+                ) : (
+                  <Maximize2 className="w-4 h-4" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsOpen((prev) => !prev)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                title={isOpen ? 'Свернуть содержимое' : 'Раскрыть содержимое'}
+              >
+                <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsConfirmingDelete(true)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                title="Удалить блок"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Editable Content Area */}
+          {isOpen && (
+            <div className="mt-3 pt-3 border-t border-border/60">
+              <NodeViewContent className="wiki-collapsible-editor-content min-h-12 text-foreground focus:outline-none" />
+            </div>
           )}
         </div>
       </NodeViewWrapper>
 
-      {/* Placeholder Card: "+ Добавить блок рядом" (Direct child of .ProseMirror 2-column grid in Column 2!) */}
+      {/* Floating Delete Confirmation Modal */}
+      {isConfirmingDelete && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fadeIn select-none">
+          <div className="bg-card border border-border rounded-2xl p-5 shadow-2xl max-w-sm w-full animate-scaleUp text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto border border-red-500/20">
+              <X className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-foreground">
+                Удалить раскрывающийся блок?
+              </h4>
+              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                Блок и всё его содержимое будут удалены без возможности восстановления.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsConfirmingDelete(false)}
+                className="px-4 py-2 text-xs font-semibold bg-muted hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-xl text-foreground transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteBlock}
+                className="px-4 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-sm transition-colors cursor-pointer"
+              >
+                Удалить блок
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Placeholder Card: "+ Добавить блок рядом" */}
       {isLastUnpairedCompact && (
         <div 
           onClick={handleAddBlockAlongside}
-          className="wiki-collapsible-add-card col-span-1 w-full rounded-2xl border-2 border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/40 p-3.5 hover:border-indigo-500 hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-500/[0.08] transition-all cursor-pointer select-none text-center flex items-center justify-center min-h-[56px]"
-          title="Добавить второй компактный блок в эту же строку"
+          className="accordion-add-slot col-span-1 w-full min-w-0 rounded-2xl border-2 border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/40 p-4 hover:border-indigo-500 hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-500/[0.08] transition-all cursor-pointer select-none text-center flex items-center justify-center min-h-[64px]"
+          title="Добавить второй компактный блок рядом"
         >
           <div className="flex items-center justify-center gap-2 text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:text-indigo-600 dark:hover:text-indigo-400 py-0.5">
             <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500">
@@ -1235,47 +1221,57 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
           margin-bottom: 0 !important;
           min-height: 0 !important;
         }
-        .ProseMirror > .node-collapsibleBlock {
-          display: inline-block !important;
-          vertical-align: top !important;
-          box-sizing: border-box !important;
-          margin-bottom: 20px !important;
-        }
-        .ProseMirror > .node-collapsibleBlock:has([data-size="wide"]),
-        .ProseMirror > .node-collapsibleBlock:has([data-layout="wide"]),
-        .ProseMirror > .node-collapsibleBlock:has(.wiki-collapsible-wide) {
-          display: block !important;
+        .accordion-grid,
+        .wiki-collapsible-group {
+          display: grid !important;
+          grid-template-columns: repeat(2, minmax(260px, 1fr)) !important;
+          gap: 20px !important;
           width: 100% !important;
-          margin-right: 0 !important;
+          align-items: start !important;
+          margin: 1.25rem 0 !important;
         }
-        .ProseMirror > .wiki-collapsible-item {
-          display: inline-block !important;
-          vertical-align: top !important;
-          box-sizing: border-box !important;
-          margin-bottom: 20px !important;
+        .accordion-grid > *,
+        .wiki-collapsible-group > * {
+          min-width: 0 !important;
         }
-        .ProseMirror > .wiki-collapsible-item.wiki-collapsible-wide,
-        .ProseMirror > .wiki-collapsible-item[data-size="wide"],
-        .ProseMirror > .wiki-collapsible-item[data-layout="wide"] {
-          display: block !important;
+        .accordion-item,
+        .node-collapsibleBlock,
+        .wiki-collapsible-item {
+          grid-column: span 1 !important;
           width: 100% !important;
-          margin-right: 0 !important;
+          min-width: 0 !important;
         }
-        .ProseMirror > .wiki-collapsible-add-card {
-          display: inline-block !important;
-          vertical-align: top !important;
-          box-sizing: border-box !important;
-          margin-bottom: 20px !important;
-          width: calc(50% - 10px) !important;
+        .accordion-item[data-layout="wide"],
+        .node-collapsibleBlock[data-layout="wide"],
+        .node-collapsibleBlock:has([data-layout="wide"]),
+        .wiki-collapsible-item[data-layout="wide"],
+        .wiki-collapsible-item.wiki-collapsible-wide {
+          grid-column: 1 / -1 !important;
+          width: 100% !important;
+        }
+        .accordion-add-slot,
+        .wiki-collapsible-add-card {
+          grid-column: span 1 !important;
+          width: 100% !important;
+          min-width: 0 !important;
         }
         @media (max-width: 768px) {
-          .ProseMirror > .node-collapsibleBlock,
-          .ProseMirror > .wiki-collapsible-item,
-          .ProseMirror > .wiki-collapsible-add-card {
-            display: block !important;
-            width: 100% !important;
-            margin-right: 0 !important;
+          .accordion-grid,
+          .wiki-collapsible-group {
+            grid-template-columns: 1fr !important;
           }
+          .accordion-item,
+          .node-collapsibleBlock,
+          .wiki-collapsible-item,
+          .accordion-add-slot,
+          .wiki-collapsible-add-card {
+            grid-column: 1 / -1 !important;
+          }
+        }
+        .accordion-card {
+          width: 100% !important;
+          min-width: 0 !important;
+          box-sizing: border-box !important;
         }
         .ProseMirror .wiki-collapsible-editor-content > *:first-child {
           margin-top: 0;
