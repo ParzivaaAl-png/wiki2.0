@@ -1279,51 +1279,42 @@ export default function ArticlePage() {
 
           {/* Article content renderer */}
           <style>{`
-            .wiki-collapsible-row {
+            .wiki-article-body {
               display: grid;
-              grid-template-columns: repeat(1, minmax(0, 1fr));
-              gap: 0.75rem;
-              margin: 0.75rem 0;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 20px;
+              width: 100%;
+              align-items: start;
+            }
+            .wiki-article-body > *:not(.wiki-collapsible-block) {
+              grid-column: 1 / -1;
               width: 100%;
             }
-            @media (min-width: 640px) {
-              .wiki-collapsible-row {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+            .wiki-article-body > .wiki-collapsible-block {
+              grid-column: span 1;
+              width: 100%;
+              min-width: 0;
+              margin: 0;
+            }
+            .wiki-article-body > .wiki-collapsible-block.wiki-collapsible-wide {
+              grid-column: 1 / -1;
+              width: 100%;
+            }
+            @media (max-width: 768px) {
+              .wiki-article-body {
+                grid-template-columns: 1fr;
+              }
+              .wiki-article-body > .wiki-collapsible-block {
+                grid-column: 1 / -1;
               }
             }
-            .wiki-collapsible-row > .wiki-collapsible-block.wiki-collapsible-wide {
-              grid-column: 1 / -1;
-              width: 100% !important;
-            }
-            .wiki-collapsible-row > .wiki-collapsible-block.wiki-collapsible-compact {
-              width: 100% !important;
-              margin-right: 0 !important;
-            }
             .wiki-collapsible-block {
-              margin: 0.75rem 0;
               border: 1px solid var(--border);
               border-radius: 1rem;
               background: var(--card);
               box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
               transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
               overflow: hidden;
-            }
-            .wiki-collapsible-block.wiki-collapsible-compact {
-              display: inline-block;
-              width: 100%;
-              vertical-align: top;
-            }
-            @media (min-width: 640px) {
-              .wiki-collapsible-block.wiki-collapsible-compact {
-                width: calc(50% - 0.375rem);
-                margin-right: 0.75rem;
-              }
-            }
-            .wiki-collapsible-block.wiki-collapsible-wide,
-            .wiki-collapsible-block[open] {
-              display: block;
-              width: 100% !important;
-              margin-right: 0 !important;
             }
             .wiki-collapsible-summary {
               display: flex;
@@ -1388,7 +1379,7 @@ export default function ArticlePage() {
                 <div 
                   data-article-content={article.id}
                   dangerouslySetInnerHTML={{ __html: processedContent }} 
-                  className="prose dark:prose-invert max-w-none prose-neutral dark:prose-neutral prose-headings:font-bold prose-h2:text-2xl prose-h2:border-b prose-h2:border-neutral-250/50 dark:prose-h2:border-neutral-800/50 prose-h2:pb-2 prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-3 prose-p:leading-relaxed prose-p:mb-4 prose-ul:list-disc prose-ul:pl-6 prose-ul:mb-4 prose-table:w-full prose-table:border-collapse prose-table:my-4 prose-td:border prose-td:border-neutral-200/50 dark:prose-td:border-neutral-800/50 prose-td:p-2 prose-th:bg-neutral-100 dark:prose-th:bg-neutral-900 prose-th:p-2 prose-th:font-semibold" 
+                  className="wiki-article-body prose dark:prose-invert max-w-none prose-neutral dark:prose-neutral prose-headings:font-bold prose-h2:text-2xl prose-h2:border-b prose-h2:border-neutral-250/50 dark:prose-h2:border-neutral-800/50 prose-h2:pb-2 prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-3 prose-p:leading-relaxed prose-p:mb-4 prose-ul:list-disc prose-ul:pl-6 prose-ul:mb-4 prose-table:w-full prose-table:border-collapse prose-table:my-4 prose-td:border prose-td:border-neutral-200/50 dark:prose-td:border-neutral-800/50 prose-td:p-2 prose-th:bg-neutral-100 dark:prose-th:bg-neutral-900 prose-th:p-2 prose-th:font-semibold" 
                 />
               );
             }
