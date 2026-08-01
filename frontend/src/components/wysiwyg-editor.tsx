@@ -320,18 +320,21 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
     }
   }, [editor?.doc, getPos, currentLayout]);
 
-  const openDeleteConfirmation = React.useCallback((e?: React.MouseEvent) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    window.dispatchEvent(
-      new CustomEvent('wiki-cancel-all-delete-confirmations', {
-        detail: { blockId: attrs.id },
-      })
-    );
-    setIsConfirmingDelete(true);
-  }, [attrs.id]);
+  const openDeleteConfirmation = React.useCallback(
+    (e?: React.MouseEvent) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      window.dispatchEvent(
+        new CustomEvent('wiki-cancel-all-delete-confirmations', {
+          detail: { blockId: attrs.id },
+        })
+      );
+      setIsConfirmingDelete(true);
+    },
+    [attrs.id]
+  );
 
   const handleDeleteBlock = React.useCallback((e?: React.MouseEvent) => {
     if (e) {
@@ -364,24 +367,16 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
         const parentPos = $pos.before($pos.depth);
         const parentSize = parent.nodeSize;
 
-        editor
-          .chain()
-          .deleteRange({
-            from: parentPos,
-            to: parentPos + parentSize,
-          })
-          .focus()
-          .run();
+        const tr = editor.state.tr.delete(parentPos, parentPos + parentSize);
+        editor.view.dispatch(tr);
       } else {
-        editor
-          .chain()
-          .deleteRange({
-            from: pos,
-            to: pos + node.nodeSize,
-          })
-          .focus()
-          .run();
+        const tr = editor.state.tr.delete(pos, pos + node.nodeSize);
+        editor.view.dispatch(tr);
       }
+
+      try {
+        editor.commands.focus();
+      } catch {}
     } catch (err) {
       console.error('Error deleting collapsible block:', err);
       try {
@@ -684,7 +679,7 @@ const CollapsibleGroup = Node.create({
   group: 'block',
   content: 'collapsibleBlock+',
   defining: true,
-  isolating: true,
+  isolating: false,
 
   parseHTML() {
     return [
@@ -732,7 +727,7 @@ const CollapsibleBlock = Node.create({
   group: 'block',
   content: 'block+',
   defining: true,
-  isolating: true,
+  isolating: false,
 
   addAttributes() {
     return {
