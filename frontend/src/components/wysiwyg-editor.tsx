@@ -254,11 +254,43 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
   const iconPickerRef = React.useRef<HTMLDivElement>(null);
   const titleInputRef = React.useRef<HTMLInputElement>(null);
   const cardRef = React.useRef<HTMLDivElement>(null);
+  const isAnimatingRef = React.useRef(false);
 
   const currentIconKey = attrs.icon || 'file-text';
   const currentLayout = attrs.layout || attrs.size || 'compact';
 
   const CurrentIconComponent = ICON_OPTIONS.find((i) => i.key === currentIconKey)?.icon || FileText;
+
+  const toggleOpenState = React.useCallback(
+    (e?: React.MouseEvent) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      if (isAnimatingRef.current) return;
+      isAnimatingRef.current = true;
+
+      const cardEl = cardRef.current;
+      if (cardEl) {
+        const parentGroup = cardEl.closest('.wiki-collapsible-group') || cardEl.parentElement;
+        if (parentGroup) {
+          const siblingCards = Array.from(
+            parentGroup.querySelectorAll<HTMLElement>('.accordion-card, .wiki-collapsible-block, .wiki-collapsible-item')
+          );
+          siblingCards.forEach((el) => {
+            (el as any).__flipOldRect = el.getBoundingClientRect();
+          });
+        }
+      }
+
+      setIsOpen((prev) => !prev);
+
+      setTimeout(() => {
+        isAnimatingRef.current = false;
+      }, 550);
+    },
+    []
+  );
 
   React.useLayoutEffect(() => {
     const cardEl = cardRef.current;
@@ -283,15 +315,18 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
       if (oldRect && newRect) {
         const deltaX = oldRect.left - newRect.left;
         const deltaY = oldRect.top - newRect.top;
+        const scaleX = oldRect.width / (newRect.width || 1);
 
-        if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+        if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1 || Math.abs(scaleX - 1) > 0.02) {
           el.style.transition = 'none';
-          el.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0)`;
+          el.style.transformOrigin = 'left top';
+          el.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0) scaleX(${scaleX})`;
 
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-              el.style.transition = 'transform 350ms cubic-bezier(0.16, 1, 0.3, 1), border-color 300ms ease, box-shadow 300ms ease, background-color 300ms ease';
-              el.style.transform = 'translate3d(0, 0, 0)';
+              el.style.transition =
+                'transform 550ms cubic-bezier(0.16, 1, 0.3, 1), border-color 400ms ease, box-shadow 400ms ease, background-color 400ms ease';
+              el.style.transform = 'translate3d(0, 0, 0) scaleX(1)';
             });
           });
         }
@@ -717,16 +752,12 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
                   e.preventDefault();
                   e.stopPropagation();
                 }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsOpen((prev) => !prev);
-                }}
+                onClick={toggleOpenState}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
                 title={isOpen ? 'Свернуть' : 'Раскрыть'}
               >
                 <ChevronDown 
-                  className={`accordion-toggle-icon w-4 h-4 transition-transform duration-350 ease-in-out ${
+                  className={`accordion-toggle-icon w-4 h-4 transition-transform duration-400 ease-in-out ${
                     isOpen ? 'rotate-180' : 'rotate-0'
                   }`} 
                 />
@@ -756,14 +787,18 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
             display: 'grid',
             gridTemplateRows: isOpen ? '1fr' : '0fr',
             opacity: isOpen ? 1 : 0,
-            transition: 'grid-template-rows 350ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms cubic-bezier(0.16, 1, 0.3, 1)',
+            transition: isOpen
+              ? 'grid-template-rows 500ms cubic-bezier(0.16, 1, 0.3, 1) 100ms, opacity 350ms ease 120ms'
+              : 'grid-template-rows 400ms cubic-bezier(0.16, 1, 0.3, 1) 0ms, opacity 250ms ease 0ms',
           }}
         >
           <div 
             className="accordion-content-inner overflow-hidden min-h-0"
             style={{
-              transform: isOpen ? 'translateY(0)' : 'translateY(-6px)',
-              transition: 'transform 350ms cubic-bezier(0.16, 1, 0.3, 1)',
+              transform: isOpen ? 'translateY(0)' : 'translateY(-10px)',
+              transition: isOpen
+                ? 'transform 450ms cubic-bezier(0.16, 1, 0.3, 1) 100ms'
+                : 'transform 300ms cubic-bezier(0.16, 1, 0.3, 1) 0ms',
             }}
           >
             <div className="mt-3 pt-3 border-t border-border/60">
