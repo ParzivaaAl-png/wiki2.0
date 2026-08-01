@@ -508,7 +508,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
       data-layout={currentLayout}
       data-size={currentLayout}
       data-open={isOpen ? 'true' : 'false'}
-      className={`accordion-item node-collapsibleBlock wiki-collapsible-item min-w-0 w-full transition-all duration-300 ease-in-out ${
+      className={`accordion-item node-collapsibleBlock wiki-collapsible-item min-w-0 w-full transition-all duration-350 ease-in-out ${
         isExpanded
           ? 'wiki-collapsible-wide col-span-full my-2'
           : showAddButton
@@ -680,7 +680,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
                 title={isOpen ? 'Свернуть' : 'Раскрыть'}
               >
                 <ChevronDown 
-                  className={`accordion-toggle-icon w-4 h-4 transition-transform duration-300 ease-in-out ${
+                  className={`accordion-toggle-icon w-4 h-4 transition-transform duration-350 ease-in-out ${
                     isOpen ? 'rotate-180' : 'rotate-0'
                   }`} 
                 />
@@ -704,16 +704,22 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
 
         {/* Editable Content Area */}
         <div
-          className="accordion-content transition-all duration-300 ease-in-out"
+          className="accordion-content"
           data-open={isOpen ? 'true' : 'false'}
           style={{
             display: 'grid',
             gridTemplateRows: isOpen ? '1fr' : '0fr',
             opacity: isOpen ? 1 : 0,
-            transition: 'grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1), opacity 200ms ease',
+            transition: 'grid-template-rows 350ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         >
-          <div className="accordion-content-inner overflow-hidden min-h-0">
+          <div 
+            className="accordion-content-inner overflow-hidden min-h-0"
+            style={{
+              transform: isOpen ? 'translateY(0)' : 'translateY(-6px)',
+              transition: 'transform 350ms cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+          >
             <div className="mt-3 pt-3 border-t border-border/60">
               <NodeViewContent className="wiki-collapsible-editor-content min-h-12 text-foreground focus:outline-none" />
             </div>

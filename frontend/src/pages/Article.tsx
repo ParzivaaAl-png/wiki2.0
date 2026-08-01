@@ -1382,7 +1382,7 @@ export default function ArticlePage() {
               border-radius: 1rem;
               background: var(--card);
               box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
-              transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+              transition: all 350ms cubic-bezier(0.16, 1, 0.3, 1);
               overflow: hidden;
             }
             .wiki-collapsible-block:hover {
