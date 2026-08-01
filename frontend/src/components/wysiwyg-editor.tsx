@@ -253,11 +253,52 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
   const [isOpen, setIsOpen] = React.useState(Boolean(attrs.defaultOpen));
   const iconPickerRef = React.useRef<HTMLDivElement>(null);
   const titleInputRef = React.useRef<HTMLInputElement>(null);
+  const cardRef = React.useRef<HTMLDivElement>(null);
 
   const currentIconKey = attrs.icon || 'file-text';
   const currentLayout = attrs.layout || attrs.size || 'compact';
 
   const CurrentIconComponent = ICON_OPTIONS.find((i) => i.key === currentIconKey)?.icon || FileText;
+
+  React.useLayoutEffect(() => {
+    const cardEl = cardRef.current;
+    if (!cardEl) return;
+
+    const parentGroup = cardEl.closest('.wiki-collapsible-group') || cardEl.parentElement;
+    if (!parentGroup) return;
+
+    const siblingCards = Array.from(
+      parentGroup.querySelectorAll<HTMLElement>('.accordion-card, .wiki-collapsible-block, .wiki-collapsible-item')
+    );
+
+    const newRects = new Map<HTMLElement, DOMRect>();
+    siblingCards.forEach((el) => {
+      newRects.set(el, el.getBoundingClientRect());
+    });
+
+    siblingCards.forEach((el) => {
+      const oldRect = (el as any).__flipOldRect as DOMRect | undefined;
+      const newRect = newRects.get(el);
+
+      if (oldRect && newRect) {
+        const deltaX = oldRect.left - newRect.left;
+        const deltaY = oldRect.top - newRect.top;
+
+        if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+          el.style.transition = 'none';
+          el.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0)`;
+
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              el.style.transition = 'transform 350ms cubic-bezier(0.16, 1, 0.3, 1), border-color 300ms ease, box-shadow 300ms ease, background-color 300ms ease';
+              el.style.transform = 'translate3d(0, 0, 0)';
+            });
+          });
+        }
+      }
+      (el as any).__flipOldRect = newRect;
+    });
+  }, [isOpen, currentLayout]);
 
   React.useEffect(() => {
     if (attrs.title === 'Новый раскрывающийся блок' && !attrs.autoFocused) {
@@ -364,7 +405,7 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
         // Layer 1: Dynamic position via getPos()
         if (typeof getPos === 'function') {
           const pos = getPos();
-          if (typeof pos !== 'number') {
+          if (typeof pos === 'number') {
             const $pos = editor.state.doc.resolve(pos);
 
             let groupPos = -1;
@@ -516,9 +557,14 @@ const CollapsibleBlockView = ({ node, updateAttributes, deleteNode, getPos, edit
           : 'wiki-collapsible-compact col-span-1 my-2'
       }`}
     >
-      <div className={`accordion-card relative rounded-2xl border border-border bg-card p-4 shadow-sm transition-all duration-300 ease-in-out hover:border-indigo-500/30 hover:shadow-md w-full min-w-0 box-border ${
-        isExpanded ? 'col-span-full' : 'col-span-1'
-      }`}>
+      <div 
+        ref={cardRef}
+        className={`accordion-card relative rounded-2xl border bg-card p-4 transition-all duration-350 ease-in-out w-full min-w-0 box-border ${
+          isOpen
+            ? 'border-indigo-500/40 dark:border-indigo-400/40 shadow-lg shadow-indigo-500/[0.08] dark:shadow-indigo-500/[0.12] col-span-full'
+            : 'border-border shadow-xs hover:border-indigo-500/30 hover:shadow-md col-span-1'
+        }`}
+      >
         {/* Card Header Row */}
         {isConfirmingDelete ? (
           <div 

@@ -129,6 +129,52 @@ export default function ArticlePage() {
   const [lightboxIndex, setLightboxIndex] = React.useState(0);
   const [isLightboxOpen, setIsLightboxOpen] = React.useState(false);
 
+  // Attach FLIP grid animation listeners to collapsible details elements
+  React.useEffect(() => {
+    const handleToggleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const detailsEl = target.closest('details.wiki-collapsible-block, .wiki-collapsible-block');
+      if (!detailsEl) return;
+
+      const parentGroup = detailsEl.closest('.wiki-collapsible-group, .wiki-collapsible-grid') || detailsEl.parentElement;
+      if (!parentGroup) return;
+
+      const siblingCards = Array.from(parentGroup.querySelectorAll<HTMLElement>('details.wiki-collapsible-block, .wiki-collapsible-block'));
+      siblingCards.forEach((el) => {
+        (el as any).__flipOldRect = el.getBoundingClientRect();
+      });
+
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          siblingCards.forEach((el) => {
+            const oldRect = (el as any).__flipOldRect as DOMRect | undefined;
+            const newRect = el.getBoundingClientRect();
+
+            if (oldRect && newRect) {
+              const deltaX = oldRect.left - newRect.left;
+              const deltaY = oldRect.top - newRect.top;
+
+              if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+                el.style.transition = 'none';
+                el.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0)`;
+
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => {
+                    el.style.transition = 'transform 350ms cubic-bezier(0.16, 1, 0.3, 1), border-color 300ms ease, box-shadow 300ms ease';
+                    el.style.transform = 'translate3d(0, 0, 0)';
+                  });
+                });
+              }
+            }
+          });
+        }, 30);
+      });
+    };
+
+    document.addEventListener('click', handleToggleClick, true);
+    return () => document.removeEventListener('click', handleToggleClick, true);
+  }, []);
+
   // Attach click listeners to article images for lightbox viewing
   React.useEffect(() => {
     if (!article?.content) return;
