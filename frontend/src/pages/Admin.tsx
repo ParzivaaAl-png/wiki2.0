@@ -28,6 +28,7 @@ import {
   ChevronDown,
   ChevronRight,
   Building2,
+  Gift,
   Briefcase,
   FileText,
   PhoneCall,
@@ -58,6 +59,8 @@ import {
 import { useAuth } from '../lib/auth-context';
 import PreviewModal from '../components/preview-modal';
 import { NewsAdmin } from '../components/news-admin';
+import { TaxiParksAdmin } from '../components/taxi-parks-admin';
+import { PromotionsAdmin } from '../components/promotions-admin';
 import WikiManagement from '../components/wiki-management';
 import AnalyticsDashboard from '../components/analytics-dashboard';
 import TeamAccessManagement from '../components/team-access-management';
@@ -123,7 +126,7 @@ export default function Admin() {
     setAuthorFilter('all');
   };
 
-  const [activeTab, setActiveTab] = React.useState<'articles' | 'archive' | 'analytics' | 'news' | 'team' | 'wiki'>('articles');
+  const [activeTab, setActiveTab] = React.useState<'articles' | 'archive' | 'analytics' | 'news' | 'taxi-parks' | 'promotions' | 'team' | 'wiki'>('articles');
   const [collapsedSpaceIds, setCollapsedSpaceIds] = React.useState<Set<string>>(new Set());
   const [collapsedSectionIds, setCollapsedSectionIds] = React.useState<Set<string>>(new Set());
 
@@ -947,6 +950,30 @@ export default function Admin() {
             Новости
           </button>
 
+          <button
+            onClick={() => setActiveTab('taxi-parks')}
+            className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
+              activeTab === 'taxi-parks'
+                ? 'border-indigo-500 text-indigo-500'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Building2 className="w-4 h-4 text-muted-foreground" />
+            Таксопарки
+          </button>
+
+          <button
+            onClick={() => setActiveTab('promotions')}
+            className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
+              activeTab === 'promotions'
+                ? 'border-amber-500 text-amber-500'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Gift className="w-4 h-4 text-muted-foreground" />
+            Акции
+          </button>
+
           {isAdmin && (
             <button
               onClick={() => setActiveTab('analytics')}
@@ -1001,6 +1028,14 @@ export default function Admin() {
 
       {activeTab === 'news' && (
         <NewsAdmin />
+      )}
+
+      {activeTab === 'taxi-parks' && (
+        <TaxiParksAdmin />
+      )}
+
+      {activeTab === 'promotions' && (
+        <PromotionsAdmin />
       )}
 
       {activeTab === 'analytics' && isAdmin && (

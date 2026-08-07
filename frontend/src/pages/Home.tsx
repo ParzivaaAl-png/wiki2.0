@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Search, Sparkles, Clock, ChevronRight, ChevronLeft, Check, Plus, Star, X, ShieldCheck, Folder } from 'lucide-react';
+import { Search, Sparkles, Clock, ChevronRight, ChevronLeft, Check, Plus, Star, X, ShieldCheck, Folder, Newspaper, Building2, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   fetchArticles, 
@@ -14,8 +14,14 @@ import {
   fetchHomeData,
   homeCache,
   prefetchHomeData,
+  fetchUnreadNewsCount,
+  fetchNews,
+  fetchTaxiParks,
+  getApiAssetUrl,
   MandatoryAcknowledgementAssignment,
-  Article
+  Article,
+  TaxiPark,
+  News
 } from '../lib/api';
 import { CategoryIcon } from '../components/icon';
 import { SearchModal } from '../components/search-modal';
@@ -40,7 +46,11 @@ export default function Home() {
   const [readingHistory, setReadingHistory] = React.useState<Article[]>([]);
   const [mandatoryAcknowledgements, setMandatoryAcknowledgements] = React.useState<MandatoryAcknowledgementAssignment[]>([]);
 
-  
+  // News and Taxi Parks states
+  const [unreadNewsCount, setUnreadNewsCount] = React.useState(0);
+  const [latestNews, setLatestNews] = React.useState<News | null>(null);
+  const [taxiParks, setTaxiParks] = React.useState<TaxiPark[]>([]);
+
   const [isLoading, setIsLoading] = React.useState(true);
 
   // Filter Tab State: 'all' | 'new' | 'trending' | 'recommended' | 'mandatory'
@@ -57,6 +67,11 @@ export default function Home() {
   const [draggedId, setDraggedId] = React.useState<number | null>(null);
 
   const loadData = React.useCallback(async (forceRevalidate = false) => {
+    // Load News and Taxi Parks asynchronously
+    fetchUnreadNewsCount().then(setUnreadNewsCount).catch(() => {});
+    fetchNews().then(list => setLatestNews(list[0] || null)).catch(() => {});
+    fetchTaxiParks(true).then(setTaxiParks).catch(() => {});
+
     // 1. Instantaneous render from memory cache
     const cached = homeCache.get();
     if (cached && !forceRevalidate) {
@@ -416,6 +431,111 @@ export default function Home() {
 
       {/* MAIN CONTENT CONTAINER */}
       <section className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-8 py-6 space-y-6">
+
+        {/* TOP WIDGETS ROW: LEFT = НОВОСТИ, RIGHT = ТАКСОПАРКИ */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          
+          {/* LEFT BLOCK: НОВОСТИ */}
+          <Link
+            to="/news"
+            className="group relative p-5 rounded-2xl border border-border bg-card hover:border-indigo-500/40 hover:shadow-xl transition-all flex flex-col justify-between overflow-hidden"
+          >
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform">
+                  <Newspaper className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-outfit text-base font-extrabold text-foreground group-hover:text-indigo-500 transition-colors uppercase tracking-wider">
+                    НОВОСТИ
+                  </h3>
+                  <p className="text-xs text-muted-foreground">Корпоративные новости</p>
+                </div>
+              </div>
+
+              {/* Unread Counter Badge */}
+              <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold border transition-all ${
+                unreadNewsCount > 0 
+                  ? 'bg-red-500 text-white border-red-500 shadow-sm animate-pulse' 
+                  : 'bg-muted text-muted-foreground border-border'
+              }`}>
+                {unreadNewsCount > 0 
+                  ? (unreadNewsCount > 9 ? '9+' : `${unreadNewsCount} новых`) 
+                  : 'Все новости'}
+              </span>
+            </div>
+
+            {latestNews ? (
+              <div className="space-y-1 pt-2 border-t border-border/60">
+                <h4 className="text-xs font-bold text-foreground line-clamp-1 group-hover:text-indigo-500 transition-colors">
+                  {latestNews.title}
+                </h4>
+                <p className="text-[11px] text-muted-foreground line-clamp-1 font-light">
+                  {latestNews.description || 'Нажмите, чтобы открыть свежие новости и объявления.'}
+                </p>
+              </div>
+            ) : (
+              <div className="pt-2 border-t border-border/60 text-xs text-muted-foreground italic">
+                Перейти в раздел новостей →
+              </div>
+            )}
+          </Link>
+
+          {/* RIGHT BLOCK: ТАКСОПАРКИ */}
+          <div className="p-5 rounded-2xl border border-border bg-card space-y-3 flex flex-col justify-between shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-outfit text-base font-extrabold text-foreground uppercase tracking-wider">
+                    ТАКСОПАРКИ
+                  </h3>
+                  <p className="text-xs text-muted-foreground">Партнеры платформы</p>
+                </div>
+              </div>
+
+              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                {taxiParks.length} парков
+              </span>
+            </div>
+
+            {/* Compact Scrollable List */}
+            <div className="max-h-28 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
+              {taxiParks.length === 0 ? (
+                <div className="text-xs text-muted-foreground py-2 text-center">Загрузка таксопарков...</div>
+              ) : (
+                taxiParks.map((park) => (
+                  <Link
+                    key={park.id}
+                    to={`/taxi-parks/${park.slug}`}
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-muted/70 transition-colors border border-transparent hover:border-border text-xs group"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {park.logo_url ? (
+                        <img
+                          src={getApiAssetUrl(park.logo_url)}
+                          alt={park.name}
+                          className="w-5 h-5 rounded object-cover border border-border bg-muted shrink-0"
+                        />
+                      ) : (
+                        <div className="w-5 h-5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold flex items-center justify-center text-[9px] shrink-0">
+                          {park.name.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="font-bold text-foreground group-hover:text-indigo-500 transition-colors truncate">
+                        {park.name}
+                      </span>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+                  </Link>
+                ))
+              )}
+            </div>
+          </div>
+
+        </div>
 
         {user && pendingMandatoryAcknowledgements.length > 0 && (
           <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-5 shadow-premium dark:shadow-premium-dark">

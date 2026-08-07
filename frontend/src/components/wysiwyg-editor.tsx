@@ -179,6 +179,24 @@ const FontSize = Extension.create({
   },
 });
 
+export const CustomTableCell = TableCell.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      backgroundColor: {
+        default: null,
+        parseHTML: (element) => element.style.backgroundColor || element.getAttribute('bgcolor') || null,
+        renderHTML: (attributes) => {
+          if (!attributes.backgroundColor) return {};
+          return {
+            style: `background-color: ${attributes.backgroundColor}`,
+          };
+        },
+      },
+    };
+  },
+});
+
 export function wrapCollapsibleBlocksInRows(html: string): string {
   if (!html || (!html.includes('data-wiki-collapsible') && !html.includes('<details') && !html.includes('data-wiki-collapsible-row'))) return html;
   
@@ -1110,9 +1128,16 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
   const [isColorMenuOpen, setIsColorMenuOpen] = React.useState(false);
   const [isHighlightMenuOpen, setIsHighlightMenuOpen] = React.useState(false);
 
+  // Advanced Table States
+  const [showTableModal, setShowTableModal] = React.useState(false);
+  const [tableRowsInput, setTableRowsInput] = React.useState(3);
+  const [tableColsInput, setTableColsInput] = React.useState(3);
+  const [isCellColorOpen, setIsCellColorOpen] = React.useState(false);
+
   const colorMenuRef = React.useRef<HTMLDivElement>(null);
   const highlightMenuRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const tableModalRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -1186,7 +1211,7 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
       }),
       TableRow,
       TableHeader,
-      TableCell,
+      CustomTableCell,
       Image.configure({
         allowBase64: true,
         HTMLAttributes: {
@@ -2154,53 +2179,134 @@ export default function WYSIWYGEditor({ content, onChange, articleId, onEditorRe
             >
               <Code className="w-4 h-4" />
             </button>
-            <button
-              type="button"
-              onClick={insertTable}
-              className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground cursor-pointer"
-              title="Таблица"
-            >
-              <TableIcon className="w-4 h-4" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowTableModal(!showTableModal)}
+                className={`p-1.5 rounded hover:bg-muted transition-colors cursor-pointer ${showTableModal || editor.isActive('table') ? 'bg-muted text-indigo-500' : 'text-muted-foreground'}`}
+                title="Вставить или настроить таблицу"
+              >
+                <TableIcon className="w-4 h-4" />
+              </button>
+
+              {/* Table Creation Popover */}
+              {showTableModal && (
+                <div ref={tableModalRef} className="absolute top-8 left-0 z-30 p-3 bg-card border border-border rounded-xl shadow-2xl space-y-3 w-56 animate-scaleUp">
+                  <div className="text-[10px] font-bold text-muted-foreground uppercase">Создать таблицу</div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="block text-[10px] text-muted-foreground font-semibold mb-1">Строки</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={30}
+                        value={tableRowsInput}
+                        onChange={(e) => setTableRowsInput(parseInt(e.target.value) || 1)}
+                        className="w-full px-2 py-1 border border-border rounded bg-muted text-foreground"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-muted-foreground font-semibold mb-1">Столбцы</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={15}
+                        value={tableColsInput}
+                        onChange={(e) => setTableColsInput(parseInt(e.target.value) || 1)}
+                        className="w-full px-2 py-1 border border-border rounded bg-muted text-foreground"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      editor.chain().focus().insertTable({ rows: tableRowsInput, cols: tableColsInput, withHeaderRow: true }).run();
+                      setShowTableModal(false);
+                    }}
+                    className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  >
+                    Вставить таблицу
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Table tools */}
+          {/* Expanded Table Controls Toolbar */}
           {editor.isActive('table') && (
-            <div className="flex items-center gap-0.5 border-r border-border pr-1.5 mr-1.5 text-[9px] text-muted-foreground">
+            <div className="flex items-center gap-1 border-r border-border pr-2 mr-2 text-[10px] text-muted-foreground flex-wrap">
+              <span className="font-bold text-indigo-500 text-[10px]">Таблица:</span>
               <button
                 type="button"
-                onClick={() => editor.chain().focus().addColumnAfter().run()}
-                className="px-1 py-0.5 bg-muted rounded hover:bg-muted text-muted-foreground cursor-pointer"
+                onClick={() => editor.chain().focus().addRowBefore().run()}
+                className="px-1.5 py-0.5 bg-muted rounded hover:bg-neutral-200 dark:hover:bg-neutral-800 text-foreground cursor-pointer"
+                title="Добавить строку сверху"
               >
-                +Кол.
-              </button>
-              <button
-                type="button"
-                onClick={() => editor.chain().focus().deleteColumn().run()}
-                className="px-1 py-0.5 bg-red-100 dark:bg-red-950/20 text-red-500 rounded hover:bg-red-200 cursor-pointer"
-              >
-                -Кол.
+                +Стр. ⬆️
               </button>
               <button
                 type="button"
                 onClick={() => editor.chain().focus().addRowAfter().run()}
-                className="px-1 py-0.5 bg-muted rounded hover:bg-muted text-muted-foreground cursor-pointer"
+                className="px-1.5 py-0.5 bg-muted rounded hover:bg-neutral-200 dark:hover:bg-neutral-800 text-foreground cursor-pointer"
+                title="Добавить строку снизу"
               >
-                +Стр.
+                +Стр. ⬇️
               </button>
               <button
                 type="button"
                 onClick={() => editor.chain().focus().deleteRow().run()}
-                className="px-1 py-0.5 bg-red-100 dark:bg-red-950/20 text-red-500 rounded hover:bg-red-200 cursor-pointer"
+                className="px-1.5 py-0.5 bg-red-500/10 text-red-600 rounded hover:bg-red-500/20 cursor-pointer"
+                title="Удалить строку"
               >
                 -Стр.
               </button>
               <button
                 type="button"
-                onClick={() => editor.chain().focus().deleteTable().run()}
-                className="px-1 py-0.5 bg-red-500 text-white rounded hover:bg-red-600 font-bold cursor-pointer"
+                onClick={() => editor.chain().focus().addColumnBefore().run()}
+                className="px-1.5 py-0.5 bg-muted rounded hover:bg-neutral-200 dark:hover:bg-neutral-800 text-foreground cursor-pointer"
+                title="Добавить столбец слева"
               >
-                Удалить
+                +Кол. ⬅️
+              </button>
+              <button
+                type="button"
+                onClick={() => editor.chain().focus().addColumnAfter().run()}
+                className="px-1.5 py-0.5 bg-muted rounded hover:bg-neutral-200 dark:hover:bg-neutral-800 text-foreground cursor-pointer"
+                title="Добавить столбец справа"
+              >
+                +Кол. ➡️
+              </button>
+              <button
+                type="button"
+                onClick={() => editor.chain().focus().deleteColumn().run()}
+                className="px-1.5 py-0.5 bg-red-500/10 text-red-600 rounded hover:bg-red-500/20 cursor-pointer"
+                title="Удалить столбец"
+              >
+                -Кол.
+              </button>
+              <button
+                type="button"
+                onClick={() => editor.chain().focus().mergeCells().run()}
+                className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded hover:bg-indigo-500/20 cursor-pointer"
+                title="Объединить выд. ячейки"
+              >
+                Объединить
+              </button>
+              <button
+                type="button"
+                onClick={() => editor.chain().focus().splitCell().run()}
+                className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded hover:bg-indigo-500/20 cursor-pointer"
+                title="Разделить ячейку"
+              >
+                Разделить
+              </button>
+              <button
+                type="button"
+                onClick={() => editor.chain().focus().deleteTable().run()}
+                className="px-1.5 py-0.5 bg-red-600 text-white rounded hover:bg-red-700 font-bold cursor-pointer"
+                title="Удалить таблицу"
+              >
+                Удалить тбл.
               </button>
             </div>
           )}

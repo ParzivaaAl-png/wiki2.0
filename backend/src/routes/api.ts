@@ -11,6 +11,7 @@ import * as orgStructureController from '../controllers/orgStructure';
 import * as guestAccessController from '../controllers/guestAccess';
 import * as analyticsController from '../controllers/analytics';
 import * as accessControlController from '../controllers/accessControl';
+import * as taxiParksController from '../controllers/taxiParks';
 import { requireAuth, requireRole, optionalAuth } from '../middleware/auth';
 
 // Ensure uploads folder exists
@@ -205,5 +206,22 @@ router.get('/articles/:id/links', requireAuth, articlesController.getArticleLink
 router.get('/articles/:id/backlinks', requireAuth, articlesController.getArticleBacklinks);
 router.post('/articles/:id/links', requireAuth, requireRole(['Admin', 'Editor']), articlesController.createArticleLink);
 router.delete('/articles/:id/links/:linkId', requireAuth, requireRole(['Admin', 'Editor']), articlesController.deleteArticleLink);
+
+// Taxi Parks Routes
+router.get('/taxi-parks', taxiParksController.getTaxiParks);
+router.get('/taxi-parks/:slug', taxiParksController.getTaxiParkBySlug);
+router.post('/taxi-parks', requireAuth, requireRole(['Admin', 'Editor']), taxiParksController.createTaxiPark);
+router.put('/taxi-parks/:id', requireAuth, requireRole(['Admin', 'Editor']), taxiParksController.updateTaxiPark);
+router.delete('/taxi-parks/:id', requireAuth, requireRole(['Admin', 'Editor']), taxiParksController.deleteTaxiPark);
+router.post('/taxi-parks/reorder', requireAuth, requireRole(['Admin', 'Editor']), taxiParksController.reorderTaxiParks);
+router.post('/taxi-parks/upload-logo', requireAuth, requireRole(['Admin', 'Editor']), upload.single('logo'), taxiParksController.uploadTaxiParkLogo);
+
+// Promotions Routes
+router.get('/promotions', taxiParksController.getPromotions);
+router.get('/promotions/:id', taxiParksController.getPromotionById);
+router.post('/promotions', requireAuth, requireRole(['Admin', 'Editor']), taxiParksController.createPromotion);
+router.put('/promotions/:id', requireAuth, requireRole(['Admin', 'Editor']), taxiParksController.updatePromotion);
+router.delete('/promotions/:id', requireAuth, requireRole(['Admin', 'Editor']), taxiParksController.deletePromotion);
+router.post('/promotions/upload-banner', requireAuth, requireRole(['Admin', 'Editor']), upload.single('banner'), taxiParksController.uploadPromotionBanner);
 
 export default router;

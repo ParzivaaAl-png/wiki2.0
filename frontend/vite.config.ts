@@ -13,6 +13,16 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true, // Allows exposing the server inside Docker container
+    proxy: {
+      '/uploads': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     target: 'esnext',

@@ -20,6 +20,8 @@ const EditorPage = React.lazy(() => import('./pages/Editor'));
 const ImportPreviewPage = React.lazy(() => import('./pages/ImportPreview'));
 const LoginPage = React.lazy(() => import('./pages/Login'));
 const ProfilePage = React.lazy(() => import('./pages/Profile'));
+const NewsPage = React.lazy(() => import('./pages/NewsPage'));
+const TaxiParkDetail = React.lazy(() => import('./pages/TaxiParkDetail'));
 
 function PageFallback() {
   return (
@@ -298,7 +300,6 @@ function Header() {
         {/* Navigation Actions */}
         <div className="flex items-center gap-1.5 sm:gap-3">
           {user && <SearchModal />}
-          {user && <NewsBell />}
 
           {user ? (
             <div className="flex items-center gap-1.5 sm:gap-3">
@@ -486,6 +487,27 @@ function AppContent() {
             />
 
             
+            <Route
+              path="/news"
+              element={
+                <ProtectedRoute>
+                  <AnimatedPage>
+                    <NewsPage />
+                  </AnimatedPage>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/taxi-parks/:slug"
+              element={
+                <ProtectedRoute>
+                  <AnimatedPage>
+                    <TaxiParkDetail />
+                  </AnimatedPage>
+                </ProtectedRoute>
+              }
+            />
+
             {/* Protected Admin/Editor Routes */}
             <Route 
               path="/admin" 

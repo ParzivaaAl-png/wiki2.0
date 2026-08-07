@@ -1733,3 +1733,128 @@ export async function createArticleLink(articleId: number, data: { target_articl
 export async function deleteArticleLink(articleId: number, linkId: number): Promise<void> {
   return apiCall<void>(`/articles/${articleId}/links/${linkId}`, { method: 'DELETE' });
 }
+
+// TAXI PARKS & PROMOTIONS
+export interface TaxiPark {
+  id: number;
+  name: string;
+  slug: string;
+  logo_url: string | null;
+  short_description: string | null;
+  full_description: string | null;
+  phone: string | null;
+  additional_phones: string | null;
+  address: string | null;
+  working_hours: string | null;
+  website: string | null;
+  additional_info: string | null;
+  is_active: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Promotion {
+  id: number;
+  title: string;
+  short_description: string | null;
+  full_description: string | null;
+  image_url: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  external_link: string | null;
+  button_text: string | null;
+  is_active: boolean;
+  author_id: number | null;
+  created_at: string;
+  updated_at: string;
+  taxi_park_ids?: number[];
+  taxi_parks?: { id: number; name: string; slug: string }[];
+}
+
+export async function fetchTaxiParks(activeOnly: boolean = false): Promise<TaxiPark[]> {
+  return apiCall<TaxiPark[]>(`/taxi-parks?activeOnly=${activeOnly}`, { cache: 'no-store' });
+}
+
+export async function fetchTaxiParkBySlug(slug: string): Promise<TaxiPark> {
+  return apiCall<TaxiPark>(`/taxi-parks/${encodeURIComponent(slug)}`, { cache: 'no-store' });
+}
+
+export async function createTaxiPark(data: Partial<TaxiPark>): Promise<TaxiPark> {
+  clearApiCache();
+  return apiCall<TaxiPark>('/taxi-parks', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateTaxiPark(id: number, data: Partial<TaxiPark>): Promise<TaxiPark> {
+  clearApiCache();
+  return apiCall<TaxiPark>(`/taxi-parks/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteTaxiPark(id: number): Promise<void> {
+  clearApiCache();
+  return apiCall<void>(`/taxi-parks/${id}`, { method: 'DELETE' });
+}
+
+export async function reorderTaxiParks(items: { id: number; position: number }[]): Promise<void> {
+  clearApiCache();
+  return apiCall<void>('/taxi-parks/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  });
+}
+
+export async function uploadTaxiParkLogo(file: File): Promise<{ message: string; url: string }> {
+  const formData = new FormData();
+  formData.append('logo', file);
+  return apiCall<{ message: string; url: string }>('/taxi-parks/upload-logo', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export async function fetchPromotions(taxiParkId?: number, activeOnly: boolean = false): Promise<Promotion[]> {
+  const q = new URLSearchParams();
+  if (activeOnly) q.set('activeOnly', 'true');
+  if (taxiParkId) q.set('taxiParkId', String(taxiParkId));
+  return apiCall<Promotion[]>(`/promotions?${q.toString()}`, { cache: 'no-store' });
+}
+
+export async function fetchPromotionById(id: number): Promise<Promotion> {
+  return apiCall<Promotion>(`/promotions/${id}`, { cache: 'no-store' });
+}
+
+export async function createPromotion(data: Partial<Promotion> & { taxi_park_ids?: number[] }): Promise<Promotion> {
+  clearApiCache();
+  return apiCall<Promotion>('/promotions', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updatePromotion(id: number, data: Partial<Promotion> & { taxi_park_ids?: number[] }): Promise<Promotion> {
+  clearApiCache();
+  return apiCall<Promotion>(`/promotions/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deletePromotion(id: number): Promise<void> {
+  clearApiCache();
+  return apiCall<void>(`/promotions/${id}`, { method: 'DELETE' });
+}
+
+export async function uploadPromotionBanner(file: File): Promise<{ message: string; url: string }> {
+  const formData = new FormData();
+  formData.append('banner', file);
+  return apiCall<{ message: string; url: string }>('/promotions/upload-banner', {
+    method: 'POST',
+    body: formData,
+  });
+}

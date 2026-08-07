@@ -1059,6 +1059,89 @@ export const initializeDatabase = async () => {
       END $$;
     `);
 
+    // Create Taxi Parks and Promotions Tables
+    console.log('Ensuring Taxi Parks and Promotions tables exist...');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS taxi_parks (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) NOT NULL UNIQUE,
+        logo_url TEXT,
+        short_description TEXT,
+        full_description TEXT,
+        phone VARCHAR(100),
+        additional_phones TEXT,
+        address TEXT,
+        working_hours VARCHAR(255),
+        website TEXT,
+        additional_info TEXT,
+        is_active BOOLEAN DEFAULT true,
+        position INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS promotions (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        short_description TEXT,
+        full_description TEXT,
+        image_url TEXT,
+        start_date TIMESTAMP,
+        end_date TIMESTAMP,
+        external_link TEXT,
+        button_text VARCHAR(100) DEFAULT 'Подробнее',
+        is_active BOOLEAN DEFAULT true,
+        author_id INT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS promotion_taxi_parks (
+        promotion_id INT REFERENCES promotions(id) ON DELETE CASCADE,
+        taxi_park_id INT REFERENCES taxi_parks(id) ON DELETE CASCADE,
+        PRIMARY KEY (promotion_id, taxi_park_id)
+      );
+    `);
+
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_taxi_parks_active_position ON taxi_parks(is_active, position)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_taxi_parks_slug ON taxi_parks(slug)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_promotions_active_dates ON promotions(is_active, start_date, end_date)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_promotion_taxi_parks_park ON promotion_taxi_parks(taxi_park_id)');
+
+    // Seed 16 Initial Taxi Parks
+    const initialTaxiParks = [
+      { name: 'iTaxi', slug: 'itaxi', short_description: 'Официальный партнер такси iTaxi', position: 1 },
+      { name: 'Такси 24 (NurTaxi)', slug: 'taksi-24-nurtaksi', short_description: 'Таксопарк Такси 24 (NurTaxi)', position: 2 },
+      { name: 'Бизнес Партнер', slug: 'biznes-partner', short_description: 'Таксопарк Бизнес Партнер', position: 3 },
+      { name: 'Департамент', slug: 'departament', short_description: 'Таксопарк Департамент', position: 4 },
+      { name: 'Честный', slug: 'chestnyj', short_description: 'Таксопарк Честный', position: 5 },
+      { name: 'Global', slug: 'global', short_description: 'Таксопарк Global', position: 6 },
+      { name: 'Ipartner', slug: 'ipartner', short_description: 'Таксопарк Ipartner', position: 7 },
+      { name: 'Qazaq', slug: 'qazaq', short_description: 'Таксопарк Qazaq', position: 8 },
+      { name: 'Amanat', slug: 'amanat', short_description: 'Таксопарк Amanat', position: 9 },
+      { name: 'Халык', slug: 'halyk', short_description: 'Таксопарк Халык', position: 10 },
+      { name: 'Eki Dongelek', slug: 'eki-dongelek', short_description: 'Таксопарк Eki Dongelek', position: 11 },
+      { name: 'Стабильный', slug: 'stabilnyj', short_description: 'Таксопарк Стабильный', position: 12 },
+      { name: 'Jana такси', slug: 'jana-taksi', short_description: 'Таксопарк Jana такси', position: 13 },
+      { name: 'Tenge Taxi', slug: 'tenge-taxi', short_description: 'Таксопарк Tenge Taxi', position: 14 },
+      { name: 'Ноль такси', slug: 'nol-taksi', short_description: 'Таксопарк Ноль такси', position: 15 },
+      { name: 'Салам такси', slug: 'salam-taksi', short_description: 'Таксопарк Салам такси', position: 16 }
+    ];
+
+    for (const park of initialTaxiParks) {
+      await pool.query(
+        `INSERT INTO taxi_parks (name, slug, short_description, position, is_active)
+         VALUES ($1, $2, $3, $4, true)
+         ON CONFLICT (slug) DO NOTHING`,
+        [park.name, park.slug, park.short_description, park.position]
+      );
+    }
+
     console.log('Database tables and indexes verified/created successfully.');
   } catch (error) {
     console.error('Failed to initialize database tables:', error);
