@@ -448,11 +448,11 @@ export default function Home() {
       </section>
 
       {/* 3-COLUMN MAIN LAYOUT CONTAINER */}
-      <section className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 py-6">
-        <div className="flex flex-col lg:flex-row gap-6 xl:gap-8 items-start">
+      <section className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="flex flex-col lg:flex-row justify-between items-start gap-8 xl:gap-14">
 
           {/* LEFT SIDEBAR: ТАКСОПАРКИ */}
-          <aside className="hidden lg:block w-60 xl:w-64 shrink-0 sticky top-20 space-y-4 self-start">
+          <aside className="hidden lg:block w-[240px] xl:w-[250px] shrink-0 sticky top-24 space-y-4 self-start">
             <div className="p-4 rounded-2xl border border-border bg-card/60 backdrop-blur-sm shadow-sm space-y-3">
               {/* Sidebar Header */}
               <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-border/60">
@@ -514,7 +514,7 @@ export default function Home() {
           </aside>
 
           {/* CENTER COLUMN: MAIN WIKI CONTENT */}
-          <main className="flex-1 min-w-0 space-y-8 w-full">
+          <main className="flex-1 min-w-0 max-w-[880px] mx-auto space-y-8 w-full">
             {user && pendingMandatoryAcknowledgements.length > 0 && (
               <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-5 shadow-premium dark:shadow-premium-dark">
                 <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1015,7 +1015,7 @@ export default function Home() {
       </main>
 
           {/* RIGHT SIDEBAR: НОВОСТИ */}
-          <aside className="hidden lg:block w-72 xl:w-80 shrink-0 sticky top-20 space-y-4 self-start">
+          <aside className="hidden lg:block w-[270px] xl:w-[290px] shrink-0 sticky top-24 space-y-4 self-start">
             <div className="p-4 rounded-2xl border border-border bg-card/60 backdrop-blur-sm shadow-sm space-y-3">
               {/* Sidebar Header */}
               <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-border/60">
