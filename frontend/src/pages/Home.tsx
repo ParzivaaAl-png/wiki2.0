@@ -405,54 +405,12 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen pb-20 overflow-hidden">
-      {/* Hero Header */}
-      <section className="max-w-4xl mx-auto px-3 sm:px-4 pt-10 sm:pt-16 pb-8 text-center">
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-indigo-500/10 dark:border-indigo-400/20 bg-indigo-500/5 text-indigo-600 dark:text-indigo-400 text-xs font-semibold mb-6 shadow-sm shadow-indigo-500/5"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>SaaS База Знаний 2026</span>
-        </motion.div>
-
-        <motion.h1
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.05 }}
-          className="font-outfit text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-4 sm:mb-6 bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-700 dark:from-white dark:via-neutral-100 dark:to-neutral-400 bg-clip-text text-transparent"
-        >
-          Все статьи Wiki 2.0 <br />
-          в одном месте.
-        </motion.h1>
-
-        <motion.p
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
-          className="text-neutral-500 dark:text-neutral-400 text-sm sm:text-base md:text-lg lg:text-xl max-w-2xl mx-auto mb-6 sm:mb-8 font-light leading-relaxed"
-        >
-          Минималистичный справочник с моментальным автозаполнением, поиском по содержимому статей и красивым оформлением в стиле Notion и GitBook.
-        </motion.p>
-
-        {/* Search Input Bar */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3, delay: 0.15 }}
-          className="max-w-2xl mx-auto"
-        >
-          <SearchModal variant="hero" />
-        </motion.div>
-      </section>
-
       {/* 3-COLUMN MAIN LAYOUT CONTAINER */}
-      <section className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-4">
+      <section className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 pt-4 sm:pt-6 pb-6">
         <div className="w-full flex flex-col lg:flex-row justify-between items-start gap-8 lg:gap-10 xl:gap-14">
 
           {/* LEFT SIDEBAR: ТАКСОПАРКИ */}
-          <aside className="hidden lg:block w-[240px] xl:w-[250px] shrink-0 sticky top-24 space-y-4 self-start">
+          <aside className="hidden lg:block w-[240px] xl:w-[250px] shrink-0 sticky top-20 space-y-4 self-start">
             <div className="p-4 rounded-2xl border border-border bg-card/60 backdrop-blur-sm shadow-sm space-y-3">
               {/* Sidebar Header */}
               <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-border/60">
@@ -468,7 +426,7 @@ export default function Home() {
               </div>
 
               {/* Compact Taxi Parks List */}
-              <div className="space-y-1 max-h-[calc(100vh-220px)] overflow-y-auto custom-scrollbar pr-0.5">
+              <div className="space-y-1 max-h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar pr-0.5">
                 {taxiParks.length === 0 ? (
                   <div className="text-xs text-muted-foreground py-4 text-center">Загрузка таксопарков...</div>
                 ) : (
@@ -515,6 +473,47 @@ export default function Home() {
 
           {/* CENTER COLUMN: MAIN WIKI CONTENT */}
           <main className="flex-1 min-w-0 max-w-[840px] mx-auto space-y-8 w-full">
+            {/* Hero Header Centered in Main Column */}
+            <div className="text-center pt-2 sm:pt-4 pb-4">
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-indigo-500/10 dark:border-indigo-400/20 bg-indigo-500/5 text-indigo-600 dark:text-indigo-400 text-xs font-semibold mb-4 sm:mb-6 shadow-sm shadow-indigo-500/5"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>SaaS База Знаний 2026</span>
+              </motion.div>
+
+              <motion.h1
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.05 }}
+                className="font-outfit text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-3 sm:mb-4 bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-700 dark:from-white dark:via-neutral-100 dark:to-neutral-400 bg-clip-text text-transparent"
+              >
+                Все статьи Wiki 2.0 <br />
+                в одном месте.
+              </motion.h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.1 }}
+                className="text-neutral-500 dark:text-neutral-400 text-xs sm:text-base md:text-lg max-w-2xl mx-auto mb-6 sm:mb-8 font-light leading-relaxed"
+              >
+                Минималистичный справочник с моментальным автозаполнением, поиском по содержимому статей и красивым оформлением в стиле Notion и GitBook.
+              </motion.p>
+
+              {/* Search Input Bar */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3, delay: 0.15 }}
+                className="max-w-2xl mx-auto"
+              >
+                <SearchModal variant="hero" />
+              </motion.div>
+            </div>
             {user && pendingMandatoryAcknowledgements.length > 0 && (
               <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-5 shadow-premium dark:shadow-premium-dark">
                 <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1015,7 +1014,7 @@ export default function Home() {
       </main>
 
           {/* RIGHT SIDEBAR: НОВОСТИ */}
-          <aside className="hidden lg:block w-[270px] xl:w-[290px] shrink-0 sticky top-24 space-y-4 self-start">
+          <aside className="hidden lg:block w-[270px] xl:w-[290px] shrink-0 sticky top-20 space-y-4 self-start">
             <div className="p-4 rounded-2xl border border-border bg-card/60 backdrop-blur-sm shadow-sm space-y-3">
               {/* Sidebar Header */}
               <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-border/60">
