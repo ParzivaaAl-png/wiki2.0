@@ -31,6 +31,20 @@ import GuestAccessTimer from '../components/guest-access-timer';
 const PRESET_COLORS = ['#6366f1', '#8b5cf6', '#7c3aed', '#10b981', '#f43f5e', '#f59e0b', '#06b6d4'];
 const PRESET_ICONS = ['file-text', 'book', 'layers', 'layout', 'database', 'settings', 'cpu', 'terminal', 'search'];
 
+const formatNewsDate = (dateStr: string): string => {
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    if (isToday) {
+      return `Сегодня, ${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
+    }
+    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  } catch {
+    return dateStr;
+  }
+};
+
 export default function Home() {
   const { user, isStaff } = useAuth();
   const navigate = useNavigate();
@@ -49,6 +63,7 @@ export default function Home() {
   // News and Taxi Parks states
   const [unreadNewsCount, setUnreadNewsCount] = React.useState(0);
   const [latestNews, setLatestNews] = React.useState<News | null>(null);
+  const [newsList, setNewsList] = React.useState<News[]>([]);
   const [taxiParks, setTaxiParks] = React.useState<TaxiPark[]>([]);
 
   const [isLoading, setIsLoading] = React.useState(true);
@@ -69,7 +84,10 @@ export default function Home() {
   const loadData = React.useCallback(async (forceRevalidate = false) => {
     // Load News and Taxi Parks asynchronously
     fetchUnreadNewsCount().then(setUnreadNewsCount).catch(() => {});
-    fetchNews().then(list => setLatestNews(list[0] || null)).catch(() => {});
+    fetchNews().then(list => {
+      setNewsList(list);
+      setLatestNews(list[0] || null);
+    }).catch(() => {});
     fetchTaxiParks(true).then(setTaxiParks).catch(() => {});
 
     // 1. Instantaneous render from memory cache
@@ -429,160 +447,120 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* MAIN CONTENT CONTAINER */}
-      <section className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-8 py-6 space-y-6">
+      {/* 3-COLUMN MAIN LAYOUT CONTAINER */}
+      <section className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 py-6">
+        <div className="flex flex-col lg:flex-row gap-6 xl:gap-8 items-start">
 
-        {/* TOP WIDGETS ROW: LEFT = НОВОСТИ, RIGHT = ТАКСОПАРКИ */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          
-          {/* LEFT BLOCK: НОВОСТИ */}
-          <Link
-            to="/news"
-            className="group relative p-5 rounded-2xl border border-border bg-card hover:border-indigo-500/40 hover:shadow-xl transition-all flex flex-col justify-between overflow-hidden"
-          >
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform">
-                  <Newspaper className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-outfit text-base font-extrabold text-foreground group-hover:text-indigo-500 transition-colors uppercase tracking-wider">
-                    НОВОСТИ
-                  </h3>
-                  <p className="text-xs text-muted-foreground">Корпоративные новости</p>
-                </div>
-              </div>
-
-              {/* Unread Counter Badge */}
-              <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold border transition-all ${
-                unreadNewsCount > 0 
-                  ? 'bg-red-500 text-white border-red-500 shadow-sm animate-pulse' 
-                  : 'bg-muted text-muted-foreground border-border'
-              }`}>
-                {unreadNewsCount > 0 
-                  ? (unreadNewsCount > 9 ? '9+' : `${unreadNewsCount} новых`) 
-                  : 'Все новости'}
-              </span>
-            </div>
-
-            {latestNews ? (
-              <div className="space-y-1 pt-2 border-t border-border/60">
-                <h4 className="text-xs font-bold text-foreground line-clamp-1 group-hover:text-indigo-500 transition-colors">
-                  {latestNews.title}
-                </h4>
-                <p className="text-[11px] text-muted-foreground line-clamp-1 font-light">
-                  {latestNews.description || 'Нажмите, чтобы открыть свежие новости и объявления.'}
-                </p>
-              </div>
-            ) : (
-              <div className="pt-2 border-t border-border/60 text-xs text-muted-foreground italic">
-                Перейти в раздел новостей →
-              </div>
-            )}
-          </Link>
-
-          {/* RIGHT BLOCK: ТАКСОПАРКИ */}
-          <div className="p-5 rounded-2xl border border-border bg-card space-y-3 flex flex-col justify-between shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  <Building2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-outfit text-base font-extrabold text-foreground uppercase tracking-wider">
+          {/* LEFT SIDEBAR: ТАКСОПАРКИ */}
+          <aside className="hidden lg:block w-60 xl:w-64 shrink-0 sticky top-20 space-y-4 self-start">
+            <div className="p-4 rounded-2xl border border-border bg-card/60 backdrop-blur-sm shadow-sm space-y-3">
+              {/* Sidebar Header */}
+              <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-border/60">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-emerald-500" />
+                  <h3 className="font-outfit text-xs font-extrabold text-foreground uppercase tracking-wider">
                     ТАКСОПАРКИ
                   </h3>
-                  <p className="text-xs text-muted-foreground">Партнеры платформы</p>
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  {taxiParks.length} парков
+                </span>
+              </div>
+
+              {/* Compact Taxi Parks List */}
+              <div className="space-y-1 max-h-[calc(100vh-220px)] overflow-y-auto custom-scrollbar pr-0.5">
+                {taxiParks.length === 0 ? (
+                  <div className="text-xs text-muted-foreground py-4 text-center">Загрузка таксопарков...</div>
+                ) : (
+                  taxiParks.slice(0, 10).map((park) => (
+                    <Link
+                      key={park.id}
+                      to={`/taxi-parks/${park.slug}`}
+                      className="flex items-center justify-between p-2 rounded-xl hover:bg-muted/70 transition-all border border-transparent hover:border-border text-xs group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {park.logo_url ? (
+                          <img
+                            src={getApiAssetUrl(park.logo_url)}
+                            alt={park.name}
+                            className="w-5 h-5 rounded object-cover border border-border bg-muted shrink-0"
+                          />
+                        ) : (
+                          <div className="w-5 h-5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold flex items-center justify-center text-[9px] shrink-0">
+                            {park.name.slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <span className="font-bold text-foreground group-hover:text-emerald-500 transition-colors truncate text-xs">
+                          {park.name}
+                        </span>
+                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground group-hover:translate-x-0.5 transition-transform shrink-0" />
+                    </Link>
+                  ))
+                )}
+              </div>
+
+              {/* Sidebar Footer Link */}
+              <div className="pt-2 border-t border-border/60">
+                <Link
+                  to="/taxi-parks/itaxi"
+                  className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center justify-between"
+                >
+                  <span>Все таксопарки</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+          </aside>
+
+          {/* CENTER COLUMN: MAIN WIKI CONTENT */}
+          <main className="flex-1 min-w-0 space-y-8 w-full">
+            {user && pendingMandatoryAcknowledgements.length > 0 && (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-5 shadow-premium dark:shadow-premium-dark">
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="font-outfit text-sm font-extrabold text-foreground flex items-center gap-2 uppercase tracking-wider">
+                      <ShieldCheck className="h-5 w-5 text-amber-500" />
+                      Требуют ознакомления
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Непрочитанных обязательных материалов: {pendingMandatoryAcknowledgements.length}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-amber-500/25 bg-card px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-300">
+                    {pendingMandatoryAcknowledgements.length}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {pendingMandatoryAcknowledgements.slice(0, 4).map((item) => (
+                    <Link
+                      key={item.id}
+                      to={`/articles/${item.slug || item.article_slug}`}
+                      className="group rounded-lg border border-border bg-card p-4 transition-all hover:border-amber-500/40 hover:bg-muted/40"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h4 className="truncate text-sm font-bold text-foreground group-hover:text-indigo-500">
+                            {item.title || item.article_title}
+                          </h4>
+                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                            {item.summary || 'Обязательная статья для подтверждения ознакомления.'}
+                          </p>
+                        </div>
+                        <ShieldCheck className="h-4 w-4 shrink-0 text-amber-500" />
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                        <span className="rounded-full bg-muted px-2 py-0.5 font-bold">
+                          {item.status === 'overdue' ? 'Просрочена' : item.status === 'in_progress' ? 'В процессе' : 'Не открыта'}
+                        </span>
+                        <span>Срок: {item.due_at ? new Date(item.due_at).toLocaleDateString('ru-RU') : 'не указан'}</span>
+                      </div>
+                    </Link>
+                  ))}
                 </div>
               </div>
-
-              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                {taxiParks.length} парков
-              </span>
-            </div>
-
-            {/* Compact Scrollable List */}
-            <div className="max-h-28 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
-              {taxiParks.length === 0 ? (
-                <div className="text-xs text-muted-foreground py-2 text-center">Загрузка таксопарков...</div>
-              ) : (
-                taxiParks.map((park) => (
-                  <Link
-                    key={park.id}
-                    to={`/taxi-parks/${park.slug}`}
-                    className="flex items-center justify-between p-2 rounded-xl hover:bg-muted/70 transition-colors border border-transparent hover:border-border text-xs group"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {park.logo_url ? (
-                        <img
-                          src={getApiAssetUrl(park.logo_url)}
-                          alt={park.name}
-                          className="w-5 h-5 rounded object-cover border border-border bg-muted shrink-0"
-                        />
-                      ) : (
-                        <div className="w-5 h-5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold flex items-center justify-center text-[9px] shrink-0">
-                          {park.name.slice(0, 2).toUpperCase()}
-                        </div>
-                      )}
-                      <span className="font-bold text-foreground group-hover:text-indigo-500 transition-colors truncate">
-                        {park.name}
-                      </span>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
-                  </Link>
-                ))
-              )}
-            </div>
-          </div>
-
-        </div>
-
-        {user && pendingMandatoryAcknowledgements.length > 0 && (
-          <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-5 shadow-premium dark:shadow-premium-dark">
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="font-outfit text-sm font-extrabold text-foreground flex items-center gap-2 uppercase tracking-wider">
-                  <ShieldCheck className="h-5 w-5 text-amber-500" />
-                  Требуют ознакомления
-                </h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Непрочитанных обязательных материалов: {pendingMandatoryAcknowledgements.length}
-                </p>
-              </div>
-              <span className="rounded-full border border-amber-500/25 bg-card px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-300">
-                {pendingMandatoryAcknowledgements.length}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {pendingMandatoryAcknowledgements.slice(0, 4).map((item) => (
-                <Link
-                  key={item.id}
-                  to={`/articles/${item.slug || item.article_slug}`}
-                  className="group rounded-lg border border-border bg-card p-4 transition-all hover:border-amber-500/40 hover:bg-muted/40"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h4 className="truncate text-sm font-bold text-foreground group-hover:text-indigo-500">
-                        {item.title || item.article_title}
-                      </h4>
-                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                        {item.summary || 'Обязательная статья для подтверждения ознакомления.'}
-                      </p>
-                    </div>
-                    <ShieldCheck className="h-4 w-4 shrink-0 text-amber-500" />
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                    <span className="rounded-full bg-muted px-2 py-0.5 font-bold">
-                      {item.status === 'overdue' ? 'Просрочена' : item.status === 'in_progress' ? 'В процессе' : 'Не открыта'}
-                    </span>
-                    <span>Срок: {item.due_at ? new Date(item.due_at).toLocaleDateString('ru-RU') : 'не указан'}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
+            )}
 
         {/* ROW OF PERSONAL BLOCKS (Continue Reading + Favorites + Recent Changes) */}
         {user && (
@@ -1033,6 +1011,146 @@ export default function Home() {
               );
             })}
           </motion.div>
+        </div>
+      </main>
+
+          {/* RIGHT SIDEBAR: НОВОСТИ */}
+          <aside className="hidden lg:block w-72 xl:w-80 shrink-0 sticky top-20 space-y-4 self-start">
+            <div className="p-4 rounded-2xl border border-border bg-card/60 backdrop-blur-sm shadow-sm space-y-3">
+              {/* Sidebar Header */}
+              <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-border/60">
+                <div className="flex items-center gap-2">
+                  <Newspaper className="w-4 h-4 text-indigo-500" />
+                  <h3 className="font-outfit text-xs font-extrabold text-foreground uppercase tracking-wider">
+                    НОВОСТИ
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  {unreadNewsCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500 text-white shadow-sm">
+                      {unreadNewsCount > 9 ? '9+' : `${unreadNewsCount} новых`}
+                    </span>
+                  )}
+                  <Link to="/news" className="text-[11px] font-bold text-indigo-500 hover:underline">
+                    Все →
+                  </Link>
+                </div>
+              </div>
+
+              {/* Stream of Latest News Items */}
+              <div className="space-y-2 max-h-[calc(100vh-220px)] overflow-y-auto custom-scrollbar pr-0.5">
+                {newsList.length === 0 ? (
+                  <div className="text-xs text-muted-foreground py-4 text-center">Загрузка новостей...</div>
+                ) : (
+                  newsList.slice(0, 5).map((news) => {
+                    const isUnread = !news.is_read;
+                    return (
+                      <Link
+                        key={news.id}
+                        to="/news"
+                        className={`block p-3 rounded-xl border transition-all cursor-pointer space-y-1.5 group ${
+                          isUnread 
+                            ? 'border-indigo-500/40 bg-indigo-500/[0.04] shadow-sm' 
+                            : 'border-border/60 bg-muted/20 hover:bg-muted/60 hover:border-border'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {isUnread && (
+                              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0" />
+                            )}
+                            <span className="truncate">{formatNewsDate(news.published_at)}</span>
+                          </div>
+                          {news.is_pinned && (
+                            <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 uppercase">
+                              Закреплено
+                            </span>
+                          )}
+                        </div>
+
+                        <h4 className={`text-xs font-extrabold line-clamp-2 leading-snug group-hover:text-indigo-500 transition-colors ${isUnread ? 'text-foreground' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                          {news.title}
+                        </h4>
+
+                        {news.description && (
+                          <p className="text-[11px] text-muted-foreground line-clamp-2 font-light leading-relaxed">
+                            {news.description}
+                          </p>
+                        )}
+                      </Link>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Sidebar Footer Link */}
+              <div className="pt-2 border-t border-border/60">
+                <Link
+                  to="/news"
+                  className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center justify-between"
+                >
+                  <span>Все новости</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+          </aside>
+
+        </div>
+
+        {/* MOBILE FALLBACK WIDGETS (< lg) */}
+        <div className="lg:hidden mt-12 grid grid-cols-1 md:grid-cols-2 gap-6 pt-8 border-t border-border">
+          {/* Mobile Taxi Parks */}
+          <div className="p-4 rounded-2xl border border-border bg-card space-y-3">
+            <div className="flex items-center justify-between gap-2 pb-2 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-emerald-500" />
+                <h3 className="font-outfit text-xs font-extrabold text-foreground uppercase tracking-wider">
+                  ТАКСОПАРКИ
+                </h3>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                {taxiParks.length} парков
+              </span>
+            </div>
+            <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar pr-1">
+              {taxiParks.slice(0, 8).map((park) => (
+                <Link
+                  key={park.id}
+                  to={`/taxi-parks/${park.slug}`}
+                  className="flex items-center justify-between p-2 rounded-xl hover:bg-muted transition-colors text-xs group"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-bold text-foreground group-hover:text-emerald-500 truncate">{park.name}</span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Mobile News */}
+          <div className="p-4 rounded-2xl border border-border bg-card space-y-3">
+            <div className="flex items-center justify-between gap-2 pb-2 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Newspaper className="w-4 h-4 text-indigo-500" />
+                <h3 className="font-outfit text-xs font-extrabold text-foreground uppercase tracking-wider">
+                  НОВОСТИ
+                </h3>
+              </div>
+              <Link to="/news" className="text-xs font-bold text-indigo-500 hover:underline">
+                Все новости →
+              </Link>
+            </div>
+            <div className="max-h-48 overflow-y-auto space-y-2 custom-scrollbar pr-1">
+              {newsList.slice(0, 3).map((news) => (
+                <Link key={news.id} to="/news" className="block p-2 rounded-xl hover:bg-muted transition-colors text-xs space-y-1">
+                  <div className="text-[10px] text-muted-foreground">{formatNewsDate(news.published_at)}</div>
+                  <div className="font-bold text-foreground line-clamp-1">{news.title}</div>
+                </Link>
+              ))}
+            </div>
+          </div>
         </div>
 
       </section>
