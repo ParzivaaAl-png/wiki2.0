@@ -448,8 +448,8 @@ export default function Home() {
       </section>
 
       {/* 3-COLUMN MAIN LAYOUT CONTAINER */}
-      <section className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex flex-col lg:flex-row justify-between items-start gap-8 xl:gap-14">
+      <section className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-4">
+        <div className="w-full flex flex-col lg:flex-row justify-between items-start gap-8 lg:gap-10 xl:gap-14">
 
           {/* LEFT SIDEBAR: ТАКСОПАРКИ */}
           <aside className="hidden lg:block w-[240px] xl:w-[250px] shrink-0 sticky top-24 space-y-4 self-start">
@@ -514,7 +514,7 @@ export default function Home() {
           </aside>
 
           {/* CENTER COLUMN: MAIN WIKI CONTENT */}
-          <main className="flex-1 min-w-0 max-w-[880px] mx-auto space-y-8 w-full">
+          <main className="flex-1 min-w-0 max-w-[840px] mx-auto space-y-8 w-full">
             {user && pendingMandatoryAcknowledgements.length > 0 && (
               <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-5 shadow-premium dark:shadow-premium-dark">
                 <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
